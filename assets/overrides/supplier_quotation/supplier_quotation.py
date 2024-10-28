@@ -2,5 +2,5 @@ from erpnext.buying.doctype.supplier_quotation.supplier_quotation import Supplie
 from assets.controllers.overrides.buying_controller import AssetsBuyingController
 
 
-class AssetsPurchaseInvoice(SupplierQuotation, AssetsBuyingController):
+class AssetsSupplierQuotation(SupplierQuotation, AssetsBuyingController):
     pass

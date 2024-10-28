@@ -2,5 +2,5 @@ from erpnext.buying.doctype.request_for_quotation.request_for_quotation import R
 from assets.controllers.overrides.buying_controller import AssetsBuyingController
 
 
-class AssetsRequestforQuotation(RequestforQuotation, AssetsBuyingController):
+class AssetsRequestForQuotation(RequestforQuotation, AssetsBuyingController):
     pass
