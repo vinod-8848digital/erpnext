@@ -129,12 +129,12 @@ after_install = "assets.setup.after_install"
 # Override standard doctype classes
 
 override_doctype_class = {
-	"Purchase Receipt": "assets.overrides.purchase_receipt.purchase_receipt.AssetsPurchaseReceipt",
-    "Material Request": "assets.overrides.material_request.material_request.AssetsMaterialRequest",
-    "Purchase Invoice": "assets.overrides.purchase_invoice.purchase_invoice.AssetsPurchaseInvoice",
-    "Purchase Order": "assets.overrides.purchase_order.purchase_order.AssetsPurchaseOrder",
-    "Request For Quotation": "assets.overrides.request_for_quotation.request_for_quotation.AssetsRequestForQuotation",
-    "Supplier Quotation": "assets.overrides.supplier_quotation.supplier_quotation.AssetsSupplierQuotation",
+	# "Purchase Receipt": "assets.overrides.purchase_receipt.purchase_receipt.AssetsPurchaseReceipt",
+    # "Material Request": "assets.overrides.material_request.material_request.AssetsMaterialRequest",
+    # "Purchase Invoice": "assets.overrides.purchase_invoice.purchase_invoice.AssetsPurchaseInvoice",
+    # "Purchase Order": "assets.overrides.purchase_order.purchase_order.AssetsPurchaseOrder",
+    # "Request For Quotation": "assets.overrides.request_for_quotation.request_for_quotation.AssetsRequestForQuotation",
+    # "Supplier Quotation": "assets.overrides.supplier_quotation.supplier_quotation.AssetsSupplierQuotation",
 }
 
 # Document Events
@@ -164,9 +164,9 @@ doc_events = {
 		"on_submit": "assets.assets.customizations.journal_entry.journal_entry.on_submit",
 		"on_cancel": "assets.assets.customizations.journal_entry.journal_entry.on_cancel",
 	},
-    "Purchase Receipt": {
-        "validate": "assets.overrides.purchase_receipt.purchase_receipt.validate",
-	},
+    # "Purchase Receipt": {
+    #     "validate": "assets.overrides.purchase_receipt.purchase_receipt.validate",
+	# },
 }
 
 # Scheduled Tasks
