@@ -645,7 +645,7 @@ def get_actual_gle_dict(name):
 		from `tabGL Entry`
 		where voucher_type = 'Asset Capitalization' and voucher_no = %s
 		group by account
-		having diff != 0
+		having sum(debit-credit) != 0
 	""",
 			name,
 		)
@@ -662,7 +662,7 @@ def get_actual_sle_dict(name):
 		from `tabStock Ledger Entry`
 		where voucher_type = 'Asset Capitalization' and voucher_no = %s
 		group by item_code, warehouse
-		having actual_qty != 0
+		having sum(actual_qty) != 0
 	""",
 		name,
 		as_dict=1,
