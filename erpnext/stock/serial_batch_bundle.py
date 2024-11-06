@@ -6,7 +6,8 @@ from frappe.model.naming import make_autoname
 from frappe.query_builder.functions import CombineDatetime, Sum, Timestamp, _PostgresTimestamp
 from frappe.utils import add_days, cint, cstr, flt, get_link_to_form, now, nowtime, today
 from pypika import Order
-
+from frappe.utils import flt, nowtime
+from datetime import datetime
 from erpnext.stock.deprecated_serial_batch import (
 	DeprecatedBatchNoValuation,
 	DeprecatedSerialNoValuation,
@@ -514,7 +515,7 @@ class SerialNoValuation(DeprecatedSerialNoValuation):
 
 			self.calculate_stock_value_from_deprecarated_ledgers()
 
-	def get_incoming_rate_from_bundle(self, serial_no) -> float:
+	def get_incoming_rate_from_bundle(self, serial_no: str) -> float:
 		bundle = frappe.qb.DocType("Serial and Batch Bundle")
 		bundle_child = frappe.qb.DocType("Serial and Batch Entry")
 
@@ -522,7 +523,11 @@ class SerialNoValuation(DeprecatedSerialNoValuation):
 			frappe.qb.from_(bundle)
 			.inner_join(bundle_child)
 			.on(bundle.name == bundle_child.parent)
-			.select((bundle_child.incoming_rate * bundle_child.qty).as_("incoming_rate"))
+			.select(
+				bundle.posting_date,
+				bundle.posting_time,
+				(bundle_child.incoming_rate * bundle_child.qty).as_("incoming_rate")
+			)
 			.where(
 				(bundle.is_cancelled == 0)
 				& (bundle.docstatus == 1)
@@ -536,22 +541,39 @@ class SerialNoValuation(DeprecatedSerialNoValuation):
 			.limit(1)
 		)
 
-		# Important to exclude the current voucher to calculate correct the stock value difference
 		if self.sle.voucher_no:
 			query = query.where(bundle.voucher_no != self.sle.voucher_no)
 
-		if self.sle.posting_date:
-			if self.sle.posting_time is None:
-				self.sle.posting_time = nowtime()
+		try:
+			# Run the query to get posting_date and posting_time values
+			result = query.run()
 
-			timestamp_condition = CombineDatetime(
-				bundle.posting_date, bundle.posting_time
-			) <= CombineDatetime(self.sle.posting_date, self.sle.posting_time)
+			if not result:
+				return 0.0
+			
+			# Extract the date and time from the query result
+			posting_date, posting_time_str, incoming_rate = result[0]
 
-			query = query.where(timestamp_condition)
+			# Convert posting_time to a datetime.time object if it is a string
+			if posting_time_str:
+				# posting_time = datetime.strptime(posting_time_str, "%H:%M:%S").time()
+				posting_time = posting_time_str
+			else:
+				posting_time = datetime.min.time()  # Default to midnight if no time is provided
 
-		incoming_rate = query.run()
-		return flt(incoming_rate[0][0]) if incoming_rate else 0.0
+			# Combine date and time into a datetime object
+			bundle_datetime = datetime.combine(posting_date, posting_time)
+			sle_datetime = datetime.combine(self.sle.posting_date, self.sle.posting_time)
+
+			# Create the timestamp condition
+			timestamp_condition = bundle_datetime <= sle_datetime
+			# Note: Adjust the query here if needed to consider this condition
+
+			return flt(incoming_rate) if incoming_rate else 0.0
+		except Exception as e:
+			frappe.log_error(f"Error fetching incoming rate for serial {serial_no}: {str(e)}", "get_incoming_rate_from_bundle")
+			return 0.0
+
 
 	def get_serial_nos(self):
 		if self.sle.get("serial_nos"):
