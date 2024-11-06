@@ -1771,8 +1771,7 @@ class PurchaseInvoice(BuyingController):
 
 	def update_advance_tax_references(self, cancel=0):
 		for tax in self.get("advance_tax"):
-			at = frappe.qb.DocType("Advance Taxes and Charges").as_("at")
-
+			at = frappe.qb.DocType("Advance Taxes and Charges")
 			if cancel:
 				frappe.qb.update(at).set(
 					at.allocated_amount, at.allocated_amount - tax.allocated_amount
