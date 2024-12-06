@@ -226,11 +226,6 @@
   },
   {
    "group": "Transactions",
-   "link_doctype": "Payroll Entry",
-   "link_fieldname": "bank_account"
-  },
-  {
-   "group": "Transactions",
    "link_doctype": "Bank Transaction",
    "link_fieldname": "bank_account"
   },
