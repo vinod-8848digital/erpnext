@@ -2417,7 +2417,64 @@ class TestPurchaseInvoice(FrappeTestCase, StockTestMixin):
 
 		# Step 5: Validate Ledger Entries
 		self.validate_ledger_entries(payment_entries=[pe1, pe2], purchase_invoices=[pi])
+	
+	def test_multiple_purchase_invoices_multiple_payments(self):
+		"""Test payments against multiple Purchase Invoices and validate ledger entries."""
+		today = nowdate()
 
+		# Step 1: Create and Submit Purchase Invoices and Payment Entries
+		purchase_invoices, payment_entries = [], []
+		for i in range(3):
+			pi = make_purchase_invoice()
+			purchase_invoices.append(pi)
+
+			pe = get_payment_entry("Purchase Invoice", pi.name, bank_account="Cash - _TC")
+			pe.update({
+				"reference_no": f"Test-{pi.name}",
+				"reference_date": today,
+				"paid_from_account_currency": pi.currency,
+				"paid_to_account_currency": pi.currency,
+				"source_exchange_rate": 1,
+				"target_exchange_rate": 1,
+				"paid_amount": pi.grand_total
+			})
+			pe.insert()
+			pe.submit()
+			payment_entries.append(pe)
+
+		# Step 2: Validate Outstanding Amounts and Ledger Entries
+		for pi in purchase_invoices:
+			pi.reload()
+			self.assertEqual(pi.outstanding_amount, 0, f"Outstanding amount is not zero for {pi.name}.")
+			self.assertEqual(pi.status, "Paid", f"Purchase Invoice status is not 'Paid' for {pi.name}.")
+
+		# Step 3: Validate Ledger Entries
+		ledger_entries = frappe.get_all(
+			"GL Entry",
+			filters={"voucher_no": ["in", [pe.name for pe in payment_entries]]},
+			fields=["account", "debit", "credit"]
+		)
+
+		for pe in payment_entries:
+			debit_account, debit_amount = pe.paid_from, pe.paid_amount  # Paid from Cash/Bank
+			credit_account, credit_amount = purchase_invoices[0].credit_to, pe.paid_amount  # Credited to Creditors
+
+			# Assert debit entry for Creditors and credit entry for Cash/Bank
+			assert any(entry["account"] == debit_account and entry["credit"] == debit_amount for entry in ledger_entries), (
+				f"Credit entry missing for account: {debit_account} with amount: {debit_amount}."
+			)
+			assert any(entry["account"] == credit_account and entry["debit"] == credit_amount for entry in ledger_entries), (
+				f"Debit entry missing for account: {credit_account} with amount: {credit_amount}."
+			)
+
+		# Step 4: Validate total debit and credit balance
+		total_paid_amount = sum(pe.paid_amount for pe in payment_entries)
+		total_credit = sum(entry["credit"] for entry in ledger_entries if entry["account"] == debit_account)
+		total_debit = sum(entry["debit"] for entry in ledger_entries if entry["account"] == credit_account)
+		assert total_credit == total_debit, (
+			f"Total credit ({total_credit}) does not match total debit ({total_debit})."
+		)
+		
 def set_advance_flag(company, flag, default_account):
 	frappe.db.set_value(
 		"Company",
