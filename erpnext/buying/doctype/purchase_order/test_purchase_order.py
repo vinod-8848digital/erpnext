@@ -2481,9 +2481,3 @@ def check_payment_gl_entries(
 	for row in range(len(expected_gle)):
 		for field in ["account", "debit", "credit"]:
 			self.assertEqual(expected_gle[row][field], gl_entries[row][field])
-
-@frappe.whitelist()
-def run_tests():
-	test_obj = TestPurchaseOrder()
-	test_obj.test_po_additional_discount_TC_B_052()
-	return 1

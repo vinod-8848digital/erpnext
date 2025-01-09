@@ -3180,7 +3180,7 @@ class TestPurchaseInvoice(FrappeTestCase, StockTestMixin):
 
 	def test_pi_with_additional_discount_TC_B_054(self):
 		# Scenario : PI [With Additional Discount][StandAlone]	
-		pr_data = {
+		pi_data = {
 			"company" : "_Test Company",
 			"item_code" : "_Test Item",
 			"warehouse" : "Stores - _TC",
@@ -3190,12 +3190,34 @@ class TestPurchaseInvoice(FrappeTestCase, StockTestMixin):
 			"rate" : 10000,
 			"apply_discount_on" : "Net Total",
 			"additional_discount_percentage" :10 ,
+			"do_not_submit":1
 		}
 
-		doc_pi = make_purchase_receipt(**pr_data)
-		self.assertEqual(doc_pi.discount_amount, 1000)
-		self.assertEqual(doc_pi.grand_total, 9000)
+		acc = frappe.new_doc("Account")
+		acc.account_name = "Input Tax IGST"
+		acc.parent_account = "Tax Assets - _TC"
+		acc.company = "_Test Company"
+		account_name = frappe.db.exists("Account", {"account_name" : "Input Tax IGST","company": "_Test Company" })
+		if not account_name:
+			account_name = acc.insert()
 
+		doc_pi = make_purchase_invoice(**pi_data)
+		doc_pi.append("taxes", {
+                    "charge_type": "On Net Total",
+                    "account_head": account_name,
+                    "rate": 12,
+                    "description": "Input GST",
+                })
+		doc_pi.submit()
+		self.assertEqual(doc_pi.discount_amount, 1000)
+		self.assertEqual(doc_pi.grand_total, 10080)
+
+		# Accounting Ledger Checks
+		pi_gl_entries = frappe.get_all("GL Entry", filters={"voucher_no": doc_pi.name}, fields=["account", "debit", "credit"])
+
+		# PI Ledger Validation
+		pi_total = sum(entry["debit"] for entry in pi_gl_entries)
+		self.assertEqual(pi_total, 10080) 
 
 
 def set_advance_flag(company, flag, default_account):
@@ -3513,3 +3535,10 @@ def get_jv_entry_account(**args):
 	)[0]
 
 	return jea_parent
+
+
+@frappe.whitelist()
+def run_tests():
+	test_obj = TestPurchaseInvoice()
+	test_obj.test_pi_with_additional_discount_TC_B_054()
+	return 1
