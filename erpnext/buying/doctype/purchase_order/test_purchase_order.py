@@ -27,7 +27,7 @@ from erpnext.stock.doctype.purchase_receipt.purchase_receipt import (
 	make_purchase_invoice as make_pi_from_pr,
 )
 from erpnext.accounts.doctype.payment_request.payment_request import make_payment_request
-
+from erpnext.accounts.doctype.purchase_invoice.purchase_invoice import make_debit_note
 class TestPurchaseOrder(FrappeTestCase):
 	def test_purchase_order_qty(self):
 		po = create_purchase_order(qty=1, do_not_save=True)
@@ -1962,6 +1962,188 @@ class TestPurchaseOrder(FrappeTestCase):
 
 
 
+	def test_po_return_TC_B_043(self):
+		# Scenario : PO => PR => PI => PI(Return)
+		args = frappe._dict()
+		po_data = {
+			"company" : "_Test Company",
+			"item_code" : "_Test Item",
+			"warehouse" : "Stores - _TC",
+			"qty" : 6,
+			"rate" : 100,
+		}
+		
+		doc_po = create_purchase_order(**po_data)
+		self.assertEqual(doc_po.docstatus, 1)
+		
+		doc_pr = make_pr_for_po(doc_po.name)
+		self.assertEqual(doc_pr.docstatus, 1)
+
+		doc_pi = make_pi_against_pr(doc_pr.name)
+		self.assertEqual(doc_pi.docstatus, 1)
+		self.assertEqual(doc_pi.items[0].qty, doc_po.items[0].qty)
+		self.assertEqual(doc_pi.grand_total, doc_po.grand_total)
+
+		doc_returned_pi = make_return_pi(doc_pi.name)
+		self.assertEqual(doc_returned_pi.total_qty, -doc_po.total_qty)
+		doc_pi.reload()
+		self.assertEqual(doc_pi.status, 'Debit Note Issued')
+		self.assertEqual(doc_returned_pi.status, 'Return')
+
+	def test_po_full_payment_TC_B_045(self):
+		# Scenario : PO => Payment Entry => PR => PI => PI(Return)
+		
+		po_data = {
+			"company" : "_Test Company",
+			"item_code" : "_Test Item",
+			"warehouse" : "Stores - _TC",
+			"qty" : 6,
+			"rate" : 100,
+		}
+		
+		doc_po = create_purchase_order(**po_data)
+		self.assertEqual(doc_po.docstatus, 1)
+		
+		doc_pe = get_payment_entry("Purchase Order", doc_po.name, doc_po.grand_total)
+		doc_pe.insert()
+		doc_pe.submit()
+		# doc_pe.paid_from = "Cash"
+
+		doc_pr = make_pr_for_po(doc_po.name)
+		self.assertEqual(doc_pr.docstatus, 1)
+
+		doc_pi = make_pi_against_pr(doc_pr.name, args={"is_paid" : 1, "cash_bank_account" : doc_pe.paid_from})
+		self.assertEqual(doc_pi.docstatus, 1)
+		self.assertEqual(doc_pi.items[0].qty, doc_po.items[0].qty)
+		self.assertEqual(doc_pi.grand_total, doc_po.grand_total)
+
+		doc_pi.reload()
+		doc_po.reload()
+		self.assertEqual(doc_pi.status, 'Paid')
+		self.assertEqual(doc_po.status, 'Completed')
+
+	def test_po_with_pricing_rule_TC_B_046(self):
+		# Scenario : PO => Pricing Rule => PR => PI
+		
+		po_data = {
+			"company" : "_Test Company",
+			"item_code" : "_Test Item",
+			"warehouse" : "Stores - _TC",
+			"supplier": "_Test Supplier",
+            "schedule_date": "2025-01-13",
+			"qty" : 1,
+		}
+
+		pricing_rule_record = {
+			"doctype": "Pricing Rule",
+			"title": "Discount on _Test Item",
+			"apply_on": "Item Code",
+			"items": [
+				{
+					"item_code": "_Test Item",
+				}
+				],
+			"price_or_product_discount": "Price",
+			"applicable_for": "Supplier",
+			"supplier": "_Test Supplier",
+			"buying": 1,
+			"currency": "INR",
+			
+			"min_qty": 1,
+			"min_amt": 100,
+			"valid_from": "2025-01-01",
+			"rate_or_discount": "Discount Percentage",
+			"discount_percentage": 10,
+			"price_list": "Standard Buying",
+			"company" : "_Test Company",
+
+		}
+		rule = frappe.get_doc(pricing_rule_record)
+		rule.insert()
+		
+		frappe.get_doc(
+			{
+				"doctype": "Item Price",
+				"price_list": "Standard Buying",
+				"item_code": "_Test Item",
+				"price_list_rate": 130,
+			}
+		).insert()
+
+		doc_po = create_purchase_order(**po_data)
+		doc_po_item = doc_po.items[0]
+		self.assertEqual(doc_po_item.discount_percentage, 10)
+		self.assertEqual(doc_po_item.rate, 117)  
+		self.assertEqual(doc_po_item.amount, 117)
+
+		doc_pr = make_pr_for_po(doc_po.name)
+
+		doc_pi = make_pi_against_pr(doc_pr.name)
+		pi_item = doc_pi.items[0]
+		self.assertEqual(pi_item.rate, 117)
+		self.assertEqual(pi_item.amount, 117)
+
+	def test_po_with_pricing_rule_TC_B_047(self):
+		# Scenario : PO => Pricing Rule => PR 
+				
+		po_data = {
+			"company" : "_Test Company",
+			"item_code" : "_Test Item",
+			"warehouse" : "Stores - _TC",
+			"supplier": "_Test Supplier",
+            "schedule_date": "2025-01-13",
+			"qty" : 1,
+		}
+
+		pricing_rule_record = {
+			"doctype": "Pricing Rule",
+			"title": "Discount on _Test Item",
+			"apply_on": "Item Code",
+			"items": [
+				{
+					"item_code": "_Test Item",
+				}
+				],
+			"price_or_product_discount": "Price",
+			"applicable_for": "Supplier",
+			"supplier": "_Test Supplier",
+			"buying": 1,
+			"currency": "INR",
+			
+			"min_qty": 1,
+			"min_amt": 100,
+			"valid_from": "2025-01-01",
+			"rate_or_discount": "Discount Percentage",
+			"discount_percentage": 10,
+			"price_list": "Standard Buying",
+			"company" : "_Test Company",
+
+		}
+		rule = frappe.get_doc(pricing_rule_record)
+		rule.insert()
+		
+		frappe.get_doc(
+			{
+				"doctype": "Item Price",
+				"price_list": "Standard Buying",
+				"item_code": "_Test Item",
+				"price_list_rate": 130,
+			}
+		).insert()
+
+		doc_po = create_purchase_order(**po_data)
+		po_item = doc_po.items[0]
+		self.assertEqual(po_item.discount_percentage, 10)
+		self.assertEqual(po_item.rate, 117)
+		self.assertEqual(po_item.amount, 117)
+
+
+		doc_pr = make_pr_for_po(doc_po.name)
+		pr_item = doc_pr.items[0]
+		self.assertEqual(pr_item.rate, 117) 
+		self.assertEqual(pr_item.amount, 117)
+
+
 def create_po_for_sc_testing():
 	from erpnext.controllers.tests.test_subcontracting_controller import (
 		make_bom_for_subcontracted_items,
@@ -2147,18 +2329,26 @@ test_dependencies = ["BOM", "Item Price"]
 
 test_records = frappe.get_test_records("Purchase Order")
 
-def make_pi_against_pr(source_name, received_qty=0, item_dict_list = None):
+def make_pi_against_pr(source_name, received_qty=0, item_dict_list = None, args = None):
 	doc_pi =  make_pi_from_pr(source_name)
 	if received_qty != 0: doc_pi.get("items")[0].qty = received_qty
 	
 	if item_dict_list is not None:
 		for item in item_dict_list:
 			doc_pi.append("items", item)
-
+	if args:
+		args = frappe._dict(args)
+		doc_pi.update(args)
 	doc_pi.insert()
 	doc_pi.submit()
 	return doc_pi
 
+def make_return_pi(source_name):
+	return_pi = make_debit_note(source_name)
+	return_pi.update_outstanding_for_self = 0
+	return_pi.insert()
+	return_pi.submit()
+	return return_pi
 
 def make_pr_for_po(source_name, received_qty=0, item_dict_list = None):
 	doc_pr = make_purchase_receipt(source_name)
