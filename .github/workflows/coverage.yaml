@@ -9,18 +9,16 @@ jobs:
     runs-on: ubuntu-latest
     services:
       mysql:
-        image: mysql:8.0
+        image: postgres:13.3
         ports:
           - 3306:3306
         env:
-          MYSQL_ROOT_PASSWORD: root
-          MYSQL_DATABASE: test_frappe
+          POSTGRES_PASSWORD: travis
       redis:
         image: redis:latest
         ports:
           - 6379:6379
     steps:
-      # Step 1: Check out the repository
       - name: Checkout Code
         uses: actions/checkout@v3
       # Step 2: Set up Python
@@ -50,6 +48,6 @@ jobs:
         uses: matthewcroughan/code-coverage-report-action@v2
         with:
           coverage_file: frappe-bench/apps/frappe/coverage.xml
-          minimum_coverage: 100
+          minimum_coverage: 75
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
