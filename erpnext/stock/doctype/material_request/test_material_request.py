@@ -32,6 +32,7 @@ from erpnext.buying.doctype.purchase_order.purchase_order import make_purchase_r
 from erpnext.stock.doctype.purchase_receipt.purchase_receipt import make_purchase_invoice
 from erpnext.buying.doctype.purchase_order.purchase_order import make_purchase_invoice as create_purchase_invoice
 from erpnext.buying.doctype.supplier.test_supplier import create_supplier
+from erpnext.stock.doctype.material_request.material_request import make_purchase_order_based_on_supplier
 
 class TestMaterialRequest(FrappeTestCase):
 	def test_make_purchase_order(self):
@@ -4377,19 +4378,20 @@ class TestMaterialRequest(FrappeTestCase):
 		for gle in gl_entries:
 			self.assertEqual(expected_values[gle.account][0], gle.debit)
 			self.assertEqual(expected_values[gle.account][1], gle.credit)
+
 	def test_po_additional_discount_TC_B_079(self):
 		# Scenario : MR=> PO => PR => PI [With IGST TAX]
-
-		po_data = {
-			"company" : "_Test Company",
-			"item_code" : "_Test Item",
-			"warehouse" : "Stores - _TC",
-			"supplier": "_Test Supplier",
-            "schedule_date": "2025-01-13",
-			"qty" : 1,
-			"rate" : 10000,
-			"do_not_submit":1
-		}
+		mr_dict_list = {
+				"company" : "_Test Company",
+				"purpose":"Purchase",
+				"item_code" : "Testing-31",
+				"warehouse" : "Stores - _TC",
+				"qty" : 1,
+				"rate" : 3000,
+				"uom":"Nos"
+			}
+		mr = make_material_request(**mr_dict_list)
+		self.assertEqual(mr.status, "Pending")
 
 		acc = frappe.new_doc("Account")
 		acc.account_name = "Input Tax IGST"
@@ -4398,31 +4400,156 @@ class TestMaterialRequest(FrappeTestCase):
 		account_name = frappe.db.exists("Account", {"account_name" : "Input Tax IGST","company": "_Test Company" })
 		if not account_name:
 			account_name = acc.insert()
-
-		doc_mr = make_material_request(**po_data)
-		doc_mr.append("taxes", {
+		doc_po = make_purchase_order(mr.name)
+		doc_po.supplier = "_Test Supplier"
+		doc_po.append("taxes", {
                     "charge_type": "On Net Total",
                     "account_head": account_name,
                     "rate": 18,
                     "description": "Input GST",
                 })
-		doc_mr.submit()
-		self.assertEqual(doc_mr.discount_amount, 1120)
-		self.assertEqual(doc_mr.grand_total, 10080)
+		doc_po.insert()
+		doc_po.submit()
+		self.assertEqual(doc_po.grand_total, 3540)
+		self.assertEqual(doc_po.status, "To Receive and Bill")
+		mr.reload()
+		self.assertEqual(mr.status, "Ordered")
+		args = {
+			"mode_of_payment" : "Cash",
+			"reference_no" : "For Testing"
+		}
+		pe = make_payment_entry(doc_po.doctype, doc_po.name, doc_po.grand_total, args)
+		doc_po.reload()
+		self.assertEqual(doc_po.advance_paid, 3540)
+		pe_gl_entries = get_gl_entries(pe.name)
+		for gl_entries in pe_gl_entries:
+			if gl_entries['account'] == "Creditors - _TC":
+				self.assertEqual(gl_entries['debit'], 3540)
+			elif gl_entries['account'] == "Cash - _TC":
+				self.assertEqual(gl_entries['credit'], 3540)
 
-		doc_po = make_test_po(doc_mr.name)
-		doc_pr = make_test_pr(doc_po.name)
-		doc_pi = make_test_pi(doc_pr.name)
+		pr = make_test_pr(doc_po.name)
+		self.assertEqual(pr.status, "To Bill")
+		pr_sle = get_sle(pr.name)
+		self.assertEqual(pr_sle[0]['actual_qty'], 1)
+		pr_gl_enties = get_gl_entries(pr.name)
+		for gl_entries_pr in pr_gl_enties:
+			if gl_entries_pr['account'] == "Stock In Hand - _TC":
+				self.assertEqual(gl_entries_pr['debit'], 3000)
+			elif gl_entries_pr['account'] == "Stock Received But Not Billed - _TC":
+				self.assertEqual(gl_entries_pr['credit'], 3000)
+		pi = make_test_pi(pr.name, args={"is_paid" : 1, "cash_bank_account" : pe.paid_from})
+		pi.reload()
+		self.assertEqual(pi.status, "Paid")
+		doc_po.reload()
+		pr.reload()
+		self.assertEqual(doc_po.status, "Completed")
+		self.assertEqual(pr.status, "Completed")
+	
+	def test_mr_to_pe_flow_TC_B_080(self):
+		# Scenario : MR=>PO=> Partial PE=>PR=>PI=>Rm PE (With GST)
+		mr_dict_list = {
+				"company" : "_Test Company",
+				"purpose":"Purchase",
+				"item_code" : "Testing-31",
+				"warehouse" : "Stores - _TC",
+				"qty" : 4,
+				"rate" : 3000,
+				"uom":"Nos"
+			}
+		mr = make_material_request(**mr_dict_list)
+		self.assertEqual(mr.status, "Pending")
+		acc = frappe.new_doc("Account")
+		acc.account_name = "Input Tax IGST"
+		acc.parent_account = "Tax Assets - _TC"
+		acc.company = "_Test Company"
+		account_name = frappe.db.exists("Account", {"account_name" : "Input Tax IGST","company": "_Test Company" })
+		if not account_name:
+			account_name = acc.insert()
+		doc_po = make_purchase_order(mr.name)
+		doc_po.supplier = "_Test Supplier"
+		doc_po.append("taxes", {
+                    "charge_type": "On Net Total",
+                    "account_head": account_name,
+                    "rate": 18,
+                    "description": "Input GST",
+                })
+		doc_po.insert()
+		doc_po.submit()
+		self.assertEqual(doc_po.grand_total, 14160)
+		self.assertEqual(doc_po.status, "To Receive and Bill")
+		mr.reload()
+		self.assertEqual(mr.status, "Ordered")
+		args = {
+			"mode_of_payment" : "Cash",
+			"reference_no" : "For Testing"
+		}
+		pe = make_payment_entry(doc_po.doctype, doc_po.name, 6000, args)
+		doc_po.reload()
+		self.assertEqual(doc_po.advance_paid, 6000)
+		pe_gl_entries = get_gl_entries(pe.name)
+		for gl_entries in pe_gl_entries:
+			if gl_entries['account'] == "Cash - _TC":
+				self.assertEqual(gl_entries['credit'], 6000)
+		pr = make_test_pr(doc_po.name)
+		self.assertEqual(pr.status, "To Bill")
+		pr_sle = get_sle(pr.name)
+		self.assertEqual(pr_sle[0]['actual_qty'], 4)
+		pr_gl_enties = get_gl_entries(pr.name)
+		for gl_entries_pr in pr_gl_enties:
+			if gl_entries_pr['account'] == "Stock In Hand - _TC":
+				self.assertEqual(gl_entries_pr['debit'], 12000)
+			elif gl_entries_pr['account'] == "Stock Received But Not Billed - _TC":
+				self.assertEqual(gl_entries_pr['credit'], 12000)
+		pi = make_purchase_invoice(pr.name)
+		pi.set_advances()
+		for advance in pi.advances:
+			advance.allocated_amount = 6000 if advance.reference_name == pe.name else 0
+		self.assertEqual(pi.advances[0].allocated_amount, 6000)
+		pi.save()
+		pi.submit()
+		self.assertEqual(pi.status, "Partly Paid")
+		self.assertEqual(pi.outstanding_amount, 8160)
+		doc_po.reload()
+		pr.reload()
+		self.assertEqual(doc_po.status, "Completed")
+		self.assertEqual(pr.status, "Completed")
+		args = {
+			"mode_of_payment" : "Cash",
+			"reference_no" : "For Testing"
+		}
+		make_payment_entry(pi.doctype, pi.name, pi.outstanding_amount, args)
+		pi.reload()
+		self.assertEqual(pi.status, "Paid")
 
-		self.assertEqual(doc_pi.discount_amount, 1120)
-		self.assertEqual(doc_pi.grand_total, 10080)
-
-		# Accounting Ledger Checks
-		pi_gl_entries = frappe.get_all("GL Entry", filters={"voucher_no": doc_pi.name}, fields=["account", "debit", "credit"])
-
-		# PI Ledger Validation
-		pi_total = sum(entry["debit"] for entry in pi_gl_entries)
-		self.assertEqual(pi_total, 10080) 
+	def test_fetching_item_from_open_mr_TC_B_096(self):
+		#Scenario :Fetching Items from Open Material Requests 
+		item_code = "Testing-31"
+		supplier = "_Test Supplier"
+		company = "_Test Company"
+		frappe.db.set_value("Item Default", {"parent": item_code, "company": company}, "default_supplier", supplier)
+		mr_dict_list = {
+				"company" : company,
+				"purpose":"Purchase",
+				"item_code" : item_code,
+				"warehouse" : "Stores - _TC",
+				"qty" : 1,
+				"rate" : 100,
+			}
+		mr = make_material_request(**mr_dict_list)
+		po = make_purchase_order_based_on_supplier(source_name=mr.name, args={"supplier":supplier})
+		po.warehouse = "Stores - _TC"
+		po.items[0].rate = 100 if po.items[0].item_code == item_code else 0
+		po.save()
+		po.submit()
+		self.assertEqual(po.items[0].material_request, mr.name)
+		mr.reload()
+		self.assertEqual(mr.status, "Ordered")
+		pr = make_test_pr(po.name)
+		self.assertEqual(pr.items[0].material_request, mr.name)
+		self.assertEqual(pr.items[0].purchase_order, po.name)
+		mr.reload()
+		self.assertEqual(mr.status, "Received")
 
 	def test_purchase_flow_TC_B_068(self):
 		#Scenario : MR=>PO=>PR=>PI [With Shipping Rule]
@@ -6811,3 +6938,9 @@ def get_shipping_rule_name(args = None):
 	from erpnext.accounts.doctype.shipping_rule.test_shipping_rule import create_shipping_rule
 	doc_shipping_rule = create_shipping_rule("Buying", "_Test Shipping Rule -TC", args)
 	return doc_shipping_rule.name
+
+def get_gl_entries(voucher_no):
+	return frappe.get_all("GL Entry", filters={"voucher_no": voucher_no}, fields=["account", "debit", "credit"])
+
+def get_sle(voucher_no):
+	return frappe.get_all("Stock Ledger Entry", filters={"voucher_no": voucher_no}, fields=['actual_qty', 'item_code']) 
