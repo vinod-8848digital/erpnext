@@ -3148,6 +3148,167 @@ class TestPurchaseOrder(FrappeTestCase):
 		self.assertEqual(pr.items[0].rate, 100)
 		make_pi_against_pr(pr.name)
 
+	def test_po_with_create_tax_template_5_pr_pi_2_TC_B_145(self):
+		from erpnext.buying.doctype.purchase_order.purchase_order import make_purchase_receipt
+		from erpnext.stock.doctype.purchase_receipt.purchase_receipt import make_purchase_invoice
+
+		company = "_Test Company"
+		supplier = "_Test Supplier 1"
+		tax_template = "GST 5% - TC-4"
+		if not frappe.db.exists("Item Tax Template", tax_template):
+			tax_template = get_tax_template(company, tax_template, 5)
+		item_group = frappe.get_doc("Item Group", "Raw Material")
+		item_group.append("taxes", {"item_tax_template": tax_template})
+		item_group.save()
+		item_code = "_Test Item"
+		item = frappe.get_doc("Item", item_code)
+		item.item_group = "Raw Material"
+		item.save()
+		po_data = {
+			"company": company,
+			"supplier": supplier,
+			"warehouse": "Stores - _TC",
+			"item_code": item.item_code,
+			"qty": 10,
+			"rate": 1000
+		}
+		doc_po = create_purchase_order(**po_data)
+		doc_pr = make_purchase_receipt(doc_po.name)
+		doc_pr.save()
+		doc_pr.submit()
+		self.assertEqual(doc_pr.items[0].qty, 10)
+		self.assertEqual(doc_pr.items[0].rate, 1000)
+		pr_gl_entries = get_gl_entries(doc_pr.name)
+		for gl_entries in pr_gl_entries:
+			if gl_entries['account'] == "Stock In Hand - _TC":
+				self.assertEqual(gl_entries['debit'], 10000)
+			elif gl_entries['account'] == "Stock Received But Not Billed - _TC":
+				self.assertEqual(gl_entries['credit'], 10000)
+		doc_pi = make_purchase_invoice(doc_pr.name)
+		doc_pi.save()
+		doc_pi.submit()
+	
+	def test_po_with_create_tax_template_5_pr_pi_3_TC_B_146(self):
+		from erpnext.buying.doctype.purchase_order.purchase_order import make_purchase_receipt
+		from erpnext.stock.doctype.purchase_receipt.purchase_receipt import make_purchase_invoice
+		company = "_Test Company"
+		supplier = "_Test Supplier 1"
+		tax_template = "GST 12% - TC-5"
+		if not frappe.db.exists("Item Tax Template", tax_template):
+			tax_template = get_tax_template(company, tax_template, 12)
+		item_code = "_Test Item"
+		item = frappe.get_doc("Item", item_code)
+		gst_hsn = frappe.get_doc("GST HSN Code", item.gst_hsn_code)
+		gst_hsn.append("taxes", {"item_tax_template":tax_template, "valid_from": today()})
+		gst_hsn.save()
+		po_data_1 = {
+			"company": company,
+			"supplier": supplier,
+			"warehouse": "Stores - _TC",
+			"item_code": item.item_code,
+			"qty": 1,
+			"rate": 100
+		}
+		doc_po_1 = create_purchase_order(**po_data_1)
+		doc_pr_1 = make_purchase_receipt(doc_po_1.name)
+		doc_pr_1.save()
+		doc_pr_1.submit()
+		self.assertEqual(doc_pr_1.items[0].qty, 1)
+		self.assertEqual(doc_pr_1.items[0].rate, 100)
+		pr_gl_entries = get_gl_entries(doc_pr_1.name)
+		for gl_entries in pr_gl_entries:
+			if gl_entries['account'] == "Stock In Hand - _TC":
+				self.assertEqual(gl_entries['debit'], 100)
+			elif gl_entries['account'] == "Stock Received But Not Billed - _TC":
+				self.assertEqual(gl_entries['credit'], 100)
+		doc_pi_1= make_purchase_invoice(doc_pr_1.name)
+		doc_pi_1.save()
+		doc_pi_1.submit()
+		po_data_2 = {
+			"company": company,
+			"supplier": supplier,
+			"warehouse": "Stores - _TC",
+			"item_code": item.item_code,
+			"qty": 1,
+			"rate": 100
+		}
+		doc_po_2 = create_purchase_order(**po_data_2)
+		doc_pr_2 = make_purchase_receipt(doc_po_2.name)
+		doc_pr_2.save()
+		doc_pr_2.submit()
+		self.assertEqual(doc_pr_2.items[0].qty, 1)
+		self.assertEqual(doc_pr_2.items[0].rate, 100)
+		pr_gl_entries = get_gl_entries(doc_pr_2.name)
+		for gl_entries in pr_gl_entries:
+			if gl_entries['account'] == "Stock In Hand - _TC":
+				self.assertEqual(gl_entries['debit'], 100)
+			elif gl_entries['account'] == "Stock Received But Not Billed - _TC":
+				self.assertEqual(gl_entries['credit'], 100)
+		doc_pi_2= make_purchase_invoice(doc_pr_2.name)
+		doc_pi_2.save()
+		doc_pi_2.submit()
+
+	def test_get_item_from_po_to_pr_TC_B_147(self):
+		po_data = {
+			"company" : "_Test Company",
+			"item_code" : "_Test Item",
+			"warehouse" : "Stores - _TC",
+			"qty" : 10,
+			"rate" : 1000,
+			"do_not_submit":True
+		}
+		doc_po = create_purchase_order(**po_data)
+		acc = frappe.new_doc("Account")
+		acc.account_name = "Input Tax CGST"
+		acc.parent_account = "Tax Assets - _TC"
+		acc.company = "_Test Company"
+		account_name_cgst = frappe.db.exists("Account", {"account_name" : "Input Tax CGST","company": "_Test Company" })
+		if not account_name_cgst:
+			account_name_cgst = acc.insert()
+
+		
+		acc = frappe.new_doc("Account")
+		acc.account_name = "Input Tax SGST"
+		acc.parent_account = "Tax Assets - _TC"
+		acc.company = "_Test Company"
+		account_name_sgst = frappe.db.exists("Account", {"account_name" : "Input Tax SGST","company": "_Test Company" })
+		if not account_name_sgst:
+			account_name_sgst = acc.insert()
+		
+		taxes =  [
+			{
+                    "charge_type": "On Net Total",
+                    "account_head": account_name_cgst,
+                    "rate": 2.5,
+                    "description": "Input GST",
+            },
+			{
+                    "charge_type": "On Net Total",
+                    "account_head": account_name_sgst,
+                    "rate": 2.5,
+                    "description": "Input GST",
+            }
+		]
+		for tax in taxes:
+			doc_po.append("taxes", tax)
+		doc_po.save()
+		doc_po.submit()
+		self.assertEqual(doc_po.grand_total, 10500)
+		doc_pr = make_purchase_receipt(doc_po.name)
+		doc_pr.save()
+		doc_pr.submit()
+		self.assertEqual(doc_pr.items[0].qty, 10)
+		self.assertEqual(doc_pr.items[0].rate, 1000)
+		gl_entries_pr = get_gl_entries(doc_pr.name)
+		for gl_entries in gl_entries_pr:
+			if gl_entries['account'] == "Stock In Hand - _TC":
+				self.assertEqual(gl_entries['debit'], 10000)
+			elif gl_entries['account'] == "Stock Received But Not Billed - _TC":
+				self.assertEqual(gl_entries['credit'], 10000)
+		doc_pi= make_purchase_invoice(doc_pr.name)
+		doc_pi.save()
+		doc_pi.submit()
+			
 	def test_po_ignore_pricing_rule_TC_B_049(self):
 		company = "_Test Company"
 		item_code = "Testing-31"
@@ -7836,3 +7997,28 @@ def get_gl_entries(voucher_no):
 #     currency_exchange.insert()
     
 #     return currency_exchange
+
+def get_tax_template(company, tax_template, rate):
+	if not frappe.db.exists(tax_template):
+		tax_template = frappe.get_doc(
+			{
+				"doctype": "Item Tax Template",
+				"title": f"GST {rate}%",
+				"company": company,
+				"gst_treatment": "Taxable",
+				"gst_rate": rate,
+				"taxes": [
+					{
+						"tax_type": "Input Tax CGST - _TC",
+						"tax_rate": rate/2
+					},
+					{
+						"tax_type": "Input Tax SGST - _TC",
+						"tax_rate": rate/2
+					},
+				]
+			}
+		)
+		tax_template.insert(ignore_if_duplicate=True)
+
+		return tax_template.name
