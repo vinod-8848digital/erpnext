@@ -3034,58 +3034,119 @@ class TestPurchaseOrder(FrappeTestCase):
 		warehouse = "Stores - _TC"
 		if not warehouse:
 			create_warehouse("Stores - _TC")
-		supplier = create_supplier(
-			supplier_name = "_Test Supplier USD",
-			default_currency="USD"
-		)
 		account = self.create_account("Creditors USD", company, "USD", "Accounts Payable - _TC")
-		test_account_details = {
-			"company": company,
-			"account": account.name,
-		}
-		supplier.append("accounts", test_account_details)
-		
-		bank = "Bank Of America"
+		supplier = create_supplier(supplier_name="_Test Supplier_1 USD", default_currency="USD")
+		if not [x for x in supplier.accounts if x.company == company]:
+			supplier.append("accounts", {"company": company, "account": account.name})
+			supplier.save()
+		bank_name = "Bank Of America"
+		bank = frappe.get_doc("Bank", bank_name) if frappe.db.exists("Bank", bank_name) else None
 		if not bank:
 			bank = frappe.new_doc("Bank")
-			bank.bank_name = bank
+			bank.bank_name = bank_name
 			bank.insert()
 
-		bank_account = frappe.new_doc("Bank Account")
-		bank_account.account_name = "Bank Of America"
-		bank_account.bank = bank
-		bank_account.account_type = "Current A/c"
-		bank_account.company = company
-		bank_account.is_company_account = 1
-		item_code = "Testing-31"
-		if not item_code:
-			create_item("Testing-31")
-		item_price = 100
-		# currency_exchange_data = {
-		# 	"date":today(),
-		# 	"from_currency":"USD",
-		# 	"to_currency":"INR",
-		# 	"exchange_rate":flt("62.9"),
-		# 	"for_buying":1
-		# }
-		# create_currency_exchange(**currency_exchange_data)
-		frappe.get_doc({
-			"doctype": "Item Price",
-			"price_list": "Standard Buying",
-			"item_code": item_code,
-			"price_list_rate": item_price
-		}).insert()
-		po = create_purchase_order(supplier=supplier.name,
-							  		company=company,
-									warehouse=warehouse, 
-									currency="USD", 
-									item_code=item_code, 
-									qty=10, 
-									do_not_submit=1)
-		po.conversion_rate = 60
-		print(po.items[0].rate)
-		print(po.total)
-		print(po.currency)
+		bank_account_name = f"{bank_name} - {bank_name}"
+		if not frappe.db.exists("Bank Account", bank_account_name):
+			bank_account = frappe.new_doc("Bank Account")
+			bank_account.account_name = bank_name
+			bank_account.bank = bank.name
+			bank_account.account_type = "Current A/c"
+			bank_account.company = company
+			bank_account.is_company_account = 1
+			bank_account.insert()
+		else:
+			bank_account = frappe.get_doc("Bank Account", bank_account_name)
+
+		item = create_item("Testing-312")
+		po_doc = create_purchase_order(qty=10,company=company,supplier=supplier.name,item=item.item_code, warehouse=warehouse,rate=1.59, currency="USD", do_not_save=1)
+		po_doc.conversion_rate = 62.9
+		po_doc.save()
+		po_doc.submit()
+		self.assertEqual(po_doc.base_total, 1000.11)
+		pr = make_purchase_receipt(po_doc.name)
+		pr.save()
+		pr.submit()
+		self.assertEqual(pr.items[0].received_qty, 10)
+		self.assertEqual(pr.base_total, 1000.11)
+		pi = make_test_pi(pr.name)
+		pr_gl_entries = get_gl_entries(pi.name)
+		for gl_entries_pr in pr_gl_entries:
+			if gl_entries_pr['account'] == "Stock In Hand - _TC":
+				self.assertEqual(gl_entries_pr['debit'], 1000.11)
+			elif gl_entries_pr['account'] == "Stock Received But Not Billed - _TC":
+				self.assertEqual(gl_entries_pr['credit'], 1000.11)
+		from erpnext.accounts.doctype.payment_entry.test_payment_entry import get_payment_entry
+		pe = get_payment_entry(pi.doctype, pi.name, bank_account=pi.credit_to)
+		pe.mode_of_payment = "Bank Draft"
+		pe.posting_date = add_days(pi.posting_date, 1)
+		pe.bank_account = bank_account.name
+		pe.reference_no = "123"
+		pe.reference_date = nowdate()
+		pe.paid_from_account_currency = pi.currency
+		pe.paid_to_account_currency = pi.currency
+		pe.target_exchange_rate = 60
+		pe.source_exchange_rate = 60
+		pe.paid_amount = pi.grand_total
+		pe.save(ignore_permissions=True)
+		pe.submit()
+
+	def test_previous_row_total_flow_TC_B_141(self):
+		item = create_item("Test Item")
+		acc = frappe.new_doc("Account")
+		acc.account_name = "Environmental Cess a/c"
+		acc.parent_account = "Indirect Expenses - _TC"
+		acc.account_type = "Chargeable"
+		acc.company = "_Test Company"
+		account_name_cess = frappe.db.exists("Account", {"account_name": "Environmental Cess a/c", "company": "_Test Company"})
+		if not account_name_cess:
+			account_name_cess = acc.insert()
+		
+		acc = frappe.new_doc("Account")
+		acc.account_name = "Input Tax CGST"
+		acc.parent_account = "Tax Assets - _TC"
+		acc.company = "_Test Company"
+		account_name = frappe.db.exists("Account", {"account_name" : "Input Tax CGST","company": "_Test Company" })
+		if not account_name:
+			account_name = acc.insert()
+		
+		acc = frappe.new_doc("Account")
+		acc.account_name = "Input Tax SGST"
+		acc.parent_account = "Tax Assets - _TC"
+		acc.company = "_Test Company"
+		account_name = frappe.db.exists("Account", {"account_name" : "Input Tax SGST","company": "_Test Company" })
+		if not account_name:
+			account_name = acc.insert()
+
+		taxes = create_taxes_interstate()
+		taxes.append({
+			"charge_type": "On Previous Row Total",
+			"account_head": account_name_cess,
+			"rate": 5,
+			"description": "Environmental Cess",
+			"row_id":2,
+			"category": "Total"
+		}
+		)
+		po_data = {
+			"company": "_Test Company",
+			"supplier": "_Test Supplier 1",
+			"warehouse": "Stores - _TC",
+			"item_code": item.item_code,
+			"qty": 10,
+			"rate": 100,
+			"do_not_submit" : 1
+		}
+		doc_po = create_purchase_order(**po_data)
+		for tax in taxes:
+			doc_po.append("taxes", tax)
+		doc_po.save()
+		doc_po.submit()
+		self.assertEqual(doc_po.grand_total, 1239)
+		pr = make_pr_for_po(doc_po.name, received_qty=10)
+		self.assertEqual(pr.items[0].received_qty, 10)
+		self.assertEqual(pr.items[0].rate, 100)
+		make_pi_against_pr(pr.name)
 
 	def test_po_ignore_pricing_rule_TC_B_049(self):
 		company = "_Test Company"
@@ -7749,29 +7810,29 @@ def get_sle(voucher_no):
 def get_gl_entries(voucher_no):
 	return frappe.get_all("GL Entry", filters={"voucher_no": voucher_no}, fields=["account", "debit", "credit"])
 
-def create_currency_exchange(**args):
-    args = frappe._dict(args)
-    existing_currency_exchange = frappe.get_value(
-        "Currency Exchange",
-        {
-            "date": args.date,
-            "from_currency": args.from_currency,
-            "to_currency": args.to_currency,
-            "for_buying": args.for_buying
-        },
-		"name",
-		as_dict=True
-    )
-    if existing_currency_exchange:
-        return frappe.get_doc("Currency Exchange", existing_currency_exchange.get("name"))
+# def create_currency_exchange(**args):
+#     args = frappe._dict(args)
+#     existing_currency_exchange = frappe.get_value(
+#         "Currency Exchange",
+#         {
+#             "date": args.date,
+#             "from_currency": args.from_currency,
+#             "to_currency": args.to_currency,
+#             "for_buying": args.for_buying
+#         },
+# 		"name",
+# 		as_dict=True
+#     )
+#     if existing_currency_exchange:
+#         return frappe.get_doc("Currency Exchange", existing_currency_exchange.get("name"))
     
-    currency_exchange = frappe.new_doc("Currency Exchange")
-    currency_exchange.date = args.date
-    currency_exchange.from_currency = args.from_currency
-    currency_exchange.to_currency = args.to_currency
-    currency_exchange.exchange_rate = args.exchange_rate
-    currency_exchange.for_buying = args.for_buying
-    currency_exchange.for_selling = args.for_selling
-    currency_exchange.insert()
+#     currency_exchange = frappe.new_doc("Currency Exchange")
+#     currency_exchange.date = args.date
+#     currency_exchange.from_currency = args.from_currency
+#     currency_exchange.to_currency = args.to_currency
+#     currency_exchange.exchange_rate = args.exchange_rate
+#     currency_exchange.for_buying = args.for_buying
+#     currency_exchange.for_selling = args.for_selling
+#     currency_exchange.insert()
     
-    return currency_exchange
+#     return currency_exchange
