@@ -1117,7 +1117,9 @@ def get_bom_items_as_dict(
 	fetch_qty_in_stock_uom=True,
 ):
 	item_dict = {}
-
+	include_project = "projects" in frappe.get_installed_apps()
+	project_column = ", bom.project" if include_project else ""
+	project_group_by = "bom.project," if include_project else ""
 	# Did not use qty_consumed_per_unit in the query, as it leads to rounding loss
 	query = """select
 				bom_item.item_code,
@@ -1125,7 +1127,7 @@ def get_bom_items_as_dict(
 				item.item_name,
 				sum(bom_item.{qty_field}/ifnull(bom.quantity, 1)) * %(qty)s as qty,
 				item.image,
-				bom.project,
+				{project_column},
 				bom_item.rate,
 				sum(bom_item.{qty_field}/ifnull(bom.quantity, 1)) * bom_item.rate * %(qty)s as amount,
 				item.stock_uom,
@@ -1150,7 +1152,7 @@ def get_bom_items_as_dict(
 				bom_item.idx,
                 item.item_name,
                 item.image,
-                bom.project,
+				{project_column},
                 bom_item.rate,
                 item.stock_uom,
                 item.item_group,
@@ -1159,7 +1161,10 @@ def get_bom_items_as_dict(
                 item_default.expense_account,
                 item_default.buying_cost_center,
 				{group_by_fields}
-				order by bom_item.idx"""
+			order by bom_item.idx""".format(
+			project_column=project_column,	
+			project_group_by=project_group_by,
+		)
 
 	is_stock_item = 0 if include_non_stock_items else 1
 	if cint(fetch_exploded):

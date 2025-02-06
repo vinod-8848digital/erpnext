@@ -4970,7 +4970,7 @@ def get_items(**args):
 
 
 def make_purchase_receipt(**args):
-	if not frappe.db.exists("Location", "Test Location"):
+	if frappe.db.exists("DocType", "Location") and not frappe.db.exists("Location", "Test Location"):
 		frappe.get_doc({"doctype": "Location", "location_name": "Test Location"}).insert()
 
 	frappe.db.set_single_value("Buying Settings", "allow_multiple_items", 1)

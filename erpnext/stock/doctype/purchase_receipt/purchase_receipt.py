@@ -267,6 +267,10 @@ class PurchaseReceipt(BuyingController):
 				item.provisional_expense_account = default_provisional_account
 
 	def validate_with_previous_doc(self):
+		compare_fields_item = [["uom", "="], ["item_code", "="]]
+		if "projects" in frappe.get_installed_apps():
+			compare_fields_item.append(["project", "="])     
+   
 		super().validate_with_previous_doc(
 			{
 				"Purchase Order": {
@@ -275,7 +279,7 @@ class PurchaseReceipt(BuyingController):
 				},
 				"Purchase Order Item": {
 					"ref_dn_field": "purchase_order_item",
-					"compare_fields": [["project", "="], ["uom", "="], ["item_code", "="]],
+					"compare_fields": compare_fields_item,
 					"is_child_table": True,
 					"allow_duplicate_prev_row_id": True,
 				},
@@ -549,7 +553,7 @@ class PurchaseReceipt(BuyingController):
 							against_account=stock_asset_account_name,
 							credit_in_account_currency=flt(amount["amount"]),
 							account_currency=account_currency,
-							project=item.project,
+							project=item.get("project"),
 							item=item,
 						)
 
@@ -565,7 +569,7 @@ class PurchaseReceipt(BuyingController):
 					remarks=_("Adjustment based on Purchase Invoice rate"),
 					against_account=stock_asset_account_name,
 					account_currency=account_currency,
-					project=item.project,
+					project=item.get("project"),
 					item=item,
 				)
 
@@ -618,7 +622,7 @@ class PurchaseReceipt(BuyingController):
 					remarks=remarks,
 					against_account=stock_asset_account_name,
 					account_currency=account_currency,
-					project=item.project,
+					project=item.get("project"),
 					item=item,
 				)
 
@@ -717,7 +721,7 @@ class PurchaseReceipt(BuyingController):
 			remarks=remarks,
 			against_account=expense_account,
 			account_currency=credit_currency,
-			project=item.project,
+			project=item.get("project"),
 			voucher_detail_no=item.name,
 			item=item,
 			posting_date=posting_date,
@@ -732,7 +736,7 @@ class PurchaseReceipt(BuyingController):
 			remarks=remarks,
 			against_account=provisional_account,
 			account_currency=debit_currency,
-			project=item.project,
+			project=item.get("project"),
 			voucher_detail_no=item.name,
 			item=item,
 			posting_date=posting_date,
