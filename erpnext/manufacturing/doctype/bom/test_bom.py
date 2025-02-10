@@ -20,6 +20,16 @@ from erpnext.stock.doctype.item.test_item import make_item
 from erpnext.stock.doctype.stock_reconciliation.test_stock_reconciliation import (
 	create_stock_reconciliation,
 )
+import copy
+from erpnext.stock.doctype.warehouse.test_warehouse import create_warehouse
+from erpnext.stock.doctype.item.test_item import create_item
+from erpnext.buying.doctype.purchase_order.test_purchase_order import create_purchase_order
+from erpnext.buying.doctype.purchase_order.purchase_order import make_subcontracting_order
+from erpnext.manufacturing.doctype.production_plan.test_production_plan import make_bom
+from erpnext.controllers.tests.test_subcontracting_controller import get_rm_items, make_stock_in_entry, make_stock_transfer_entry
+from erpnext.buying.doctype.purchase_order.purchase_order import make_purchase_receipt
+from erpnext.stock.doctype.purchase_receipt.purchase_receipt import make_purchase_invoice 
+from erpnext.subcontracting.doctype.subcontracting_order.subcontracting_order import make_subcontracting_receipt
 
 test_records = frappe.get_test_records("BOM")
 test_dependencies = ["Item", "Quality Inspection Template"]
@@ -756,11 +766,6 @@ class TestBOM(FrappeTestCase):
 		self.assertTrue("_Test RM Item 3 Manufacture Item" in items)
 
 	def test_subcontrcting_supply_raw_material_TC_B_100(self):
-		import copy
-		from erpnext.stock.doctype.warehouse.test_warehouse import create_warehouse
-		from erpnext.stock.doctype.item.test_item import create_item
-		from erpnext.buying.doctype.purchase_order.test_purchase_order import create_purchase_order
-		from erpnext.buying.doctype.purchase_order.purchase_order import make_subcontracting_order
 		item_1 = create_item(item_code="Testing Service", is_stock_item=0)
 		item_1.item_group = "Services"
 		item_1.save()
@@ -779,7 +784,6 @@ class TestBOM(FrappeTestCase):
 		fg_item.save()
 		raw_materials = [item_2.item_code, item_3.item_code, item_4.item_code]
 		supplier_warehouse = create_warehouse("Supplier Warehouse PO")
-		from erpnext.manufacturing.doctype.production_plan.test_production_plan import make_bom
 		bom = make_bom(item=fg_item, raw_materials=raw_materials, do_not_save=True)
 		for item in bom.items:
 			if item.item_code == item_2.item_code:
@@ -800,7 +804,6 @@ class TestBOM(FrappeTestCase):
 		sco.set_warehouse = create_warehouse("Stores - _TC")
 		sco.save()
 		sco.submit()
-		from erpnext.controllers.tests.test_subcontracting_controller import get_rm_items, make_stock_in_entry, make_stock_transfer_entry
 		rm_items = get_rm_items(sco.supplied_items)
 		itemwise_details = make_stock_in_entry(rm_items=rm_items)
 		for item in rm_items:
@@ -812,8 +815,6 @@ class TestBOM(FrappeTestCase):
 			itemwise_details=copy.deepcopy(itemwise_details),
 		)
 		make_subcontracting_receipt_against_sco(sco.name)
-		from erpnext.buying.doctype.purchase_order.purchase_order import make_purchase_receipt
-		from erpnext.stock.doctype.purchase_receipt.purchase_receipt import make_purchase_invoice 
 		pr = make_purchase_receipt(po.name)
 		pr.submit()
 		self.assertEqual(pr.status, "To Bill")
@@ -827,7 +828,6 @@ class TestBOM(FrappeTestCase):
 		self.assertEqual(pi.status, "Paid")
 
 def make_subcontracting_receipt_against_sco(sco, quantity=1):
-	from erpnext.subcontracting.doctype.subcontracting_order.subcontracting_order import make_subcontracting_receipt
 	scr = make_subcontracting_receipt(sco)
 	scr.items[0].qty = quantity
 	scr.insert()

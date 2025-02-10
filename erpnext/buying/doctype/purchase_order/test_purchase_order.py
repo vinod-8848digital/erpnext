@@ -6793,9 +6793,6 @@ class TestPurchaseOrder(FrappeTestCase):
 		self.assertEqual(po.grand_total, 2360)
 
 	def test_po_with_create_tax_template_5_pr_pi_2_TC_B_145(self):
-		from erpnext.buying.doctype.purchase_order.purchase_order import make_purchase_receipt
-		from erpnext.stock.doctype.purchase_receipt.purchase_receipt import make_purchase_invoice
-		from erpnext.stock.doctype.warehouse.test_warehouse import create_warehouse
 		supplier = create_supplier(supplier_name="_Test Supplier PO")
 		company = "_Test Company"
 		if not frappe.db.exists("Company", company):
@@ -6824,7 +6821,7 @@ class TestPurchaseOrder(FrappeTestCase):
 			"rate": 1000
 		}
 		doc_po = create_purchase_order(**po_data)
-		doc_pr = make_purchase_receipt(doc_po.name)
+		doc_pr = make_test_pr(doc_po.name)
 		doc_pr.save()
 		doc_pr.submit()
 		self.assertEqual(doc_pr.items[0].qty, 10)
@@ -6840,9 +6837,6 @@ class TestPurchaseOrder(FrappeTestCase):
 		doc_pi.submit()
 
 	def test_po_with_create_tax_template_5_pr_pi_3_TC_B_146(self):
-		from erpnext.buying.doctype.purchase_order.purchase_order import make_purchase_receipt
-		from erpnext.stock.doctype.purchase_receipt.purchase_receipt import make_purchase_invoice
-		from erpnext.stock.doctype.warehouse.test_warehouse import create_warehouse
 		supplier = create_supplier(supplier_name="_Test Supplier PO")
 		company = "_Test Company"
 		if not frappe.db.exists("Company", company):
@@ -6871,7 +6865,7 @@ class TestPurchaseOrder(FrappeTestCase):
 			"rate": 100
 		}
 		doc_po_1 = create_purchase_order(**po_data_1)
-		doc_pr_1 = make_purchase_receipt(doc_po_1.name)
+		doc_pr_1 = make_test_pr(doc_po_1.name)
 		doc_pr_1.save()
 		doc_pr_1.submit()
 		self.assertEqual(doc_pr_1.items[0].qty, 1)
@@ -6894,7 +6888,7 @@ class TestPurchaseOrder(FrappeTestCase):
 			"rate": 100
 		}
 		doc_po_2 = create_purchase_order(**po_data_2)
-		doc_pr_2 = make_purchase_receipt(doc_po_2.name)
+		doc_pr_2 = make_test_pr(doc_po_2.name)
 		doc_pr_2.save()
 		doc_pr_2.submit()
 		self.assertEqual(doc_pr_2.items[0].qty, 1)
