@@ -4391,7 +4391,6 @@ class TestMaterialRequest(FrappeTestCase):
 	
 	def test_fetching_item_from_open_mr_TC_B_096(self):
 		#Scenario :Fetching Items from Open Material Requests
-		from erpnext.stock.doctype.warehouse.test_warehouse import create_warehouse
 		item = create_item("_Test Item")
 		supplier = create_supplier(supplier_name="_Test Supplier")
 		company = "_Test Company"

@@ -4504,7 +4504,6 @@ class TestPurchaseReceipt(FrappeTestCase):
 		pi.submit()
 
 	def test_pr_zero_valuation_TC_B_104(self):
-		from erpnext.stock.doctype.warehouse.test_warehouse import create_warehouse
 		item = create_item("Testing-31")
 		supplier = create_supplier(supplier_name="_Test Supplier")
 		company = "_Test Company"

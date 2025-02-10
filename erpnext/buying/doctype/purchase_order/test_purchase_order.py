@@ -10,6 +10,7 @@ from frappe.tests.utils import FrappeTestCase, change_settings
 from frappe.utils import add_days, flt, getdate, nowdate, add_years, today, get_year_start, get_year_ending
 from frappe.utils.data import today
 from datetime import date
+from frappe.desk.query_report import run
 
 from erpnext.accounts.doctype.payment_entry.payment_entry import get_payment_entry
 from erpnext.accounts.party import get_due_date_from_template
@@ -2730,11 +2731,9 @@ class TestPurchaseOrder(FrappeTestCase):
 		self.assertEqual(pi.net_total, 9000)
 
 	def test_partial_pr_pi_flow_TC_B_103(self):
-		from frappe.desk.query_report import run
 		# Scenario : PO > PR > PI
 		item_1= create_item("_Test Item")
 		item_2= create_item("Book")
-		from erpnext.stock.doctype.warehouse.test_warehouse import create_warehouse
 		supplier = create_supplier(supplier_name="_Test Supplier")
 		company = "_Test Company"
 		if not frappe.db.exists("Company", company):
@@ -2839,7 +2838,6 @@ class TestPurchaseOrder(FrappeTestCase):
 		make_test_pi(pr.name)
 
 	def test_previous_row_total_flow_TC_B_141(self):
-		from erpnext.stock.doctype.warehouse.test_warehouse import create_warehouse
 		supplier = create_supplier(supplier_name="_Test Supplier")
 		company = "_Test Company"
 		if not frappe.db.exists("Company", company):
