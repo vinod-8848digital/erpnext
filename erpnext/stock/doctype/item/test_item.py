@@ -984,6 +984,20 @@ class TestItem(FrappeTestCase):
 		if frappe.db.exists("Item Group", 'Software'):
 			frappe.delete_doc("Item Group", 'Software')
 
+	def test_create_variant_item_TC_SCK_125(self):
+		item = make_item(
+			"_Test Template Item",
+			{
+				"variant_based_on":"Item Attribute",
+				"attributes": [
+					{"attribute": "Test Size"}
+				],
+				"has_variants": 1,
+			},
+		)
+		self.assertEqual(item.item_code, "_Test Template Item")
+		self.assertEqual(item.has_variants, 1)
+		self.assertEqual(item.attributes[0].attribute, "Test Size")
 
 def set_item_variant_settings(fields):
 	doc = frappe.get_doc("Item Variant Settings")
