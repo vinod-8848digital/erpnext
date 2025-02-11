@@ -3264,6 +3264,66 @@ class TestStockEntry(FrappeTestCase):
 			if sle['item_code'] == item.item_code:
 				self.assertEqual(sle['actual_qty'], 150)
 	
+	@change_settings("Stock Settings", {"allow_negative_stock": 1})
+	def test_stock_entry_manufacture_TC_SCK_138(self):
+		company = create_company()
+		se = make_stock_entry(
+			company=company, 
+			purpose="Manufacture", 
+			do_not_submit=True,
+			do_not_save=True
+		)
+		item_1 = create_item(item_code="W-N-001", valuation_rate=100)
+		item_2 = create_item(item_code="ST-N-001", valuation_rate=200)
+		item_3 = create_item(item_code="GU-SE-001", valuation_rate=300)
+		item_4 = create_item(item_code="SCW-N-001", valuation_rate=400)
+		
+		items = [
+			{
+				"s_warehouse": create_warehouse("Test Store 1"),
+				"item_code": item_1.item_code,
+				"qty": 10,
+				"conversion_factor": 1
+			},
+			{
+				"s_warehouse": create_warehouse("Test Store 2"),
+				"item_code": item_2.item_code,
+				"qty": 42,
+				"conversion_factor": 1
+			},
+			{
+				"t_warehouse": create_warehouse("Test Store 3"),
+				"item_code": item_3.item_code,
+				"qty": 8,
+				"is_finished_item": 1,
+				"conversion_factor": 1
+			},
+			{
+				"t_warehouse": create_warehouse("Test Store 4"),
+				"item_code": item_4.item_code,
+				"qty": 2,
+				"conversion_factor": 1
+			}
+		]
+		se.items = []
+		for item in items:
+			se.append("items", item)
+		se.save()
+		se.submit()
+
+def create_company(company=None):
+	if not company:
+		company = "_Test Company"
+	if not frappe.db.exists("Company", company):
+		company_doc = frappe.new_doc("Company")
+		company_doc.company_doc_name = company
+		company_doc.country="India",
+		company_doc.default_currency= "INR",
+		company_doc.save()
+	else:
+		company_doc = frappe.get_doc("Company", company) 
+	return company_doc.name
+		
 def create_bom(bom_item, rm_items, company=None, qty=None, properties=None):
 		bom = frappe.new_doc("BOM")
 		bom.update(
