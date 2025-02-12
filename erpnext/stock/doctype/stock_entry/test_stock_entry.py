@@ -2932,6 +2932,9 @@ class TestStockEntry(FrappeTestCase):
 			se.append("items", item)
 		se.save()
 		se.submit()
+		self.assertEqual(se.items[0].qty, 10)
+		self.assertEqual(se.purpose, "Manufacture")
+		self.assertEqual(se.items[2].is_finished_item, 1)
 
 	def test_stock_manufacture_with_batch_TC_SCK_139(self):
 		company = create_company()
