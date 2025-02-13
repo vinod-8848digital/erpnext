@@ -1932,7 +1932,30 @@ class TestStockEntry(FrappeTestCase):
 
 		actual_qty = frappe.db.get_value('Stock Ledger Entry',{'voucher_no':se.name, 'voucher_type':'Stock Entry','warehouse':'Stores - TCP1'},['qty_after_transaction'])
 		self.assertEqual(actual_qty, 10)
-	
+
+	def test_create_partial_material_request_stock_entry_for_serial_item_TC_SCK_190(self):
+		from erpnext.stock.doctype.material_request.material_request import make_stock_entry as _make_stock_entry
+		company = "_Test Company"
+		if not frappe.db.exists("Company", company):
+			company_doc = frappe.new_doc("Company")
+			company_doc.company_doc_name = company
+			company_doc.country="India"
+			company_doc.default_currency= "INR"
+			company_doc.save()
+		else:
+			company_doc = frappe.get_doc("Company", company) 
+		warehouse = create_warehouse("_Test Warehouse",  company=company_doc.name)
+		item = make_item("_Test Item MR", properties={"has_serial_no":1})
+		item.serial_no_series = f"{item.item_code}.-SL-.####."
+		item.save()
+		mr = make_material_request(material_request_type="Material Issue", qty=10, warehouse=warehouse, item=item.name)
+		se = _make_stock_entry(mr.name)
+		se.get("items")[0].qty = 5
+		se.save()
+		se.submit()
+		mr.reload()
+		self.assertEqual(mr.status, "Partially Ordered")
+
 	def test_stock_entry_ledgers_for_mr_purpose_and_TC_SCK_052(self):
 		stock_in_hand_account = get_inventory_account("_Test Company", "_Test Warehouse - _TC")
 		frappe.db.set_value("Company", "_Test Company","enable_perpetual_inventory", 1)
