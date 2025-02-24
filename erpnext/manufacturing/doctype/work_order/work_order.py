@@ -1428,7 +1428,8 @@ def make_stock_entry(work_order_id, purpose, qty=None, target_warehouse=None):
 
 	if purpose == "Material Transfer for Manufacture":
 		stock_entry.to_warehouse = wip_warehouse
-		stock_entry.project = work_order.project
+		if "project" in frappe.get_installed_apps() :
+			stock_entry.project = work_order.project
 	else:
 		stock_entry.from_warehouse = (
 			work_order.source_warehouse
@@ -1436,7 +1437,8 @@ def make_stock_entry(work_order_id, purpose, qty=None, target_warehouse=None):
 			else wip_warehouse
 		)
 		stock_entry.to_warehouse = work_order.fg_warehouse
-		stock_entry.project = work_order.project
+		if "project" in frappe.get_installed_apps() :
+			stock_entry.project = work_order.project
 
 	if purpose == "Disassemble":
 		stock_entry.from_warehouse = work_order.fg_warehouse
