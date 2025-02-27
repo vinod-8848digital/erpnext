@@ -2188,8 +2188,13 @@ class TestStockEntry(FrappeTestCase):
 			company.company_name = "_Test Company"
 			company.default_currency = "INR"
 			company.insert()
-		self.source_warehouse = create_warehouse("Stores-test", properties=None, company="_Test Company")
-		self.target_warehouse = create_warehouse("Department Stores-test", properties=None, company="_Test Company")
+		
+		warehouse = frappe.db.get_all("Warehouse", filters={"company": "_Test Company"})
+		fiscal_year = frappe.get_doc('Fiscal Year', '2025')
+		fiscal_year.append("companies", {"company": "_Test Company"})
+		fiscal_year.save()
+		self.source_warehouse = create_warehouse("Stores-test", properties={"parent_warehouse": "All Warehouses - _C"}, company="_Test Company")
+		self.target_warehouse = create_warehouse("Department Stores-test", properties={"parent_warehouse": "All Warehouses - _C"}, company="_Test Company")
 		item_fields1 = {
 			"item_name": "Test Brown Rice",
 			"is_stock_item": 1,
