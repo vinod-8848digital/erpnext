@@ -3563,7 +3563,7 @@ class TestStockEntry(FrappeTestCase):
 		company = "_Test Company"
 		if not frappe.db.exists("Company", company):
 			company_doc = frappe.new_doc("Company")
-			company_doc.company_doc_name = company
+			company_doc.company_name = company
 			company_doc.country="India",
 			company_doc.default_currency= "INR",
 			company_doc.save()
@@ -3575,32 +3575,39 @@ class TestStockEntry(FrappeTestCase):
 			do_not_submit=True,
 			do_not_save=True
 		)
-		item_1 = create_item(item_code="W-N-001", valuation_rate=100)
-		item_2 = create_item(item_code="ST-N-001", valuation_rate=200)
-		item_3 = create_item(item_code="GU-SE-001", valuation_rate=300)
-		item_4 = create_item(item_code="SCW-N-001", valuation_rate=400)
+		
+		warehouse = create_warehouse(
+			warehouse_name="_Test Warehouse - _TC",
+			properties={"parent_warehouse": "All Warehouses - _C"},
+			company=company,
+		)
+	
+		item_1 = create_item(item_code="W-N-001",warehouse=warehouse,valuation_rate=100)
+		item_2 = create_item(item_code="ST-N-001",warehouse=warehouse, valuation_rate=200)
+		item_3 = create_item(item_code="GU-SE-001", warehouse=warehouse, valuation_rate=300)
+		item_4 = create_item(item_code="SCW-N-001",  warehouse=warehouse,valuation_rate=400)
 		items = [
 			{
-				"s_warehouse": create_warehouse("Test Store 1"),
+				"s_warehouse": create_warehouse("Test Store 1",properties={"parent_warehouse": "All Warehouses - _C"},company=company),
 				"item_code": item_1.item_code,
 				"qty": 10,
 				"conversion_factor": 1
 			},
 			{
-				"s_warehouse": create_warehouse("Test Store 2"),
+				"s_warehouse": create_warehouse("Test Store 2",properties={"parent_warehouse": "All Warehouses - _C"},company=company),
 				"item_code": item_2.item_code,
 				"qty": 42,
 				"conversion_factor": 1
 			},
 			{
-				"t_warehouse": create_warehouse("Test Store 3"),
+				"t_warehouse": create_warehouse("Test Store 3",properties={"parent_warehouse": "All Warehouses - _C"},company=company),
 				"item_code": item_3.item_code,
 				"qty": 8,
 				"is_finished_item": 1,
 				"conversion_factor": 1
 			},
 			{
-				"t_warehouse": create_warehouse("Test Store 4"),
+				"t_warehouse": create_warehouse("Test Store 4",properties={"parent_warehouse": "All Warehouses - _C"},company=company),
 				"item_code": item_4.item_code,
 				"qty": 2,
 				"conversion_factor": 1
@@ -3609,6 +3616,10 @@ class TestStockEntry(FrappeTestCase):
 		se.items = []
 		for item in items:
 			se.append("items", item)
+
+		fiscal_year = frappe.get_doc('Fiscal Year', '2025')
+		fiscal_year.append("companies", {"company": "_Test Company"})
+		fiscal_year.save()
 		se.save()
 		se.submit()
 		self.assertEqual(se.items[0].qty, 10)
