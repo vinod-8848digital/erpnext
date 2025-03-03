@@ -2183,6 +2183,7 @@ class TestStockEntry(FrappeTestCase):
 		self.assertEqual(bin.actual_qty, item_fields["opening_stock"])
 
 	def test_stock_reco_TC_SCK_127(self):
+		from erpnext.buying.doctype.purchase_order.test_purchase_order import create_fiscal_with_company
 		if not frappe.db.exists("Company", "_Test Company"):
 			company = frappe.new_doc("Company")
 			company.company_name = "_Test Company"
@@ -2190,9 +2191,12 @@ class TestStockEntry(FrappeTestCase):
 			company.insert()
 		
 		warehouse = frappe.db.get_all("Warehouse", filters={"company": "_Test Company"})
-		fiscal_year = frappe.get_doc('Fiscal Year', '2025')
-		fiscal_year.append("companies", {"company": "_Test Company"})
-		fiscal_year.save()
+		if frappe.db.exists("Fiscal Year", "2024-2025"):
+			fiscal_year = frappe.get_doc('Fiscal Year', '2024-2025')
+			fiscal_year.append("companies", {"company": "_Test Company"})
+			fiscal_year.save()
+		else:
+			create_fiscal_with_company("_Test Company")
 		self.source_warehouse = create_warehouse("Stores-test", properties={"parent_warehouse": "All Warehouses - _C"}, company="_Test Company")
 		self.target_warehouse = create_warehouse("Department Stores-test", properties={"parent_warehouse": "All Warehouses - _C"}, company="_Test Company")
 		item_fields1 = {
@@ -3560,6 +3564,7 @@ class TestStockEntry(FrappeTestCase):
 
 	@change_settings("Stock Settings", {"allow_negative_stock": 1})
 	def test_stock_entry_manufacture_TC_SCK_138(self):
+		from erpnext.buying.doctype.purchase_order.test_purchase_order import create_fiscal_with_company
 		company = "_Test Company"
 		if not frappe.db.exists("Company", company):
 			company_doc = frappe.new_doc("Company")
@@ -3617,9 +3622,12 @@ class TestStockEntry(FrappeTestCase):
 		for item in items:
 			se.append("items", item)
 
-		fiscal_year = frappe.get_doc('Fiscal Year', '2025')
-		fiscal_year.append("companies", {"company": "_Test Company"})
-		fiscal_year.save()
+		if frappe.db.exists("Fiscal Year", "2024-2025"):
+			fiscal_year = frappe.get_doc('Fiscal Year', '2024-2025')
+			fiscal_year.append("companies", {"company": "_Test Company"})
+			fiscal_year.save()
+		else:
+			create_fiscal_with_company("_Test Company")
 		se.save()
 		se.submit()
 		self.assertEqual(se.items[0].qty, 10)
