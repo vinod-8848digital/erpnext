@@ -146,22 +146,36 @@ class TestWarehouse(FrappeTestCase):
 
 
 def create_warehouse(warehouse_name, properties=None, company=None):
-	if not company:
-		company = "_Test Company"
+    if not company:
+        company = "_Test Company"
 
-	warehouse_id = erpnext.encode_company_abbr(warehouse_name, company)
-	if not frappe.db.exists("Warehouse", warehouse_id):
-		w = frappe.new_doc("Warehouse")
-		w.warehouse_name = warehouse_name
-		w.parent_warehouse = "_Test Warehouse Group - _TC"
-		w.company = company
-		w.account = get_warehouse_account(warehouse_name, company)
-		if properties:
-			w.update(properties)
-		w.save()
-		return w.name
-	else:
-		return warehouse_id
+    parent_warehouse = "_Test Warehouse Group - _TC"
+
+    # Ensure the parent warehouse exists
+    if not frappe.db.exists("Warehouse", parent_warehouse):
+        parent_w = frappe.new_doc("Warehouse")
+        parent_w.warehouse_name = parent_warehouse
+        parent_w.company = company
+        parent_w.is_group = 1  # Set as a group warehouse
+        parent_w.save()
+
+    warehouse_id = erpnext.encode_company_abbr(warehouse_name, company)
+
+    if not frappe.db.exists("Warehouse", warehouse_id):
+        w = frappe.new_doc("Warehouse")
+        w.warehouse_name = warehouse_name
+        w.parent_warehouse = parent_warehouse
+        w.company = company
+        w.account = get_warehouse_account(warehouse_name, company)
+
+        if properties:
+            w.update(properties)
+
+        w.save()
+        return w.name
+    else:
+        return warehouse_id
+
 
 
 def get_warehouse(**args):

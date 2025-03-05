@@ -455,7 +455,7 @@ def get_items_to_be_repost(voucher_type=None, voucher_no=None, doc=None, reposti
 		items_to_be_repost = frappe.db.sql(
 			"""
 			SELECT item_code, warehouse, posting_date, posting_time, creation
-			FROM "tabStock Ledger Entry"
+			FROM `tabStock Ledger Entry`
 			WHERE voucher_type = %(voucher_type)s
 			AND voucher_no = %(voucher_no)s
 			GROUP BY item_code, warehouse, posting_date, posting_time, creation
@@ -1783,7 +1783,7 @@ def get_valuation_rate(
 	# Get valuation rate from last sle for the same item and warehouse
 	if last_valuation_rate := frappe.db.sql(  # nosemgrep
 		"""select valuation_rate
-		from "tabStock Ledger Entry"
+		from `tabStock Ledger Entry`
 		where
 			item_code = %s
 			AND warehouse = %s

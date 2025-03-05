@@ -5415,9 +5415,14 @@ class TestSalesInvoice(FrappeTestCase):
 		from erpnext.accounts.doctype.payment_entry.test_payment_entry import (
 			make_test_item,
 			create_supplier,
+			create_account,
 			create_purchase_invoice
 		)
 		from erpnext.accounts.doctype.party_link.party_link import create_party_link
+		create_account()
+		account_setting = frappe.get_doc('Accounts Settings')
+		account_setting.enable_common_party_accounting = True
+		account_setting.save()
 		supplier=create_supplier(supplier_name="_Test Common Party",company="_Test Company")
 		if supplier.accounts:
 			supplier.accounts.clear()

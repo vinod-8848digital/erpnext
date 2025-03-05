@@ -1296,15 +1296,18 @@ def get_item_details(item, project=None, skip_bom_info=False, throw=True):
 			frappe.msgprint(msg, raise_exception=throw, indicator="yellow", alert=(not throw))
 
 			return res
-
+		
+	fields = ["allow_alternative_item", "transfer_material_against", "item_name"]
+	if "projects" in frappe.get_installed_apps():
+		fields.append("project")
 	bom_data = frappe.db.get_value(
 		"BOM",
 		res["bom_no"],
-		["project", "allow_alternative_item", "transfer_material_against", "item_name"],
+		fields,
 		as_dict=1,
 	)
-
-	res["project"] = project or bom_data.pop("project")
+	if "projects" in frappe.get_installed_apps():
+		res["project"] = project or bom_data.pop("project")
 	res.update(bom_data)
 	res.update(check_if_scrap_warehouse_mandatory(res["bom_no"]))
 

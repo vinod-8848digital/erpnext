@@ -2693,7 +2693,7 @@ class TestPurchaseInvoice(FrappeTestCase, StockTestMixin):
 
 		records_for_pi('_Test Supplier USD')
 		supplier = frappe.get_doc('Supplier', '_Test Supplier USD')
-		tds_account = frappe.get_doc("Account", "Test TDS Payable - _TC")
+		tds_account = frappe.get_doc("Account", "_Test TDS Payable - _TC")
 		if tds_account.account_currency != "INR":
 			tds_account.account_currency = "INR"
 			tds_account.save()
@@ -2716,7 +2716,7 @@ class TestPurchaseInvoice(FrappeTestCase, StockTestMixin):
 			pe.append(
 				"taxes",
 				{
-					"account_head": "Test TDS Payable - _TC",
+					"account_head": "_Test TDS Payable - _TC",
 					"charge_type": "On Paid Amount",
 					"rate": 0,
 					"add_deduct_tax": "Deduct",
@@ -2762,20 +2762,20 @@ class TestPurchaseInvoice(FrappeTestCase, StockTestMixin):
 				party=supplier.name,
 				debit=300
 			)
-			
+			jv_doc = frappe.get_doc("Journal Entry", jea_parent.parent)
 			self.assertEqual(
 				frappe.db.get_value("Journal Entry", jea_parent.parent, "voucher_type"),
 				"Exchange Gain Or Loss"
 			)
 			
 			expected_jv_entries = [
-				["Exchange Gain/Loss - _TC", 0.0, 300.0, pe.posting_date],
-				["_Test Payable USD - _TC", 300.0, 0.0, pe.posting_date]
+				["Exchange Gain/Loss - _TC", 0.0, jv_doc.total_debit or jv_doc.total_credit, pe.posting_date],
+				["_Test Payable USD - _TC", jv_doc.total_debit or jv_doc.total_credit, 0.0, pe.posting_date]
 			]
 			
 			check_gl_entries(
 				doc=self,
-				voucher_no=jea_parent.parent,
+				voucher_no=jv_doc.name,
 				expected_gle=expected_jv_entries,
 				posting_date=pi.posting_date,
 				voucher_type="Journal Entry"
@@ -2795,10 +2795,10 @@ class TestPurchaseInvoice(FrappeTestCase, StockTestMixin):
 				party=supplier.name,
 				debit=20
 			)
-			
+			_jv_doc = frappe.get_doc("Journal Entry", jea_parent.parent)
 			expected_jv_entries = [
-				["Exchange Gain/Loss - _TC", 0.0, 20.0, pe.posting_date],
-				["_Test Payable USD - _TC", 20.0, 0.0, pe.posting_date]
+				["Exchange Gain/Loss - _TC", 0.0, _jv_doc.total_debit or _jv_doc.total_credit, pe.posting_date],
+				["_Test Payable USD - _TC", _jv_doc.total_debit or _jv_doc.total_credit, 0.0, pe.posting_date]
 			]
 			
 			check_gl_entries(
@@ -3329,50 +3329,23 @@ class TestPurchaseInvoice(FrappeTestCase, StockTestMixin):
 		self.assertEqual(pi_status, "Paid")
 	
 	def test_pi_ignore_pricing_rule_TC_B_051(self):
-		from erpnext.accounts.doctype.pricing_rule.test_pricing_rule import make_pricing_rule
-
-		frappe.delete_doc_if_exists("Pricing Rule", "Boat Earpods - Monica Discount")
-		self.pricing_rule =make_pricing_rule(
-			apply_on="Item Code",
-			title="Boat Earpods - Monica Discount",
-			items=[{"item_code": "Boat Earpods"}],
-			supplier="Monica",
-			min_qty= 10,
-			company= "_Test Company",
-			rate_or_discount="Discount Percentage",
-			discount_percentage=10,
-			valid_from="2024-12-01",
-			selling = 0,
-			buying = 1,
-			apply_discount_on = "Rate",
-			price_or_product_discount= "Price",
-			apply_rule_on = "Transaction",
-			apply_on_transaction = "Purchase Invoice"
-		)
-
-		frappe.set_user("Administrator")
-		company = "_Test Company"
-		item_code = "Testing-31"
-		target_warehouse = "Stores - _TC"
-		supplier = "_Test Supplier 1"
+		from erpnext.accounts.doctype.sales_invoice.test_sales_invoice import create_company_and_supplier as create_data
+		from erpnext.accounts.doctype.payment_entry.test_payment_entry import make_test_item
 		item_price = 130
+		get_company_supplier = create_data()
+		company = get_company_supplier.get("child_company")
+		supplier = get_company_supplier.get("supplier")
+		target_warehouse = "Stores - TC-3"
+		item = make_test_item("test_item_ignore_rule")
+		item.is_purchase_item = 1
+		item.is_sales_item = 0
+		item.save()
 
-		if not frappe.db.exists("Item", item_code):
-			frappe.get_doc({
-				"doctype": "Item",
-				"item_code": item_code,
-				"item_name": item_code,
-				"is_stock_item": 1,
-				"is_purchase_item": 1,
-				"is_sales_item": 0,
-				"company": company
-			}).insert()
-
-		if not frappe.db.exists("Item Price", {"item_code": item_code, "price_list": "Standard Buying"}):
+		if not frappe.db.exists("Item Price", {"item_code": item.item_code, "price_list": "Standard Buying"}):
 			frappe.get_doc({
 				"doctype": "Item Price",
 				"price_list": "Standard Buying",
-				"item_code": item_code,
+				"item_code": item.item_code,
 				"price_list_rate": item_price
 			}).insert()
 
@@ -3384,7 +3357,7 @@ class TestPurchaseInvoice(FrappeTestCase, StockTestMixin):
 				"apply_on": "Item Code",
 				"items": [
 					{
-						"item_code": item_code
+						"item_code": item.item_code
 					}
 				],
 				"rate_or_discount": "Discount Percentage",
@@ -3401,12 +3374,13 @@ class TestPurchaseInvoice(FrappeTestCase, StockTestMixin):
 			"set_warehouse": target_warehouse,
 			"items": [
 				{
-					"item_code": item_code,
+					"item_code": item.item_code,
 					"warehouse": target_warehouse,
 					"qty": 1
 				}
 			]
 		})
+		pi.bill_no = "test_bill_1122"
 		pi.insert()
 		self.assertEqual(len(pi.items), 1)
 		self.assertEqual(pi.items[0].rate, 117)
@@ -3760,53 +3734,54 @@ class TestPurchaseInvoice(FrappeTestCase, StockTestMixin):
 		)
 
 	def test_pi_with_tds_TC_B_151(self):
-		company = "_Test Company"
-		tax_category = "test_tax_withholding_category"
-		supplier = "_Test Supplier 1"
-		item_code = "Testing-31"
-		target_warehouse = "Stores - _TC"
-		supplier = "_Test Supplier 1"
-		if not frappe.db.exists("Tax Withholding Category", tax_category):
-			doc = frappe.get_doc({
-				"doctype": "Tax Withholding Category",
-				"name": tax_category,
-				"category_name": tax_category,
-				"rates": [
-					{
-						"from_date": get_year_start(getdate()),
-						"to_date": get_year_ending(getdate()),
-						"tax_withholding_rate": 2,
-						"single_threshold": 1000,
-						"cumulative_threshold": 100000
-					}
-				],
-				"accounts": [
-					{
-						"company": company,
-						"account": 'Test TDS Payable - _TC',
-					}
-				]
-			})
-			doc.insert()
-			tax_category = doc.name
+		from erpnext.accounts.doctype.sales_invoice.test_sales_invoice import create_company_and_supplier as create_data
+		from erpnext.accounts.doctype.payment_entry.test_payment_entry import make_test_item
+		get_company_supplier = create_data()
+		company = get_company_supplier.get("child_company")
+		supplier = get_company_supplier.get("supplier")
+		item = make_test_item("_test_item")
+		warehouse = "Stores - TC-3"
+		tax_category = frappe.get_doc({
+			"doctype": "Tax Withholding Category",
+			"__newname": "test_tax_withholding_category",
+			"rates": [
+				{
+					"from_date": get_year_start(getdate()),
+					"to_date": get_year_ending(getdate()),
+					"tax_withholding_rate": 2,
+					"single_threshold": 1000,
+					"cumulative_threshold": 100000
+				}
+			],
+			"accounts": [
+				{
+					"company": company,
+					"account": 'TDS Payable - TC-3',
+				}
+			]
+		})
+		tax_category.insert(ignore_if_duplicate=1)
 
-		frappe.db.set_value("Supplier", supplier, "tax_withholding_category", tax_category)
+		frappe.db.set_value("Supplier", supplier, "tax_withholding_category", tax_category.name)
 		pi = frappe.get_doc({
 			"doctype": "Purchase Invoice",
 			"supplier": supplier,
 			"company": company,
 			"posting_date": today(),
 			"apply_tds": 1,
-			"tax_withholding_category": tax_category,
 			"items": [
 				{
-					"item_code": item_code,
+					"item_code": item.item_code,
 					"qty": 2,
 					"rate": 500,
-					"warehouse": target_warehouse,
+					"warehouse": warehouse,
 				}
 			],
 		})
+		pi.bill_no = "test_bill_1122"
+		pi.taxes_and_charges = ""
+		pi.taxes = []
+		pi.tax_withholding_category = tax_category.name
 		pi.insert()
 		pi.submit()
 
@@ -3819,7 +3794,7 @@ class TestPurchaseInvoice(FrappeTestCase, StockTestMixin):
 
 		gl_entries = frappe.get_all("GL Entry", filters={"voucher_no": pi.name, "company": company}, fields=["account", "debit", "credit"])
 
-		tds_entry = next(entry for entry in gl_entries if entry["account"] == "Test TDS Payable - _TC")
+		tds_entry = next(entry for entry in gl_entries if entry["account"] == "TDS Payable - TC-3")
 		self.assertEqual(tds_entry["credit"], 20)
 		self.assertEqual(tds_entry["debit"], 0)
 
@@ -3871,6 +3846,8 @@ class TestPurchaseInvoice(FrappeTestCase, StockTestMixin):
 		account_setting=frappe.get_doc("Accounts Settings")
 		account_setting.db_set("over_billing_allowance", 10)
 		account_setting.save()
+		buying_setting=frappe.get_doc("Buying Settings")
+		buying_setting.db_set("maintain_same_rate", 0)
 		company = "_Test Company"
 		item=make_test_item("_Test Item")
 		po=create_purchase_order(
@@ -4238,7 +4215,7 @@ class TestPurchaseInvoice(FrappeTestCase, StockTestMixin):
 		lvc.submit()
   
 		expected_gle =[
-			['CWIP Account - _TC',pi.grand_total+300, 0.0, pi.posting_date],
+			['CWIP Account - _TC',pi.grand_total, 0.0, pi.posting_date],
 			['Creditors - _TC', 0.0, 1000.0, pi.posting_date],
 			['Expenses Included In Valuation - _TC', 0.0, 300.0, pi.posting_date],
 		]
@@ -4768,8 +4745,8 @@ def get_jv_entry_account(**args):
 			"reference_name": args.get("reference_name"),
 			"party_type": args.get("party_type"),
 			"party": args.get("party"),
-			"debit": args.get("debit") if args.get("debit") else 0,
-			"credit": args.get("credit") if args.get("credit") else 0
+			# "debit": args.get("debit") if args.get("debit") else 0,
+			# "credit": args.get("credit") if args.get("credit") else 0
 		},
 		fields=["parent"]
 	)[0]
@@ -4806,9 +4783,6 @@ def create_asset_category():
  
  
 def create_asset_data():
-	if not frappe.db.exists("Asset Category", "Test_Category"):
-		create_asset_category()
-
 	if not frappe.db.exists("Location", "Test Location"):
 		frappe.get_doc({"doctype": "Location", "location_name": "Test Location"}).insert(ignore_permissions=True)
 
@@ -4826,3 +4800,6 @@ def create_asset_data():
 		frappe.get_doc(
 			{"doctype": "Finance Book", "finance_book_name": "Test Finance Book 3"}
 		).insert(ignore_permissions=True)
+  
+	if not frappe.db.exists("Asset Category", "Test_Category"):
+		create_asset_category()

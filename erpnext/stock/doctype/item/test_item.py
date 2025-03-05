@@ -1264,7 +1264,9 @@ def create_item(
 				gst_hsn_code = frappe.new_doc("GST HSN Code")
 				gst_hsn_code.hsn_code = "11112222"
 				gst_hsn_code.save()
-			item.gst_hsn_code = gst_hsn_code
+				item.gst_hsn_code = gst_hsn_code.hsn_code
+			else:
+				item.gst_hsn_code = gst_hsn_code
 		item.save()
 	else:
 		item = frappe.get_doc("Item", item_code)

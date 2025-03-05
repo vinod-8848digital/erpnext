@@ -1063,9 +1063,9 @@ def get_item_wise_returned_qty(pr_doc):
                 pri.purchase_receipt_item,
                 SUM(ABS(pri.qty)) as qty
             FROM 
-                "tabPurchase Receipt" pr
+                `tabPurchase Receipt` pr
             INNER JOIN 
-                "tabPurchase Receipt Item" pri
+                `tabPurchase Receipt Item` pri
             ON 
                 pr.name = pri.parent
             WHERE

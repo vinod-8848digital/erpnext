@@ -4410,28 +4410,24 @@ class TestPurchaseReceipt(FrappeTestCase):
 			self.assertEqual(expected_values[gle.account][1], gle.credit)
 
 	def test_pr_ignore_pricing_rule_TC_B_050(self):
-		company = "_Test Company"
-		item_code = "Testing-31"
-		target_warehouse = "Stores - _TC"
-		supplier = "_Test Supplier 1"
+		from erpnext.accounts.doctype.payment_entry.test_payment_entry import make_test_item
+		from erpnext.accounts.doctype.sales_invoice.test_sales_invoice import create_company_and_supplier as create_data
+		get_company_supplier = create_data()
+		company = get_company_supplier.get("child_company")
+		supplier = get_company_supplier.get("supplier")
+		target_warehouse = "Stores - TC-3"
 		item_price = 130
 
-		if not frappe.db.exists("Item", item_code):
-			frappe.get_doc({
-				"doctype": "Item",
-				"item_code": item_code,
-				"item_name": item_code,
-				"is_stock_item": 1,
-				"is_purchase_item": 1,
-				"is_sales_item": 0,
-				"company": company
-			}).insert()
+		item = make_test_item("test_item_1")
+		item.is_purchase_item = 1
+		item.is_sales_item = 0
+		item.save()
 
-		if not frappe.db.exists("Item Price", {"item_code": item_code, "price_list": "Standard Buying"}):
+		if not frappe.db.exists("Item Price", {"item_code": item.item_code, "price_list": "Standard Buying"}):
 			frappe.get_doc({
 				"doctype": "Item Price",
 				"price_list": "Standard Buying",
-				"item_code": item_code,
+				"item_code": item.item_code,
 				"price_list_rate": item_price
 			}).insert()
 
@@ -4443,7 +4439,7 @@ class TestPurchaseReceipt(FrappeTestCase):
 				"apply_on": "Item Code",
 				"items": [
 					{
-						"item_code": item_code
+						"item_code": item.item_code
 					}
 				],
 				"rate_or_discount": "Discount Percentage",
@@ -4460,7 +4456,7 @@ class TestPurchaseReceipt(FrappeTestCase):
 			"set_warehouse": target_warehouse,
 			"items": [
 				{
-					"item_code": item_code,
+					"item_code": item.	item_code,
 					"warehouse": target_warehouse,
 					"qty": 1
 				}
@@ -4479,21 +4475,19 @@ class TestPurchaseReceipt(FrappeTestCase):
 		self.assertEqual(pr.items[0].rate, 130)
 
 	def test_pr_with_additional_discount_TC_B_056(self):
-		company = "_Test Company"
-		item_code = "Testing-31"
-		target_warehouse = "Stores - _TC"
-		supplier = "_Test Supplier 1"
+		from erpnext.accounts.doctype.payment_entry.test_payment_entry import make_test_item
+		from erpnext.accounts.doctype.sales_invoice.test_sales_invoice import create_company_and_supplier as create_data
+		get_company_supplier = create_data()
+		company = get_company_supplier.get("child_company")
+		supplier = get_company_supplier.get("supplier")
+		target_warehouse = "Stores - TC-3"
+
 		item_price = 10000
-		if not frappe.db.exists("Item", item_code):
-			frappe.get_doc({
-				"doctype": "Item",
-				"item_code": item_code,
-				"item_name": item_code,
-				"is_stock_item": 1,
-				"is_purchase_item": 1,
-				"is_sales_item": 0,
-				"company": company
-			}).insert()
+		item = make_test_item("testing_item_12")
+		item.is_purchase_item = 1
+		item.is_sales_item = 0
+		item.save()
+
 		pi = frappe.get_doc({
 			"doctype": "Purchase Receipt",
 			"supplier": supplier,
@@ -4502,7 +4496,7 @@ class TestPurchaseReceipt(FrappeTestCase):
 			"set_warehouse": target_warehouse,
 			"items": [
 				{
-					"item_code": item_code,
+					"item_code": item.item_code,
 					"warehouse": target_warehouse,
 					"qty": 1,
 					"rate": item_price
@@ -4521,49 +4515,30 @@ class TestPurchaseReceipt(FrappeTestCase):
 		pi.submit()
 
 	def test_putaway_rule_with_pr_pi_TC_B_153(self):
-		company = "_Test Company"
-		warehouse = "Stores - _TC"
-		overflow_warehouse = "Overflow Warehouse - _TC"
-		supplier = "_Test Supplier 1"
-		item_code = "Test Item with Putaway Rule"
-		quantity = 30
-		gst_hsn_code = "11112222"
-		if not frappe.db.exists("GST HSN Code", gst_hsn_code):
-			gst_hsn_code = frappe.new_doc("GST HSN Code")
-			gst_hsn_code.hsn_code = "11112222"
-			gst_hsn_code.save()
+		from erpnext.accounts.doctype.payment_entry.test_payment_entry import make_test_item
+		from erpnext.accounts.doctype.sales_invoice.test_sales_invoice import create_company_and_supplier as create_data
+		get_company_supplier = create_data()
+		company = get_company_supplier.get("child_company")
+		supplier = get_company_supplier.get("supplier")
+		warehouse = "Stores - TC-3"
+		item = make_test_item("Test Item with Putaway Rule")
 
-		if not frappe.db.exists("Item", item_code):
-			item = frappe.get_doc({
-				"doctype": "Item",
-				"item_code": item_code,
-				"item_name": item_code,
-				"stock_uom": "Nos",
-				"is_stock_item": 1,
-				"item_group": "All Item Groups",
-				"default_warehouse": warehouse,
-				"company": company,
-				"gst_hsn_code": gst_hsn_code
-			})
-			item.insert()
-
-		if not frappe.db.exists("Putaway Rule", {"item_code": item_code, "warehouse": warehouse}):
+		if not frappe.db.exists("Putaway Rule", {"item_code": item.item_code, "warehouse": warehouse}):
 			frappe.get_doc({
 				"company": company,
 				"doctype": "Putaway Rule",
-				"item_code": item_code,
+				"item_code": item.item_code,
 				"warehouse": warehouse,
 				"capacity": 20,
 				"priority": 1,
-				"default_location": overflow_warehouse,
-			}).insert()
+			}).insert(ignore_if_duplicate=1)
 
 		pr = frappe.get_doc({
 			"doctype": "Purchase Receipt",
 			"supplier": supplier,
 			"company": company,
 			"items": [{
-				"item_code": item_code,
+				"item_code": item.item_code,
 				"qty": 20,
 				"warehouse": warehouse,
 			}],
@@ -4584,16 +4559,9 @@ class TestPurchaseReceipt(FrappeTestCase):
 
 		warehouse_qty = sum(entry.actual_qty for entry in stock_ledger_entries if entry.warehouse == warehouse)
 		self.assertEqual(warehouse_qty, 20)
-		pi = frappe.get_doc({
-			"doctype": "Purchase Invoice",
-			"supplier": supplier,
-			"company": company,
-			"items": [{
-				"item_code": item_code,
-				"qty": pr.items[0].qty,
-				"warehouse": warehouse,
-			}],
-		})
+
+		pi = make_purchase_invoice(pr.name)
+		pi.bill_no = "test_bill_1122"
 		pi.insert()
 		pi.submit()
 		self.assertEqual(pi.docstatus, 1)
@@ -4638,49 +4606,31 @@ class TestPurchaseReceipt(FrappeTestCase):
 		self.assertEqual(len(sle_entries), 1)
 
 	def test_putaway_rule_with_pr_TC_B_154(self):
-		company = "_Test Company"
-		warehouse = "Stores - _TC"
-		overflow_warehouse = "Overflow Warehouse - _TC"
-		supplier = "_Test Supplier 1"
-		item_code = "Test Item with Putaway Rule"
+		from erpnext.accounts.doctype.payment_entry.test_payment_entry import make_test_item
+		from erpnext.accounts.doctype.sales_invoice.test_sales_invoice import create_company_and_supplier as create_data
+		get_company_supplier = create_data()
+		company = get_company_supplier.get("child_company")
+		supplier = get_company_supplier.get("supplier")
+		warehouse = "Stores - TC-3"
 		quantity = 30
-		gst_hsn_code = 48030090
-		if not frappe.db.exists("GST HSN Code", gst_hsn_code):
-			gst_hsn_code = frappe.new_doc("GST HSN Code")
-			gst_hsn_code.hsn_code = 48030090
-			gst_hsn_code.save()
+		item = make_test_item("Test Item with Putaway Rule")
 
-		if not frappe.db.exists("Item", item_code):
-			item = frappe.get_doc({
-				"doctype": "Item",
-				"item_code": item_code,
-				"item_name": item_code,
-				"stock_uom": "Nos",
-				"is_stock_item": 1,
-				"item_group": "All Item Groups",
-				"default_warehouse": warehouse,
-				"company": company,
-				"gst_hsn_code": gst_hsn_code
-			})
-			item.insert()
-
-		if not frappe.db.exists("Putaway Rule", {"item_code": item_code, "warehouse": warehouse}):
+		if not frappe.db.exists("Putaway Rule", {"item_code": item.item_code, "warehouse": warehouse}):
 			frappe.get_doc({
 				"company": company,
 				"doctype": "Putaway Rule",
-				"item_code": item_code,
+				"item_code": item.item_code,
 				"warehouse": warehouse,
 				"capacity": 20,
 				"priority": 1,
-				"default_location": overflow_warehouse,
-			}).insert()
+			}).insert(ignore_if_duplicate=1)
 
 		pr = frappe.get_doc({
 			"doctype": "Purchase Receipt",
 			"supplier": supplier,
 			"company": company,
 			"items": [{
-				"item_code": item_code,
+				"item_code": item.item_code,
 				"qty": 20,
 				"warehouse": warehouse,
 			}],

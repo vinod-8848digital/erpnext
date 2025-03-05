@@ -52,6 +52,9 @@ class TestPaymentOrder(FrappeTestCase):
 		from erpnext.accounts.doctype.purchase_invoice.test_purchase_invoice import check_gl_entries
 		from erpnext.accounts.doctype.payment_request.payment_request import make_payment_request
 		from erpnext.accounts.doctype.payment_order.payment_order import make_payment_records
+		from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_records
+
+		create_records("_Test Supplier")
 		# Step 1: Create a Purchase Invoice
 		purchase_invoice = make_purchase_invoice()	
 		# Step 2: Create a Payment Request

@@ -2348,7 +2348,7 @@ def make_test_item(item_name=None):
 				item.save()
 			return item
 		else:
-			item=frappe.get_doc("Item", item_name)
+			item=frappe.get_doc("Item", item_name or "Test Item with Tax")
 			return item
         
 def create_purchase_invoice(**args):
