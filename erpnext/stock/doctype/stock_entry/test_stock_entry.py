@@ -6,7 +6,7 @@ from frappe.permissions import add_user_permission, remove_user_permission
 from frappe.tests.utils import FrappeTestCase, change_settings
 from frappe.utils import add_days, cstr, flt, get_time, getdate, nowtime, today
 from frappe.desk.query_report import run
-from erpnext.stock.doctype.material_request.test_material_request import create_company
+# from erpnext.stock.doctype.material_request.test_material_request import create_company
 
 from erpnext.accounts.doctype.account.test_account import get_inventory_account
 from erpnext.stock.doctype.item.test_item import (
@@ -23,7 +23,7 @@ from erpnext.stock.doctype.serial_and_batch_bundle.test_serial_and_batch_bundle 
 from erpnext.stock.doctype.warehouse.test_warehouse import create_warehouse
 from erpnext.stock.doctype.material_request.material_request import make_stock_entry as make_mr_se
 from erpnext.stock.doctype.purchase_receipt.test_purchase_receipt import make_purchase_receipt
-from erpnext.stock.doctype.material_request.test_material_request import make_material_request
+# from erpnext.stock.doctype.material_request.test_material_request import make_material_request
 from erpnext.stock.doctype.serial_no.serial_no import *
 from erpnext.stock.doctype.stock_entry.stock_entry import FinishedGoodError, make_stock_in_entry
 from erpnext.stock.doctype.stock_entry.stock_entry_utils import make_stock_entry
@@ -4051,6 +4051,7 @@ class TestStockEntry(FrappeTestCase):
 	
 	@change_settings("Stock Settings", {"allow_negative_stock": 1})
 	def test_create_stock_entry_with_manufacture_purpose_TC_SCK_137(self):
+		from erpnext.stock.doctype.material_request.test_material_request import create_company
 		company = create_company("_Test Company")
 		item_1 = make_item("W-N-001", properties={"valuation_rate":100})
 		item_2 = make_item("ST-N-001", properties={"valuation_rate":200})
