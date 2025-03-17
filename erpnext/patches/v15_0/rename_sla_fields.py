@@ -9,10 +9,14 @@ def execute():
 		if doctype == "Issue":
 			continue
  
-		if frappe.db.exists("Custom Field", {"name": doctype + "-resolution_by"}):
+		if frappe.db.exists(
+ 			"Custom Field", {"name": doctype + "-resolution_by", "fieldname": "resolution_by"}
+ 		):
 			rename_fieldname(doctype + "-resolution_by", "sla_resolution_by")
 
-		if frappe.db.exists("Custom Field", {"name": doctype + "-resolution_date"}):
+		if frappe.db.exists(
+ 			"Custom Field", {"name": doctype + "-resolution_date", "fieldname": "resolution_date"}
+ 		):
 			rename_fieldname(doctype + "-resolution_date", "sla_resolution_date")
 
 	rename_field("Issue", "resolution_by", "sla_resolution_by")
