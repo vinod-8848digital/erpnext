@@ -629,6 +629,7 @@
    "fieldname": "serial_no",
    "fieldtype": "Text",
    "label": "Serial No",
+   "no_copy": 1,
    "oldfieldname": "serial_no",
    "oldfieldtype": "Small Text"
   },
@@ -947,7 +948,6 @@
  "naming_rule": "Random",
  "owner": "Administrator",
  "permissions": [],
- "row_format": "Dynamic",
  "sort_field": "creation",
  "sort_order": "DESC",
  "states": []
