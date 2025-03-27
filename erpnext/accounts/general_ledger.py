@@ -413,6 +413,8 @@ def process_debit_credit_difference(gl_map):
 		make_round_off_gle(gl_map, debit_credit_diff, trx_cur_debit_credit_diff, precision)
 
 	debit_credit_diff = get_debit_credit_difference(gl_map, precision)
+	if isinstance(debit_credit_diff, tuple):
+		debit_credit_diff = debit_credit_diff[0]
 	if abs(debit_credit_diff) > allowance:
 		if not (
 			voucher_type == "Journal Entry"

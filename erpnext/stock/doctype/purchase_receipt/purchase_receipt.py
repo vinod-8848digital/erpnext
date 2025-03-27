@@ -998,6 +998,8 @@ def get_billed_amount_against_po(po_items):
 
 	query = (
 		frappe.qb.from_(purchase_invoice_item)
+		.join(purchase_invoice)
+        .on(purchase_invoice.name == purchase_invoice_item.parent)
 		.select(fn.Sum(purchase_invoice_item.amount).as_("billed_amt"), purchase_invoice_item.po_detail)
 		.where(
 			(purchase_invoice_item.po_detail.isin(po_items))
