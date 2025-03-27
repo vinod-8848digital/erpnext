@@ -30,97 +30,145 @@ jobs:
           POSTGRES_DB: test_site
         ports:
           - 5432:5432
-        options: --health-cmd="pg_isready -U root" --health-interval=5s --health-timeout=2s --health-retries=3
+        options: >-
+          --health-cmd="pg_isready -U postgres"
+          --health-interval=5s
+          --health-timeout=2s
+          --health-retries=3
     steps:
-      - name: Clone
+      - name: Clone Repository
         uses: actions/checkout@v3
       - name: Setup Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.10'
-      - name: Setup Node
+      - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
           node-version: 18
           check-latest: true
-      - name: Cache pip
-        uses: actions/cache@v2
+      - name: Cache Dependencies (PIP)
+        uses: actions/cache@v4
         with:
           path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('**/*requirements.txt', '**/pyproject.toml', '**/setup.py', '**/setup.cfg') }}
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt', '**/pyproject.toml', '**/setup.py', '**/setup.cfg') }}
           restore-keys: |
             ${{ runner.os }}-pip-
             ${{ runner.os }}-
-      - name: Get yarn cache directory path
-        id: yarn-cache-dir-path
-        run: 'echo "dir=$(yarn cache dir)" >> $GITHUB_OUTPUT'
-      - uses: actions/cache@v3
+      - name: Cache Dependencies (Yarn)
         id: yarn-cache
+        uses: actions/cache@v3
         with:
-          path: ${{ steps.yarn-cache-dir-path.outputs.dir }}
-          key: ${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}
+          path: ~/.yarn-cache
+          key: yarn-${{ runner.os }}-${{ hashFiles('**/yarn.lock') }}
           restore-keys: |
-            ${{ runner.os }}-yarn-
-      - name: Install PostgreSQL Client
-        run: sudo apt-get install postgresql-client
-      - name: Install Redis Server
-        run: sudo apt-get install redis-server -y
-     
-      - name: Setup
+            yarn-${{ runner.os }}-
+      - name: Install Dependencies
         run: |
-          pip3 install frappe-bench
-          bench init --skip-redis-config-generation --skip-assets --python "$(which python)" --frappe-path https://github.com/8848digital/frappe-v15.git --frappe-branch pre-prod ~/frappe-bench
-            
-
-
-      # - name: Setup Frappe
-      #   working-directory: /home/runner/frappe-bench
-      #   run: |
-      #     bench init frappe-bench --frappe-path https://github.com/8848digital/frappe-v15.git --frappe-branch pre-prod 
-      
-      - name: Install
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client redis-server
+      - name: Install Frappe Bench
+        run: |
+          pip install frappe-bench
+          bench init --skip-redis-config-generation --skip-assets --python "$(which python)" --frappe-path https://github.com/8848digital/frappe --frappe-branch pre-prod ~/frappe-bench
+      - name: Install Apps
         working-directory: /home/runner/frappe-bench
         run: |
           bench get-app erpnext https://github.com/8848digital/erpnext.git --branch pre-prod
+          bench get-app https://itananddigital:${{secrets.GH_PAT}}@github.com/8848digital/ERPNext-India.git --branch pre-prod
+          bench get-app https://github.com/nirav8848/india_compliance.git --branch pre-prod
+          bench get-app https://github.com/8848digital/Assets --branch pre-prod
+          bench get-app https://itananddigital:${{secrets.GH_PAT}}@github.com/8848digital/CRM --branch pre-prod
+          bench get-app https://itananddigital:${{secrets.GH_PAT}}@github.com/8848digital/projects.git --branch pre-prod
+          bench get-app https://itananddigital:${{secrets.GH_PAT}}@github.com/8848digital/sales_commission.git --branch pre-prod
+          bench get-app --branch version-15 payments
           bench setup requirements --dev
+      - name: Create Site
+        working-directory: /home/runner/frappe-bench
+        run: |
           bench new-site --db-type postgres --db-root-password root --admin-password admin test_site
           bench --site test_site install-app erpnext
-        env:
-          CI: 'Yes'
-      # - name: Run Tests
-      #   working-directory: /home/runner/frappe-bench
-      #   run: |
-      #     bench --site test_site set-config allow_tests true
-      #     bench --site test_site run-tests 
-      #   env:
-      #     TYPE: server
-      # - name: Run Tests
-      #   run: cd ~/frappe-bench/ && bench --site test_site run-tests --app erpnext  --coverage  || echo "Tests completed with errors, but proceeding..."
-      #   env:
-      #     TYPE: server
-
-      # - name: Run Tests
-      #   run: |
-      #     cd ~/frappe-bench/ && bench --site test_site run-tests --app erpnext --coverage 2>&1 | tee test_output.log || echo "Tests completed with errors, but proceeding..." grep -v "doctype" test_output.log > filtered_test_output.log || true
-      #   env:
-      #     TYPE: server
-
-      - name: Run Tests
+          bench --site test_site install-app erpnext_india
+          bench --site test_site install-app assets
+          bench --site test_site install-app erpnext_crm
+          bench --site test_site install-app projects
+          bench --site test_site install-app payments
+          bench --site test_site install-app sales_commission
+          bench --site test_site install-app india_compliance
+      - name: Set Permissions & Configs
+        working-directory: /home/runner/frappe-bench
         run: |
-          set +e  # Prevents script from exiting on error
-          cd ~/frappe-bench/
-          bench --site test_site execute frappe.auth.login_as --args '["Administrator"]'
-          bench --site test_site run-tests --app erpnext --coverage 2>&1 | tee test_output.log
+          bench --site test_site set-config allow_tests true
+          bench --site test_site set-config developer_mode 1
+          bench --site test_site set-config db_host localhost
+          bench --site test_site set-config admin_password admin
+      - name: Run Tests
+        working-directory: /home/runner/frappe-bench
+        run: |
+          set +e  # Prevent script exit on failure
+          bench --site test_site run-tests --app erpnext --coverage --junit-xml-output /home/runner/frappe-bench/test_results.xml 2>&1 | tee test_output.log
           echo "Tests completed, proceeding with next steps..."
         env:
           TYPE: server
-
-
-          
-      - name: Upload coverage data
+      - name: Convert Test Results to CSV
+        run: |
+          pip install xmltodict pandas
+          python <<EOF
+          import xmltodict
+          import pandas as pd
+          # Read XML File
+          xml_file = "/home/runner/frappe-bench/test_results.xml"
+          with open(xml_file, 'r', encoding='utf-8') as file:
+              xml_content = file.read()
+          data = xmltodict.parse(xml_content)
+          # Ensure XML structure is valid
+          if not isinstance(data, dict):
+              raise ValueError("Parsed XML is not a dictionary. Check the XML structure.")
+          # Extract test results from different formats
+          testsuites = data.get("testsuites", {}).get("testsuite", [])
+          # Ensure testsuites is always a list
+          if isinstance(testsuites, dict):
+              testsuites = [testsuites]
+          test_results = []
+          for suite in testsuites:
+              testcases = suite.get("testcase", [])
+              if isinstance(testcases, dict):
+                  testcases = [testcases]
+              count = 0 
+              for testcase in testcases:
+                  count += 1 
+                  test_name = testcase.get("@name", "Unknown")
+                  error_info = testcase.get("error", "Unknown")
+                  type_value = error_info.get("#text", "Unknown") if isinstance(error_info, dict) else "Unknown"
+                  # Determine pass/fail status
+                  status = "Failed" if type_value != "Unknown" else "Passed"
+                  traceback = type_value if status == "Failed" else ""
+                  test_results.append([test_name, status, traceback])
+                  
+          # Convert to CSV
+          df = pd.DataFrame(test_results, columns=["Test Name", "Status", "Traceback"])
+          df.to_csv("/home/runner/frappe-bench/test_report.csv", index=False)
+          EOF
+      - name: Upload CSV Test Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: csv-test-report
+          path: /home/runner/frappe-bench/test_report.csv
+      - name: Upload Coverage Data to Codecov
         uses: codecov/codecov-action@v5
         with:
           fail_ci_if_error: false
           files: /home/runner/frappe-bench/sites/coverage.xml
           verbose: true
           token: ${{ secrets.CODECOV_TOKEN }}
+      - name: Upload Coverage Data as Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: /home/runner/frappe-bench/sites/coverage.xml
+      - name: Upload Test Logs
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-logs
+          path: /home/runner/frappe-bench/test_output.log
+

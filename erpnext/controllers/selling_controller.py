@@ -5,7 +5,7 @@
 import frappe
 from frappe import _, bold, throw
 from frappe.utils import cint, flt, get_link_to_form, nowtime
-
+from frappe.tests.utils import if_app_installed
 from erpnext.accounts.party import render_address
 from erpnext.controllers.accounts_controller import get_taxes_and_charges
 from erpnext.controllers.sales_and_purchase_return import get_rate_for_return
@@ -55,6 +55,7 @@ class SellingController(StockController):
 		self.set_missing_lead_customer_details(for_validate=for_validate)
 		self.set_price_list_and_item_details(for_validate=for_validate)
 
+	@if_app_installed("erpnext_crm")
 	def set_missing_lead_customer_details(self, for_validate=False):
 		customer, lead = None, None
 		if getattr(self, "customer", None):
@@ -90,7 +91,7 @@ class SellingController(StockController):
 			self.update_if_missing(party_details)
 
 		elif lead:
-			from custom_crm.crm.doctype.lead.lead import get_lead_details
+			from erpnext_crm.erpnext_crm.doctype.lead.lead import get_lead_details
 
 			self.update_if_missing(
 				get_lead_details(
@@ -587,12 +588,12 @@ class SellingController(StockController):
 			if not self.is_internal_transfer() or self.docstatus == 1
 			else None
 		)
-		if serial_and_batch_bundle and self.is_internal_transfer() and self.is_return:
-			if self.docstatus == 1:
+		if self.is_internal_transfer():
+			if serial_and_batch_bundle and self.docstatus == 1 and self.is_return:
 				serial_and_batch_bundle = self.make_package_for_transfer(
 					serial_and_batch_bundle, item_row.warehouse, type_of_transaction="Inward"
 				)
-			else:
+			elif not serial_and_batch_bundle:
 				serial_and_batch_bundle = frappe.db.get_value(
 					"Stock Ledger Entry",
 					{"voucher_detail_no": item_row.name, "warehouse": item_row.warehouse},
@@ -772,6 +773,153 @@ class SellingController(StockController):
 
 		validate_item_type(self, "is_sales_item", "sales")
 
+	def update_stock_reservation_entries(self) -> None:
+		"""Updates Delivered Qty in Stock Reservation Entries."""
+
+		if not frappe.db.get_single_value("Stock Settings", "enable_stock_reservation"):
+			return
+
+		# Don't update Delivered Qty on Return.
+		if self.is_return:
+			return
+
+		so_field = "sales_order" if self.doctype == "Sales Invoice" else "against_sales_order"
+
+		if self._action == "submit":
+			for item in self.get("items"):
+				# Skip if `Sales Order` or `Sales Order Item` reference is not set.
+				if not item.get(so_field) or not item.so_detail:
+					continue
+
+				sre_list = frappe.db.get_all(
+					"Stock Reservation Entry",
+					{
+						"docstatus": 1,
+						"voucher_type": "Sales Order",
+						"voucher_no": item.get(so_field),
+						"voucher_detail_no": item.so_detail,
+						"warehouse": item.warehouse,
+						"status": ["not in", ["Delivered", "Cancelled"]],
+					},
+					order_by="creation",
+				)
+
+				# Skip if no Stock Reservation Entries.
+				if not sre_list:
+					continue
+
+				qty_to_deliver = item.stock_qty
+				for sre in sre_list:
+					if qty_to_deliver <= 0:
+						break
+
+					sre_doc = frappe.get_doc("Stock Reservation Entry", sre)
+
+					qty_can_be_deliver = 0
+					if sre_doc.reservation_based_on == "Serial and Batch" and item.serial_and_batch_bundle:
+						sbb = frappe.get_doc("Serial and Batch Bundle", item.serial_and_batch_bundle)
+						if sre_doc.has_serial_no:
+							delivered_serial_nos = [d.serial_no for d in sbb.entries]
+							for entry in sre_doc.sb_entries:
+								if entry.serial_no in delivered_serial_nos:
+									entry.delivered_qty = 1  # Qty will always be 0 or 1 for Serial No.
+									entry.db_update()
+									qty_can_be_deliver += 1
+									delivered_serial_nos.remove(entry.serial_no)
+						else:
+							delivered_batch_qty = {d.batch_no: -1 * d.qty for d in sbb.entries}
+							for entry in sre_doc.sb_entries:
+								if entry.batch_no in delivered_batch_qty:
+									delivered_qty = min(
+										(entry.qty - entry.delivered_qty), delivered_batch_qty[entry.batch_no]
+									)
+									entry.delivered_qty += delivered_qty
+									entry.db_update()
+									qty_can_be_deliver += delivered_qty
+									delivered_batch_qty[entry.batch_no] -= delivered_qty
+					else:
+						# `Delivered Qty` should be less than or equal to `Reserved Qty`.
+						qty_can_be_deliver = min(
+							(sre_doc.reserved_qty - sre_doc.delivered_qty), qty_to_deliver
+						)
+
+					sre_doc.delivered_qty += qty_can_be_deliver
+					sre_doc.db_update()
+
+					# Update Stock Reservation Entry `Status` based on `Delivered Qty`.
+					sre_doc.update_status()
+
+					# Update Reserved Stock in Bin.
+					sre_doc.update_reserved_stock_in_bin()
+
+					qty_to_deliver -= qty_can_be_deliver
+
+		if self._action == "cancel":
+			for item in self.get("items"):
+				# Skip if `Sales Order` or `Sales Order Item` reference is not set.
+				if not item.get(so_field) or not item.so_detail:
+					continue
+
+				sre_list = frappe.db.get_all(
+					"Stock Reservation Entry",
+					{
+						"docstatus": 1,
+						"voucher_type": "Sales Order",
+						"voucher_no": item.get(so_field),
+						"voucher_detail_no": item.so_detail,
+						"warehouse": item.warehouse,
+						"status": ["in", ["Partially Delivered", "Delivered"]],
+					},
+					order_by="creation",
+				)
+
+				# Skip if no Stock Reservation Entries.
+				if not sre_list:
+					continue
+
+				qty_to_undelivered = item.stock_qty
+				for sre in sre_list:
+					if qty_to_undelivered <= 0:
+						break
+
+					sre_doc = frappe.get_doc("Stock Reservation Entry", sre)
+
+					qty_can_be_undelivered = 0
+					if sre_doc.reservation_based_on == "Serial and Batch" and item.serial_and_batch_bundle:
+						sbb = frappe.get_doc("Serial and Batch Bundle", item.serial_and_batch_bundle)
+						if sre_doc.has_serial_no:
+							serial_nos_to_undelivered = [d.serial_no for d in sbb.entries]
+							for entry in sre_doc.sb_entries:
+								if entry.serial_no in serial_nos_to_undelivered:
+									entry.delivered_qty = 0  # Qty will always be 0 or 1 for Serial No.
+									entry.db_update()
+									qty_can_be_undelivered += 1
+									serial_nos_to_undelivered.remove(entry.serial_no)
+						else:
+							batch_qty_to_undelivered = {d.batch_no: -1 * d.qty for d in sbb.entries}
+							for entry in sre_doc.sb_entries:
+								if entry.batch_no in batch_qty_to_undelivered:
+									undelivered_qty = min(
+										entry.delivered_qty, batch_qty_to_undelivered[entry.batch_no]
+									)
+									entry.delivered_qty -= undelivered_qty
+									entry.db_update()
+									qty_can_be_undelivered += undelivered_qty
+									batch_qty_to_undelivered[entry.batch_no] -= undelivered_qty
+					else:
+						# `Qty to Undelivered` should be less than or equal to `Delivered Qty`.
+						qty_can_be_undelivered = min(sre_doc.delivered_qty, qty_to_undelivered)
+
+					sre_doc.delivered_qty -= qty_can_be_undelivered
+					sre_doc.db_update()
+
+					# Update Stock Reservation Entry `Status` based on `Delivered Qty`.
+					sre_doc.update_status()
+
+					# Update Reserved Stock in Bin.
+					sre_doc.update_reserved_stock_in_bin()
+
+					qty_to_undelivered -= qty_can_be_undelivered
 
 def set_default_income_account_for_item(obj):
 	for d in obj.get("items"):
