@@ -31,10 +31,8 @@ from erpnext.stock.doctype.serial_and_batch_bundle.test_serial_and_batch_bundle 
 	get_serial_nos_from_bundle,
 	make_serial_batch_bundle,
 )
-from erpnext.stock.doctype.stock_entry.test_stock_entry import (
-	get_qty_after_transaction,
-	make_stock_entry,
-)
+
+
 from erpnext.stock.doctype.stock_reconciliation.test_stock_reconciliation import (
 	create_stock_reconciliation,
 )
@@ -1487,6 +1485,7 @@ class TestSalesInvoice(FrappeTestCase):
 	def test_bin_details_of_packed_item(self):
 		from erpnext.selling.doctype.product_bundle.test_product_bundle import make_product_bundle
 		from erpnext.stock.doctype.item.test_item import make_item
+		from erpnext.stock.doctype.stock_entry.test_stock_entry import make_stock_entry
 
 		# test Update Items with product bundle
 		if not frappe.db.exists("Item", "_Test Product Bundle Item New"):
@@ -1729,6 +1728,7 @@ class TestSalesInvoice(FrappeTestCase):
 		si.save()
 
 	def test_return_sales_invoice(self):
+		from erpnext.stock.doctype.stock_entry.test_stock_entry import get_qty_after_transaction,make_stock_entry
 		make_stock_entry(item_code="_Test Item", target="Stores - TCP1", qty=50, basic_rate=100)
 
 		actual_qty_0 = get_qty_after_transaction(item_code="_Test Item", warehouse="Stores - TCP1")
@@ -2836,6 +2836,7 @@ class TestSalesInvoice(FrappeTestCase):
 		frappe.db.set_single_value("Stock Settings", "allow_negative_stock", old_negative_stock)
 
 	def test_sle_for_target_warehouse(self):
+		from erpnext.stock.doctype.stock_entry.test_stock_entry import make_stock_entry
 		se = make_stock_entry(
 			item_code="138-CMS Shoe",
 			target="Finished Goods - _TC",
@@ -2867,6 +2868,7 @@ class TestSalesInvoice(FrappeTestCase):
 		se.cancel()
 
 	def test_internal_transfer_gl_entry(self):
+		from erpnext.stock.doctype.stock_entry.test_stock_entry import make_stock_entry
 		si = create_sales_invoice(
 			company="_Test Company with perpetual inventory",
 			customer="_Test Internal Customer 2",
@@ -2941,6 +2943,7 @@ class TestSalesInvoice(FrappeTestCase):
 		check_gl_entries(self, target_doc.name, pi_gl_entries, add_days(nowdate(), -1))
 
 	def test_internal_transfer_gl_precision_issues(self):
+		from erpnext.stock.doctype.stock_entry.test_stock_entry import make_stock_entry
 		# Make a stock queue of an item with two valuations
 
 		# Remove all existing stock for this
@@ -4707,6 +4710,7 @@ class TestSalesInvoice(FrappeTestCase):
 				posting_date=pe.posting_date	
 			)
 	def test_sales_invoice_without_sales_order_with_gst_TC_S_016(self):
+		from erpnext.stock.doctype.stock_entry.test_stock_entry import make_stock_entry
 		from erpnext.stock.doctype.warehouse.test_warehouse import create_warehouse
 
 		create_registered_company()
@@ -4783,6 +4787,7 @@ class TestSalesInvoice(FrappeTestCase):
 	
 	def test_sales_invoice_with_update_stock_checked_with_gst_TC_S_017(self): 
 		from erpnext.stock.doctype.warehouse.test_warehouse import create_warehouse
+		from erpnext.stock.doctype.stock_entry.test_stock_entry import make_stock_entry
 
 		create_registered_company()
 
@@ -4844,6 +4849,7 @@ class TestSalesInvoice(FrappeTestCase):
 
  
 	def test_sales_invoice_and_delivery_note_with_shipping_rule_TC_S_026(self):
+		from erpnext.stock.doctype.stock_entry.test_stock_entry import make_stock_entry
 		frappe.db.set_single_value("Selling Settings", "so_required", "No")
 		make_stock_entry(item="_Test Item Home Desktop 100", target="Stores - _TC", qty=10, rate=4000)
 
@@ -4901,6 +4907,7 @@ class TestSalesInvoice(FrappeTestCase):
 		self.assertEqual(delivery_note.sales_invoice, sales_invoice.name)
 	
 	def test_sales_invoice_with_update_stock_and_SR_TC_S_027(self):
+		from erpnext.stock.doctype.stock_entry.test_stock_entry import make_stock_entry
 		make_stock_entry(item="_Test Item Home Desktop 100", target="Stores - _TC", qty=10, rate=4000)
 
 		sales_invoice = create_sales_invoice(
@@ -5044,6 +5051,7 @@ class TestSalesInvoice(FrappeTestCase):
 	def test_sales_invoice_with_sr_crn_and_payment_TC_S_039(self):
 		from erpnext.stock.doctype.delivery_note.test_delivery_note import create_delivery_note
 		from erpnext.accounts.doctype.sales_invoice.sales_invoice import make_delivery_note
+		from erpnext.stock.doctype.stock_entry.test_stock_entry import make_stock_entry
 
 		frappe.db.set_value("Company", "_Test Company","enable_perpetual_inventory", 1)
 		make_stock_entry(item="_Test Item Home Desktop 100", target="Stores - _TC", qty=10, rate=2500)
@@ -5594,6 +5602,7 @@ class TestSalesInvoice(FrappeTestCase):
 			self.assertEqual(error_msg,f'Cannot delete or cancel because Sales Invoice {si.name} is linked with Payment Entry {pe.name} at Row: 1')
 
 	def test_si_cancel_amend_with_item_details_change_TC_S_128(self):
+		from erpnext.stock.doctype.stock_entry.test_stock_entry import make_stock_entry
 		from erpnext.accounts.doctype.payment_entry.test_payment_entry import (
 			make_test_item
 		)
@@ -5615,6 +5624,7 @@ class TestSalesInvoice(FrappeTestCase):
 		self.assertEqual(amended_si.status, "Unpaid")
 		
 	def test_si_cancel_amend_with_customer_change_TC_S_129(self):
+		from erpnext.stock.doctype.stock_entry.test_stock_entry import make_stock_entry
 
 		create_customer(customer_name="_Test Customer Selling",company="_Test Company")
 		make_stock_entry(item_code="_Test Item", qty=5, rate=1000, target="_Test Warehouse - _TC")
@@ -5635,6 +5645,7 @@ class TestSalesInvoice(FrappeTestCase):
 	def test_si_cancel_amend_with_payment_terms_change_TC_S_130(self):
 		from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_payment_terms_template
 		from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_payment_term
+		from erpnext.stock.doctype.stock_entry.test_stock_entry import make_stock_entry
 		make_stock_entry(item_code="_Test Item", qty=5, rate=1000, target="_Test Warehouse - _TC")
 		create_payment_term("Basic Amount Receivable for Selling")
 
@@ -5678,6 +5689,7 @@ class TestSalesInvoice(FrappeTestCase):
 		from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_payment_terms_template
 		from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_payment_term
 		from erpnext.accounts.doctype.sales_invoice.sales_invoice import make_sales_return
+		from erpnext.stock.doctype.stock_entry.test_stock_entry import make_stock_entry
 
 		make_stock_entry(item_code="_Test Item", qty=5, rate=1000, target="_Test Warehouse - _TC")
 		create_payment_term("Basic Amount Receivable for Selling")
@@ -5727,6 +5739,7 @@ class TestSalesInvoice(FrappeTestCase):
 	def test_si_with_deferred_revenue_item_TC_S_135(self):
 		from erpnext.accounts.doctype.payment_entry.test_payment_entry import make_test_item
 		from erpnext.accounts.doctype.account.test_account import create_account
+		from erpnext.stock.doctype.stock_entry.test_stock_entry import make_stock_entry
 		
 		item=make_test_item("_Test Item 1")
 		item.enable_deferred_revenue =1
@@ -5749,6 +5762,7 @@ class TestSalesInvoice(FrappeTestCase):
 
 	def test_si_with_sr_calculate_with_fixed_TC_S_139(self):
 		from erpnext.accounts.doctype.shipping_rule.test_shipping_rule import create_shipping_rule
+		from erpnext.stock.doctype.stock_entry.test_stock_entry import make_stock_entry
 
 		shipping_rule = create_shipping_rule(
 			shipping_rule_type="Selling", 
@@ -5770,6 +5784,8 @@ class TestSalesInvoice(FrappeTestCase):
 
 	def test_si_with_sr_calculate_with_net_total_TC_S_140(self):
 		from erpnext.accounts.doctype.shipping_rule.test_shipping_rule import create_shipping_rule
+		from erpnext.stock.doctype.stock_entry.test_stock_entry import make_stock_entry
+		
 
 		shipping_rule = create_shipping_rule(
 			shipping_rule_type="Selling", 
@@ -5792,6 +5808,7 @@ class TestSalesInvoice(FrappeTestCase):
 	def test_si_with_sr_calculate_with_net_weight_TC_S_141(self):
 		from erpnext.accounts.doctype.shipping_rule.test_shipping_rule import create_shipping_rule
 		from erpnext.accounts.doctype.payment_entry.test_payment_entry import make_test_item
+		from erpnext.stock.doctype.stock_entry.test_stock_entry import make_stock_entry
 
 
 		shipping_rule = create_shipping_rule(
@@ -6121,6 +6138,7 @@ class TestSalesInvoice(FrappeTestCase):
 			self.assertEqual(entry["credit"], expected_pi_entries.get(entry["account"], {}).get("credit", 0))
 
 	def test_direct_sales_invoice_via_update_stock_TC_SCK_132(self):
+		from erpnext.stock.doctype.stock_entry.test_stock_entry import make_stock_entry
 		customer = "_Test Customer"
 		warehouse = "_Test Warehouse - _TC"
 		item_code = "_Test Item"
@@ -6167,6 +6185,7 @@ class TestSalesInvoice(FrappeTestCase):
 	def test_sales_invoice_with_child_item_rates_of_product_bundle_TC_S_152(self):
 		from erpnext.selling.doctype.product_bundle.test_product_bundle import make_product_bundle
 		from erpnext.stock.doctype.item.test_item import make_item
+		from erpnext.stock.doctype.stock_entry.test_stock_entry import make_stock_entry
   
 		selling_setting = frappe.get_doc('Stock Settings')
 		selling_setting.editable_bundle_item_rates = 1
@@ -6241,6 +6260,8 @@ class TestSalesInvoice(FrappeTestCase):
 		from erpnext.stock.doctype.delivery_note.delivery_note import make_sales_invoice
 		from erpnext.accounts.doctype.sales_invoice.sales_invoice import make_inter_company_purchase_invoice
 		from erpnext.selling.doctype.sales_order.sales_order import make_delivery_note
+		from erpnext.stock.doctype.stock_entry.test_stock_entry import make_stock_entry
+		
 
 		get_required_data = create_company_and_supplier()
 
