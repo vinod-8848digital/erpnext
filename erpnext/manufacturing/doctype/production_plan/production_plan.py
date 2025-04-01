@@ -1886,7 +1886,7 @@ def get_raw_materials_of_sub_assembly_items(
 			& (bom.name == bom_no)
 			& (item.is_stock_item.isin([0, 1]) if include_non_stock_items else item.is_stock_item == 1)
 		)
-		.groupby(bei.item_code, bei.stock_uom)
+		.groupby(bei.item_code, bei.stock_uom,item.name,bei.description,bei.bom_no,bei.source_warehouse,item_default.default_warehouse,item_uom.conversion_factor)
 	).run(as_dict=True)
 
 	for item in items:

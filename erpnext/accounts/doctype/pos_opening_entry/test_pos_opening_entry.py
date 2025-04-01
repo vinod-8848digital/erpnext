@@ -5,11 +5,12 @@ import unittest
 
 from erpnext.accounts.doctype.pos_closing_entry.pos_closing_entry import make_closing_entry_from_opening
 import frappe
-
+from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_customer
 
 class TestPOSOpeningEntry(unittest.TestCase):
 
 	def test_pos_opening_to_pos_closing_TC_S_099(self):
+		create_customer("_Test Customer",currency = "INR")
 		from erpnext.accounts.doctype.pos_invoice.test_pos_invoice import create_pos_invoice
 		from erpnext.accounts.doctype.pos_closing_entry.test_pos_closing_entry import init_user_and_profile		
 		test_user, pos_profile = init_user_and_profile()
@@ -20,10 +21,14 @@ class TestPOSOpeningEntry(unittest.TestCase):
 
 		pos_inv1 = create_pos_invoice(rate=3500, do_not_submit=1)
 		pos_inv1.append("payments", {"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": 3500})
+		pos_inv1.paid_amount = pos_inv1.grand_total
+		pos_inv1.outstanding_amount = 0	
 		pos_inv1.submit()
 
 		pos_inv2 = create_pos_invoice(rate=3200, do_not_submit=1)
 		pos_inv2.append("payments", {"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": 3200})
+		pos_inv2.paid_amount = pos_inv2.grand_total
+		pos_inv2.outstanding_amount = 0	
 		pos_inv2.submit()
 
 		closing_enrty= make_closing_entry_from_opening(opening_entry)
@@ -44,10 +49,13 @@ class TestPOSOpeningEntry(unittest.TestCase):
 
 		pos_inv1 = create_pos_invoice(rate=3500, do_not_submit=1)
 		pos_inv1.append("payments", {"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": 3500})
+		pos_inv1.paid_amount = pos_inv1.grand_total
 		pos_inv1.submit()
 
 		pos_inv2 = create_pos_invoice(rate=3200, do_not_submit=1)
 		pos_inv2.append("payments", {"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": 3200})
+		pos_inv2.paid_amount = pos_inv2.grand_total
+		pos_inv2.outstanding_amount = 0	
 		pos_inv2.submit()
 
 		closing_enrty= make_closing_entry_from_opening(opening_entry)
@@ -81,10 +89,14 @@ class TestPOSOpeningEntry(unittest.TestCase):
 		
 		pos_inv1 = create_pos_invoice(rate=3500, do_not_submit=1)
 		pos_inv1.append("payments", {"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": 3500})
+		pos_inv1.paid_amount = pos_inv1.grand_total
+		pos_inv1.outstanding_amount = 0	
 		pos_inv1.submit()
 
 		pos_inv2 = create_pos_invoice(rate=3200, do_not_submit=1)
 		pos_inv2.append("payments", {"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": 3200})
+		pos_inv2.paid_amount = pos_inv2.grand_total
+		pos_inv2.outstanding_amount = 0	
 		pos_inv2.submit()
 
 		closing_enrty= make_closing_entry_from_opening(opening_entry)

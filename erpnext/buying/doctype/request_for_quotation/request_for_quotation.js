@@ -340,7 +340,7 @@ erpnext.buying.RequestforQuotationController = class RequestforQuotationControll
 				__("Opportunity"),
 				function () {
 					erpnext.utils.map_current_doc({
-						method: "custom_crm.crm.doctype.opportunity.opportunity.make_request_for_quotation",
+						method: "erpnext_crm.erpnext_crm.doctype.opportunity.opportunity.make_request_for_quotation",
 						source_doctype: "Opportunity",
 						target: me.frm,
 						setters: {

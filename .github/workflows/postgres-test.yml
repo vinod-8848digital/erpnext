@@ -48,7 +48,7 @@ jobs:
           node-version: 18
           check-latest: true
       - name: Cache Dependencies (PIP)
-        uses: actions/cache@v2
+        uses: actions/cache@v4
         with:
           path: ~/.cache/pip
           key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt', '**/pyproject.toml', '**/setup.py', '**/setup.cfg') }}
@@ -70,11 +70,11 @@ jobs:
       - name: Install Frappe Bench
         run: |
           pip install frappe-bench
-          bench init --skip-redis-config-generation --skip-assets --python "$(which python)" --frappe-path https://github.com/8848digital/frappe-v15.git --frappe-branch pre-prod ~/frappe-bench
+          bench init --skip-redis-config-generation --skip-assets --python "$(which python)" --frappe-path https://github.com/8848digital/frappe --frappe-branch pre-prod ~/frappe-bench
       - name: Install Apps
         working-directory: /home/runner/frappe-bench
         run: |
-          bench get-app erpnext https://github.com/Abhishek8848/erpnext.git --branch pre-prod
+          bench get-app erpnext https://github.com/8848digital/erpnext.git --branch pre-prod
           bench get-app https://itananddigital:${{secrets.GH_PAT}}@github.com/8848digital/ERPNext-India.git --branch pre-prod
           bench get-app https://github.com/nirav8848/india_compliance.git --branch pre-prod
           bench get-app https://github.com/8848digital/Assets --branch pre-prod
@@ -90,7 +90,7 @@ jobs:
           bench --site test_site install-app erpnext
           bench --site test_site install-app erpnext_india
           bench --site test_site install-app assets
-          bench --site test_site install-app crm
+          bench --site test_site install-app erpnext_crm
           bench --site test_site install-app projects
           bench --site test_site install-app payments
           bench --site test_site install-app sales_commission
@@ -106,10 +106,54 @@ jobs:
         working-directory: /home/runner/frappe-bench
         run: |
           set +e  # Prevent script exit on failure
-          bench --site test_site run-tests --app erpnext --coverage 2>&1 | tee test_output.log
+          bench --site test_site run-tests --app erpnext --coverage --junit-xml-output /home/runner/frappe-bench/test_results.xml 2>&1 | tee test_output.log
           echo "Tests completed, proceeding with next steps..."
         env:
           TYPE: server
+      - name: Convert Test Results to CSV
+        run: |
+          pip install xmltodict pandas
+          python <<EOF
+          import xmltodict
+          import pandas as pd
+          # Read XML File
+          xml_file = "/home/runner/frappe-bench/test_results.xml"
+          with open(xml_file, 'r', encoding='utf-8') as file:
+              xml_content = file.read()
+          data = xmltodict.parse(xml_content)
+          # Ensure XML structure is valid
+          if not isinstance(data, dict):
+              raise ValueError("Parsed XML is not a dictionary. Check the XML structure.")
+          # Extract test results from different formats
+          testsuites = data.get("testsuites", {}).get("testsuite", [])
+          # Ensure testsuites is always a list
+          if isinstance(testsuites, dict):
+              testsuites = [testsuites]
+          test_results = []
+          for suite in testsuites:
+              testcases = suite.get("testcase", [])
+              if isinstance(testcases, dict):
+                  testcases = [testcases]
+              count = 0 
+              for testcase in testcases:
+                  count += 1 
+                  test_name = testcase.get("@name", "Unknown")
+                  error_info = testcase.get("error", "Unknown")
+                  type_value = error_info.get("#text", "Unknown") if isinstance(error_info, dict) else "Unknown"
+                  # Determine pass/fail status
+                  status = "Failed" if type_value != "Unknown" else "Passed"
+                  traceback = type_value if status == "Failed" else ""
+                  test_results.append([test_name, status, traceback])
+                  
+          # Convert to CSV
+          df = pd.DataFrame(test_results, columns=["Test Name", "Status", "Traceback"])
+          df.to_csv("/home/runner/frappe-bench/test_report.csv", index=False)
+          EOF
+      - name: Upload CSV Test Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: csv-test-report
+          path: /home/runner/frappe-bench/test_report.csv
       - name: Upload Coverage Data to Codecov
         uses: codecov/codecov-action@v5
         with:
@@ -127,3 +171,4 @@ jobs:
         with:
           name: test-logs
           path: /home/runner/frappe-bench/test_output.log
+

@@ -30,6 +30,7 @@ from erpnext.controllers.tests.test_subcontracting_controller import get_rm_item
 from erpnext.buying.doctype.purchase_order.purchase_order import make_purchase_receipt
 from erpnext.stock.doctype.purchase_receipt.purchase_receipt import make_purchase_invoice 
 from erpnext.subcontracting.doctype.subcontracting_order.subcontracting_order import make_subcontracting_receipt
+from frappe.tests.utils import FrappeTestCase, if_app_installed
 
 test_records = frappe.get_test_records("BOM")
 test_dependencies = ["Item", "Quality Inspection Template"]
@@ -726,6 +727,7 @@ class TestBOM(FrappeTestCase):
 			else:
 				self.assertEqual(row.is_stock_item, 1)
 
+	@if_app_installed("assets")
 	def test_do_not_include_manufacturing_and_fixed_items(self):
 		from erpnext.manufacturing.doctype.bom.bom import item_query
 

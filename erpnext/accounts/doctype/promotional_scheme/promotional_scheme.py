@@ -343,6 +343,8 @@ def get_args_for_pricing_rule(doc):
 			for applicable_for_values in doc.get(applicable_for):
 				items.append(applicable_for_values.get(applicable_for))
 			args[d] = items
+		elif doc.meta.get_field(d) and doc.meta.get_field(d).fieldtype == "Table MultiSelect":
+			args[d] = ""
 		else:
 			args[d] = doc.get(d)
 	return args
