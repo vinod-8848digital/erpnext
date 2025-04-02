@@ -3427,18 +3427,13 @@ class TestPurchaseInvoice(FrappeTestCase, StockTestMixin):
 		self.assertEqual(pi_status, "Paid")
 	
 	def test_pi_ignore_pricing_rule_TC_B_051(self):
-		frappe.set_user("Administrator")
-		company = "_Test Company"
-		item_code = "Testing-31"
-		target_warehouse = "Stores - _TC"
-		supplier = "_Test Supplier 1"
-		from erpnext.accounts.doctype.sales_invoice.test_sales_invoice import create_company_and_supplier as create_data
+		from erpnext.buying.doctype.purchase_order.test_purchase_order import get_company_or_supplier
 		from erpnext.accounts.doctype.payment_entry.test_payment_entry import make_test_item
 		item_price = 130
-		get_company_supplier = create_data()
-		company = get_company_supplier.get("child_company")
+		get_company_supplier = get_company_or_supplier()
+		company = get_company_supplier.get("company")
 		supplier = get_company_supplier.get("supplier")
-		target_warehouse = "Stores - TC-3"
+		target_warehouse = "Stores - TC-5"
 		item = make_test_item("test_item_ignore_rule")
 		item.is_purchase_item = 1
 		item.is_sales_item = 0
@@ -3447,10 +3442,11 @@ class TestPurchaseInvoice(FrappeTestCase, StockTestMixin):
 		if not frappe.db.exists("Item Price", {"item_code": item.item_code, "price_list": "Standard Buying"}):
 			frappe.get_doc({
 				"doctype": "Item Price",
-				"price_list": "Standard Buying",
+				"price_list": get_or_create_price_list(),
 				"item_code": item.item_code,
-				"price_list_rate": item_price
-			}).insert()
+				"price_list_rate": item_price,
+				"currency": "INR"
+			}).insert(ignore_permissions=True, ignore_mandatory=True)
 
 		if not frappe.db.exists("Pricing Rule", {"title": "10% Discount"}):
 			frappe.get_doc({
@@ -3475,6 +3471,7 @@ class TestPurchaseInvoice(FrappeTestCase, StockTestMixin):
 			"company": company,
 			"posting_date": today(),
 			"currency": "INR",
+			"buying_price_list": get_or_create_price_list(),
 			"set_warehouse": target_warehouse,
 			"items": [
 				{
@@ -5000,3 +4997,26 @@ def create_asset_data():
   
 	if not frappe.db.exists("Asset Category", "Test_Category"):
 		create_asset_category()
+
+def get_or_create_price_list(currency="INR"):
+	existing_price_list = frappe.db.get_value(
+		"Price List",
+		{
+			"currency": currency,
+			"buying": 1,
+			"selling": 1
+		},
+		order_by="creation ASC"
+	)
+
+	if existing_price_list:
+		return existing_price_list
+
+	new_price_list = frappe.new_doc("Price List")
+	new_price_list.price_list_name = f"_test_{currency}_Price_List"
+	new_price_list.currency = currency
+	new_price_list.buying = 1
+	new_price_list.selling = 1
+	new_price_list.insert()
+
+	return new_price_list.name

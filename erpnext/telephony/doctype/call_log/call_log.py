@@ -136,7 +136,7 @@ def add_call_summary_and_call_type(call_log, summary, call_type):
 	doc.add_comment("Comment", frappe.bold(_("Call Summary")) + "<br><br>" + summary)
 
 def get_employees_with_number(number):
-	from erpnext_crm.erpnext_crm.doctype.utils import get_scheduled_employees_for_popup, strip_number
+	# from erpnext_crm.erpnext_crm.doctype.utils import get_scheduled_employees_for_popup, strip_number
 	number = strip_number(number)
 	if not number:
 		return []
@@ -156,7 +156,7 @@ def get_employees_with_number(number):
 	return employee_doc_name_and_emails
 
 def link_existing_conversations(doc, state):
-	from erpnext_crm.erpnext_crm.doctype.utils import get_scheduled_employees_for_popup, strip_number
+	# from erpnext_crm.erpnext_crm.doctype.utils import get_scheduled_employees_for_popup, strip_number
 	"""
 	Called from hooks on creation of Contact or Lead to link all the existing conversations.
 	"""
