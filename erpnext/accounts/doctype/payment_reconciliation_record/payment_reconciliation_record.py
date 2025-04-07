@@ -17,14 +17,11 @@ class PaymentReconciliationRecord(Document):
 	def create_payment_ledger_entries(self):
 		"""Create Payment Ledger Entries for each allocation"""
 		for allocation in self.allocation:
-			# Skip if already unreconciled
 			if allocation.unreconcile:
 				continue
 				
-			# Determine account type based on party type
 			account_type = "Receivable" if self.party_type == "Customer" else "Payable"
 			
-			# Create payment ledger entry
 			self.create_payment_ledger_entry(
 				accounting_entry="Credit" if account_type == "Receivable" else "Debit",
 				party_type=self.party_type,
@@ -40,25 +37,22 @@ class PaymentReconciliationRecord(Document):
 
 	def create_payment_ledger_entry(self, **kwargs):
 		"""Create a new Payment Ledger Entry"""
-		for ref in self.allocation:
-			ple = frappe.new_doc("Payment Ledger Entry")
-			ple.posting_date = self.clearing_date or nowdate()
-			ple.company = self.company
-			ple.account_type = "Receivable" if self.party_type == "Customer" else "Payable"
-			ple.account = kwargs.get("account")
-			ple.party_type = kwargs.get("party_type")
-			ple.party = kwargs.get("party")
-			ple.cost_center = kwargs.get("cost_center")
+		ple = frappe.new_doc("Payment Ledger Entry")
+		ple.posting_date = self.clearing_date or nowdate()
+		ple.company = self.company
+		ple.account_type = "Receivable" if self.party_type == "Customer" else "Payable"
+		ple.account = kwargs.get("account")
+		ple.party_type = kwargs.get("party_type")
+		ple.party = kwargs.get("party")
+		ple.cost_center = kwargs.get("cost_center")
 			
-			# Set voucher information
-			ple.voucher_type = ref.reference_type
-			ple.voucher_no = ref.reference_name
-			ple.against_voucher_type = kwargs.get("against_voucher_type")
-			ple.against_voucher_no = kwargs.get("against_voucher_no")
-			ple.amount = kwargs.get("amount")
-			
-			ple.remarks = f"Against {kwargs.get('against_voucher_type')} {kwargs.get('against_voucher_no')}"
-			
-			# Save and submit the entry
-			ple.flags.ignore_permissions = True
-			ple.submit()
+		ple.voucher_type =kwargs.get('reference_type')
+		ple.voucher_no = kwargs.get('reference_name')
+		ple.against_voucher_type = kwargs.get("against_voucher_type")
+		ple.against_voucher_no = kwargs.get("against_voucher_no")
+		ple.amount = kwargs.get("amount")
+		
+		ple.remarks = f"Against {kwargs.get('against_voucher_type')} {kwargs.get('against_voucher_no')}"
+		
+		ple.flags.ignore_permissions = True
+		ple.submit()
