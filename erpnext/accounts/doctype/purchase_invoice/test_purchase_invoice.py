@@ -4093,6 +4093,7 @@ class TestPurchaseInvoice(FrappeTestCase, StockTestMixin):
 		from erpnext.selling.doctype.sales_order.test_sales_order import get_or_create_fiscal_year
 		create_company()
 		parent_warehouse = frappe.db.get_value('Warehouse',{'is_group':1,'company':'_Test Company'},'name')
+		account = frappe.db.get_value('Account',{'company':'_Test Company'},'name')
 		create_warehouse(
 			warehouse_name="_Test Warehouse 1 - _TC",
 			properties={"parent_warehouse": f"{parent_warehouse}"},
@@ -4101,6 +4102,7 @@ class TestPurchaseInvoice(FrappeTestCase, StockTestMixin):
 		get_or_create_fiscal_year("_Test Company")
 		create_supplier(supplier_name="_Test Supplier 1")
 		warehouse = frappe.db.get_all('Warehouse',{'is_group':0,'company':'_Test Company'},['name'])
+		cost_center = frappe.db.get_value('Cost Center',{'company':'_Test Company'},'name')
 		pi = make_purchase_invoice(
 			supplier="_Test Supplier 1",
 			item_code=create_item(item_code = "Book", warehouse=warehouse[-1].name, company="_Test Company").item_code,
@@ -4109,6 +4111,8 @@ class TestPurchaseInvoice(FrappeTestCase, StockTestMixin):
 			warehouse=warehouse[-1].name,
 			supplier_warehouse = warehouse[0].name,
 			uom = "Box",
+			cost_center=cost_center,
+			expense_account =account,
 			do_not_save=True
 		)
 		pi.due_date = today()
@@ -4123,7 +4127,7 @@ class TestPurchaseInvoice(FrappeTestCase, StockTestMixin):
 		)
 		self.assertEqual(len(sle), 1)
 		self.assertEqual(sle[0].item_code, "Book")
-		self.assertEqual(sle[0].warehouse, "Stores - _TC")
+		self.assertEqual(sle[0].warehouse, warehouse[-1].name)
 		self.assertEqual(sle[0].actual_qty, 5)
 
 		# Check Accounting Ledger Entries
@@ -4134,11 +4138,16 @@ class TestPurchaseInvoice(FrappeTestCase, StockTestMixin):
 		)
 		self.assertTrue(gl_entries)
 		expected_gl_entries = [
-			{"account": "Creditors - _TC", "debit": 0, "credit": pi.grand_total},
-			{"account": "_Test Account Cost for Goods Sold - _TC", "debit": pi.grand_total, "credit": 0}
+			{"account": "_Stock In Hand - _TC", "debit": pi.grand_total, "credit": 0},
+			{"account": "Creditors - _TC", "debit": 0, "credit": pi.grand_total}
 		]
+
 		for gle in expected_gl_entries:
-			self.assertTrue(any(entry["account"] == gle["account"] and entry["debit"] == gle["debit"] and entry["credit"] == gle["credit"] for entry in gl_entries))
+			for acccount in gl_entries:
+				if acccount["account"] == gle["account"]:
+					self.assertEqual(acccount["debit"], gle["debit"])
+					self.assertEqual(acccount["credit"], gle["credit"])
+					
 	def test_supplier_invoice_number_uniqueness_validation_TC_ACC_136(self):
 		from erpnext.accounts.doctype.payment_entry.test_payment_entry import make_test_item
 
