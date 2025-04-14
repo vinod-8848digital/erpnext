@@ -328,11 +328,14 @@ class TestQualityInspection(FrappeTestCase):
 		pr.cancel()
 
 	def test_qa_for_pi_TC_SCK_160(self):
-		from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_company
 		from erpnext.buying.doctype.supplier.test_supplier import create_supplier
 		from erpnext.selling.doctype.sales_order.test_sales_order import get_or_create_fiscal_year
 		from datetime import date
+		from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_company
 		create_company()
+		company = "_Test Company"
+		frappe.db.set_value("Company", company, "stock_received_but_not_billed", 'Cost of Goods Sold - _TC')
+		
 		create_warehouse(
 			warehouse_name="_Test Warehouse 1 - _TC",
 			properties={"parent_warehouse": "All Warehouses - _TC"},

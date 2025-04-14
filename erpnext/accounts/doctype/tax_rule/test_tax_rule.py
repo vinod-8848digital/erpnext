@@ -33,7 +33,7 @@ class TestTaxRule(unittest.TestCase):
 			priority=1,
 		)
 		tax_rule1.save()
-
+		
 		tax_rule2 = make_tax_rule(
 			customer="_Test Customer",
 			sales_tax_template="_Test Sales Taxes and Charges Template - _TC",
@@ -335,6 +335,7 @@ class TestTaxRule(unittest.TestCase):
 				"rate":100,
 				"description":"GST"
 			})
+			purchase_tax_template.flags.ignore_permissions = True
 			purchase_tax_template.save()
 			existing_templates = purchase_tax_template.name
 

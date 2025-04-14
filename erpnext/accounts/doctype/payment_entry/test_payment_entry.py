@@ -1958,7 +1958,6 @@ class TestPaymentEntry(FrappeTestCase):
 			tax_withholding_category = tax_withholding_category.name
 		)
 
-		
 		if not supplier.tax_withholding_category:
 				setattr(supplier, 'tax_withholding_category', tax_withholding_category.name)
 
@@ -1992,8 +1991,8 @@ class TestPaymentEntry(FrappeTestCase):
 							"description": "Cash",
 						},
 					)
-			
-			
+
+
 			payment_entry.save()
 			payment_entry.submit()
 			self.voucher_no = payment_entry.name

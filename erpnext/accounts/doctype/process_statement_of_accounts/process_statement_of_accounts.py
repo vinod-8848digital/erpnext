@@ -214,8 +214,6 @@ def get_ar_filters(doc, entry):
 		"party": [entry.customer],
 		"customer_name": entry.customer_name if entry.customer_name else None,
 		"payment_terms_template": doc.payment_terms_template if doc.payment_terms_template else None,
-		"sales_partner": doc.sales_partner if doc.sales_partner else None,
-		"sales_person": doc.sales_person if doc.sales_person else None,
 		"territory": doc.territory if doc.territory else None,
 		"based_on_payment_terms": doc.based_on_payment_terms,
 		"report_name": "Accounts Receivable",
@@ -227,6 +225,8 @@ def get_ar_filters(doc, entry):
 	}
 	if frappe.db.has_column("Process Statement Of Accounts", "sales_partner"):
 		filters["sales_partner"] = doc.sales_partner if doc.sales_partner else None
+	if frappe.db.has_column("Process Statement Of Accounts", "sales_person"):
+		filters["sales_person"] = doc.sales_person if doc.sales_person else None,
 	return filters
 
 

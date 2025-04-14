@@ -294,14 +294,18 @@ class TestBlanketOrder(FrappeTestCase):
 		
 		frappe.flags.args.doctype = "Sales Order"
 		get_or_create_fiscal_year('_Test Company')
+		customer = frappe.get_doc("Customer", "_Test Customer")
+		customer.default_currency = "INR"
+		customer.save()
+		customer.reload()
 		bo = make_blanket_order(blanket_order_type="Selling",quantity=50,rate=1000)
 		so = make_order(bo.name)
+		so.currency = 'INR'
 		so.delivery_date = add_days(nowdate(), 5)
 		so.submit()
-
 		bo.reload()
 		self.assertEqual(bo.items[0].ordered_qty, 50)
-
+	
 		make_stock_entry(
 			item_code=bo.items[0].item_code,
 			qty=50,
@@ -309,7 +313,6 @@ class TestBlanketOrder(FrappeTestCase):
 			rate=1000,
 			purpose="Material Receipt"
 		)
-
 		si = make_sales_invoice(so.name)
 		si.update_stock = 1
 		si.insert()

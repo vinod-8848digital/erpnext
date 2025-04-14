@@ -796,6 +796,14 @@ def add_node():
 
 def get_all_transactions_annual_history(company):
 	out = {}
+	project_query=""
+
+	if "projects" in frappe.get_installed_apps():
+		project_query = """
+			UNION ALL
+				select name, creation as transaction_date, company
+				from `tabProject`
+			"""
 
 	items = frappe.db.sql(
 		"""
@@ -825,10 +833,8 @@ def get_all_transactions_annual_history(company):
 			select name, creation as transaction_date, company
 			from `tabIssue`
 
-			UNION ALL
-
-			select name, creation as transaction_date, company
-			from `tabProject`
+			{}
+			
 		) t
 
 		where
@@ -838,7 +844,8 @@ def get_all_transactions_annual_history(company):
 
 		group by
 			transaction_date
-			""",
+			"""
+		.format(project_query),
 		(company),
 		as_dict=True,
 	)

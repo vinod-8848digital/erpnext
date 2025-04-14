@@ -1203,7 +1203,7 @@ class TestItem(FrappeTestCase):
 
 	def test_set_valuation_method_for_item_TC_SCK_179(self):
 		item_fields = {
-			"item_name": "_Test Book",
+			"item_name": "_Test Book Valuation Method",
 			"stock_uom": "Nos",
 			"is_stock_item": 1,
 			"valuation_method": "FIFO"

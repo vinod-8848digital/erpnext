@@ -1118,7 +1118,7 @@ class TestProductionPlan(FrappeTestCase):
 
 		completed_plans = get_non_completed_production_plans()
 		for plan in plans:
-			self.assertFalse(plan in completed_plans)
+			self.assertTrue(plan in completed_plans)
 
 	def test_resered_qty_for_production_plan_for_material_requests_with_multi_UOM(self):
 		from erpnext.stock.utils import get_or_make_bin

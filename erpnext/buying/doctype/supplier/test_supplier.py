@@ -194,8 +194,11 @@ class TestSupplierPortal(FrappeTestCase):
 
 		supplier.append("portal_users", {"user": user})
 		supplier.save()
-
+		current_user = frappe.session.user
 		frappe.set_user(user)
 		_, suppliers = get_customers_suppliers("Purchase Order", user)
 
 		self.assertIn(supplier.name, suppliers)
+		frappe.db.rollback()
+		frappe.set_user(current_user)
+		frappe.delete_doc("User", user)

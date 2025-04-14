@@ -179,10 +179,10 @@ class TestPeriodClosingVoucher(unittest.TestCase):
 		surplus_account = pcv.closing_account_head
 
 		expected_gle = (
-			(surplus_account, 0.0, 400.0, None),
 			(surplus_account, 0.0, 400.0, jv.finance_book),
-			("Sales - TPC", 400.0, 0.0, None),
+			(surplus_account, 0.0, 400.0, None),
 			("Sales - TPC", 400.0, 0.0, jv.finance_book),
+			("Sales - TPC", 400.0, 0.0, None),
 		)
 
 		pcv_gle = frappe.db.sql(

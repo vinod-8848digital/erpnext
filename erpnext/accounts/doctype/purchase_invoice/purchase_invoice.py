@@ -892,7 +892,7 @@ class PurchaseInvoice(BuyingController):
 				)
 
 		valuation_tax_accounts = [
-			d.account_headnd (item.item_code in stock_items or item.is_fixed_asset)
+			d.account_head
 			for d in self.get("taxes")
 			if d.category in ("Valuation", "Valuation and Total")
 			and flt(d.base_tax_amount_after_discount_amount)
@@ -1129,7 +1129,7 @@ class PurchaseInvoice(BuyingController):
 
 					stock_rbnb = (
 						self.get_company_default("asset_received_but_not_billed")
-						if item.is_fixed_asset
+						if "assets" in frappe.get_installed_apps() and item.is_fixed_asset
 						else self.stock_received_but_not_billed
 					)
 

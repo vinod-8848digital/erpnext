@@ -5567,6 +5567,7 @@ class TestSalesInvoice(FrappeTestCase):
 		check_gl_entries(self, si.name, expected_gl_entries, si.posting_date)
   
 	def test_create_sales_invoice_for_common_party_TC_ACC_124(self):
+		from erpnext.buying.doctype.purchase_order.test_purchase_order import validate_fiscal_year
 		from erpnext.accounts.doctype.payment_entry.test_payment_entry import (
 			make_test_item,
 			create_supplier,
@@ -5574,6 +5575,7 @@ class TestSalesInvoice(FrappeTestCase):
 			create_purchase_invoice
 		)
 		from erpnext.accounts.doctype.party_link.party_link import create_party_link
+		validate_fiscal_year('_Test Company')
 		create_account()
 		account_setting = frappe.get_doc('Accounts Settings')
 		account_setting.enable_common_party_accounting = True

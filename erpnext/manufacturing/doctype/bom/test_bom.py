@@ -768,8 +768,8 @@ class TestBOM(FrappeTestCase):
 		self.assertTrue("_Test RM Item 3 Manufacture Item" in items)
 	
 	def test_subcontrcting_supply_raw_material_TC_B_100(self):
-		from erpnext.accounts.doctype.fiscal_year.test_fiscal_year import create_fiscal_year
-		create_fiscal_year("_Test Company")
+		from erpnext.buying.doctype.purchase_order.test_purchase_order import get_or_create_fiscal_year
+		get_or_create_fiscal_year("_Test Company")
 		item_1 = create_item(item_code="Testing Service", is_stock_item=0)
 		item_1.item_group = "Services"
 		item_1.save()
@@ -832,8 +832,8 @@ class TestBOM(FrappeTestCase):
 		self.assertEqual(pi.status, "Paid")
 	
 	def test_subcontrcting_supply_raw_material_TC_B_101(self):
-		from erpnext.accounts.doctype.fiscal_year.test_fiscal_year import create_fiscal_year
-		create_fiscal_year("_Test Company")
+		from erpnext.buying.doctype.purchase_order.test_purchase_order import get_or_create_fiscal_year
+		get_or_create_fiscal_year("_Test Company")
 		item_1 = create_item(item_code="Testing Service", is_stock_item=0)
 		item_1.item_group = "Services"
 		item_1.save()

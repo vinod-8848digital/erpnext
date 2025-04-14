@@ -255,7 +255,10 @@ class PeriodClosingVoucher(AccountsController):
 		return acc_bal_dict
 
 	def get_accounting_dimension_fields(self):
-		default_dimensions = ["cost_center", "finance_book", "project"]
+		if "projects" in frappe.get_installed_apps():
+			default_dimensions = ["cost_center", "finance_book", "project"]
+		else:
+			default_dimensions = ["cost_center", "finance_book"]
 		self.accounting_dimension_fields = default_dimensions + get_accounting_dimensions()
 
 	def get_gl_entries_for_current_period(self, report_type, only_opening_entries=False, as_iterator=False):
