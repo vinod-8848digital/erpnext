@@ -9390,3 +9390,6 @@ def remove_existing_shipping_rules():
 def _make_blanket_order(**args):
 	from erpnext.manufacturing.doctype.blanket_order.test_blanket_order import make_blanket_order
 	return make_blanket_order(**args)
+
+def test_test_function():
+	pass
