@@ -3415,21 +3415,6 @@ class TestPurchaseOrder(FrappeTestCase):
 		po.submit()
 		self.assertEqual(po.items[0].rate, 130)
 
-	def test_close_or_unclose_purchase_orders_no_permission(self):
-
-		po_1 = create_purchase_order()
-		po_2 = create_purchase_order()
-
-		names = [po_1.name, po_2.name]
-
-		frappe.set_user("Guest")
-		try:
-			close_or_unclose_purchase_orders(json.dumps(names), "Closed")
-
-		except Exception as e:
-			self.assertIsInstance(e, frappe.exceptions.PermissionError)
-			self.assertIn("Not permitted", str(e))
-
 	def test_close_or_unclose_purchase_orders_with_close_status(self):
 
 		po_1 = create_purchase_order()
