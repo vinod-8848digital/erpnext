@@ -2733,7 +2733,7 @@ class TestDeliveryNote(FrappeTestCase):
 			company="_Test Company",
 		)
 		create_warehouse(
-			warehouse_name=" _Test Warehouse - _TC",
+			warehouse_name="_Test Warehouse - _TC",
 			properties={"parent_warehouse": "All Warehouses - _TC"},
 			company="_Test Company",
 		)

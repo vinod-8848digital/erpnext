@@ -8,7 +8,9 @@ import frappe
 from erpnext.accounts.doctype.journal_entry.test_journal_entry import make_journal_entry
 from erpnext.accounts.doctype.sales_invoice.test_sales_invoice import create_sales_invoice
 
-test_dependencies = ["Cost Center", "Location", "Warehouse", "Department"]
+test_dependencies = ["Cost Center", "Warehouse", "Department"]
+if "Assets" in frappe.get_installed_apps():
+	test_dependencies = ["Cost Center", "Location", "Warehouse", "Department"]
 
 
 class TestAccountingDimension(unittest.TestCase):
@@ -200,37 +202,38 @@ def create_dimension():
 		dimension.disabled = 0
 		dimension.save()
 
-	if not frappe.db.exists("Accounting Dimension", {"document_type": "Location"}):
-		dimension1 = frappe.get_doc(
-			{
-				"doctype": "Accounting Dimension",
-				"document_type": "Location",
-			}
-		)
+	if "Assets" in frappe.get_installed_apps():
+		if not frappe.db.exists("Accounting Dimension", {"document_type": "Location"}):
+			dimension1 = frappe.get_doc(
+				{
+					"doctype": "Accounting Dimension",
+					"document_type": "Location",
+				}
+			)
 
-		dimension1.append(
-			"dimension_defaults",
-			{
-				"company": "_Test Company",
-				"reference_document": "Location",
-				"default_dimension": "Block 1",
-				"mandatory_for_bs": 1,
-			},
-		)
+			dimension1.append(
+				"dimension_defaults",
+				{
+					"company": "_Test Company",
+					"reference_document": "Location",
+					"default_dimension": "Block 1",
+					"mandatory_for_bs": 1,
+				},
+			)
 
-		dimension1.insert()
-		dimension1.save()
-	else:
-		dimension1 = frappe.get_doc("Accounting Dimension", "Location")
-		dimension1.disabled = 0
-		dimension1.save()
+			dimension1.insert()
+			dimension1.save()
+		else:
+			dimension1 = frappe.get_doc("Accounting Dimension", "Location")
+			dimension1.disabled = 0
+			dimension1.save()
 
 
 def disable_dimension():
 	dimension1 = frappe.get_doc("Accounting Dimension", "Department")
 	dimension1.disabled = 1
 	dimension1.save()
-
-	dimension2 = frappe.get_doc("Accounting Dimension", "Location")
-	dimension2.disabled = 1
-	dimension2.save()
+	if "Assets" in frappe.get_installed_apps():
+		dimension2 = frappe.get_doc("Accounting Dimension", "Location")
+		dimension2.disabled = 1
+		dimension2.save()

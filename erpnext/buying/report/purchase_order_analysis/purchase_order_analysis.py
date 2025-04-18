@@ -86,7 +86,10 @@ def get_data(filters):
 		query = query.where(po.company == filters.get("company"))
  
 	if filters.get("name"):
-		query = query.where(po.name.isin(filters.get("name")))
+		names = filters.get("name")
+		if isinstance(names, str):
+			names = [names]
+		query = query.where(po.name.isin(names))
 
 	if filters.get("from_date") and filters.get("to_date"):
 		query = query.where(po.transaction_date.between(filters.get("from_date"), filters.get("to_date")))

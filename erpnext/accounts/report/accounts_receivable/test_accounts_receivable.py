@@ -56,7 +56,7 @@ class TestAccountsReceivable(AccountsTestMixin, FrappeTestCase):
 	def create_payment_entry(self, docname, do_not_submit=False):
 		pe = get_payment_entry("Sales Invoice", docname, bank_account=self.cash, party_amount=40)
 		pe.paid_from = self.debit_to
-		pe.insert()
+		pe.insert(ignore_permissions=True)
 		if not do_not_submit:
 			pe.submit()
 		return pe
@@ -341,7 +341,7 @@ class TestAccountsReceivable(AccountsTestMixin, FrappeTestCase):
 
 		pe = get_payment_entry(si1.doctype, si1.name, bank_account=self.cash)
 		pe.paid_from = self.debit_to
-		pe.insert()
+		pe.insert(ignore_permissions=True)
 		pe.submit()
 
 		cr_note = self.create_credit_note(si1.name)

@@ -33,7 +33,7 @@ class TestTaxRule(unittest.TestCase):
 			priority=1,
 		)
 		tax_rule1.save()
-
+		
 		tax_rule2 = make_tax_rule(
 			customer="_Test Customer",
 			sales_tax_template="_Test Sales Taxes and Charges Template - _TC",
@@ -296,6 +296,8 @@ class TestTaxRule(unittest.TestCase):
 		self.assertTrue(len(quotation.taxes) > 0)
 
 	def test_create_tax_rule_and_apply_to_sales_invoice_TC_ACC_101(self):
+		from erpnext.buying.doctype.purchase_order.test_purchase_order import get_or_create_fiscal_year
+		get_or_create_fiscal_year("_Test Company")
 		# Step 1: Create a tax rule for a customer with a sales tax template
 		make_tax_rule(
 			customer="_Test Customer",
@@ -320,10 +322,27 @@ class TestTaxRule(unittest.TestCase):
 	
 	def test_create_tax_rule_and_apply_to_purchase_invoice_TC_ACC_102(self):
 		# Step 1: Create a tax rule for a supplier with a sales tax template
-		existing_templates = frappe.db.get_value(
-			"Purchase Taxes and Charges Template",
-			filters={"company":"_Test Company","title": ["like", "% GST %"]}
-		)
+		from erpnext.buying.doctype.purchase_order.test_purchase_order import get_or_create_fiscal_year
+		get_or_create_fiscal_year("_Test Company")
+		if frappe.db.exists("Purchase Taxes and Charges Template", "GST 1 - _TC"):
+			existing_templates = "GST 1 - _TC"
+		else:
+			purchase_tax_template = frappe.new_doc("Purchase Taxes and Charges Template")
+			purchase_tax_template.company = "_Test Company"
+			purchase_tax_template.title = "GST 1"
+			purchase_tax_template.tax_category = "_Test Tax Category 1"
+			purchase_tax_template.append("taxes", {
+				"category":"Total",
+				"add_deduct_tax":"Add",
+				"charge_type":"On Net Total",
+				"account_head":"Stock In Hand - _TC",
+				"rate":100,
+				"description":"GST"
+			})
+			purchase_tax_template.flags.ignore_permissions = True
+			purchase_tax_template.save()
+			existing_templates = purchase_tax_template.name
+
 		make_tax_rule(
 			tax_type= "Purchase",
 			supplier="_Test Supplier",
@@ -332,10 +351,18 @@ class TestTaxRule(unittest.TestCase):
 		)
 
 		# Step 2: Create a purchase invoice for the supplier
-		purchase_invoice = make_purchase_invoice(
-			supplier="_Test Supplier",
-			save=1,
-		)
+		purchase_invoice = frappe.new_doc("Purchase Invoice")
+		purchase_invoice.supplier = "_Test Supplier"
+		purchase_invoice.company = "_Test Company"
+		purchase_invoice.append("items", {
+			"item_code": "_Test Item",
+			"qty": 1,
+			"rate": 100,
+		})
+		purchase_invoice.credit_to = "Creditors - _TC"
+		purchase_invoice.currency = "INR"
+		purchase_invoice.save()
+		purchase_invoice.submit()
 
 		# Step 3: Fetch the sales tax based on the created tax rule and check the tax rate applied
 		applied_tax_template = purchase_invoice.taxes_and_charges

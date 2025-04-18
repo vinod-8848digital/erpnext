@@ -287,10 +287,12 @@ class TestQualityInspection(FrappeTestCase):
 		se.delete()
 
 	def test_qa_for_pr_TC_SCK_159(self):
-		from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_company
 		from erpnext.buying.doctype.supplier.test_supplier import create_supplier
 		from erpnext.buying.doctype.purchase_order.test_purchase_order import get_or_create_fiscal_year
+		from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_company
 		create_company()
+		company = "_Test Company"
+		frappe.db.set_value("Company", company, "stock_received_but_not_billed", 'Cost of Goods Sold - _TC')
 
 		create_supplier(supplier_name = "_Test Supplier")
 		create_warehouse(
@@ -326,11 +328,14 @@ class TestQualityInspection(FrappeTestCase):
 		pr.cancel()
 
 	def test_qa_for_pi_TC_SCK_160(self):
-		from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_company
 		from erpnext.buying.doctype.supplier.test_supplier import create_supplier
 		from erpnext.selling.doctype.sales_order.test_sales_order import get_or_create_fiscal_year
 		from datetime import date
+		from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_company
 		create_company()
+		company = "_Test Company"
+		frappe.db.set_value("Company", company, "stock_received_but_not_billed", 'Cost of Goods Sold - _TC')
+		
 		create_warehouse(
 			warehouse_name="_Test Warehouse 1 - _TC",
 			properties={"parent_warehouse": "All Warehouses - _TC"},
@@ -338,10 +343,8 @@ class TestQualityInspection(FrappeTestCase):
 		)
 		get_or_create_fiscal_year("_Test Company")
 		create_supplier(supplier_name="_Test Supplier")
-		
-		account = frappe.db.get_value('Account',{'company':'_Test Company'},'name')
-		cost_center = frappe.db.get_all('Cost Center',{'company':'_Test Company'},['name'])
-		pr = make_purchase_invoice(item_code="_Test Item with QA",uom = "Box",expense_account = account,cost_center = cost_center[1]['name'],do_not_save =True)
+
+		pr = make_purchase_invoice(item_code="_Test Item with QA",uom = "Box",do_not_save =True)
 		pr.due_date = date.today()
 		pr.save()
 		pr.submit()
@@ -401,10 +404,13 @@ class TestQualityInspection(FrappeTestCase):
 		si.cancel()
 
 	def test_qa_for_pr_out_TC_SCK_162(self):
-		from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_company
 		from erpnext.buying.doctype.supplier.test_supplier import create_supplier
 		from erpnext.buying.doctype.purchase_order.test_purchase_order import get_or_create_fiscal_year
+		from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_company
 		create_company()
+		company = "_Test Company"
+		frappe.db.set_value("Company", company, "stock_received_but_not_billed", 'Cost of Goods Sold - _TC')
+
 		create_supplier(supplier_name = "_Test Supplier")
 		create_warehouse(
 			warehouse_name="_Test Warehouse - _TC",
@@ -491,10 +497,13 @@ class TestQualityInspection(FrappeTestCase):
 		qa.cancel()
 
 	def test_qa_for_pr_proc_TC_SCK_166(self):
-		from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_company
 		from erpnext.buying.doctype.supplier.test_supplier import create_supplier
 		from erpnext.buying.doctype.purchase_order.test_purchase_order import get_or_create_fiscal_year
+		from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_company
 		create_company()
+		company = "_Test Company"
+		frappe.db.set_value("Company", company, "stock_received_but_not_billed", 'Cost of Goods Sold - _TC')
+		
 		create_supplier(supplier_name = "_Test Supplier")
 		create_warehouse(
 			warehouse_name="_Test Warehouse - _TC",

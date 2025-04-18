@@ -56,7 +56,7 @@ class TestDunning(FrappeTestCase):
 		pe = get_payment_entry("Dunning", dunning.name)
 		pe.reference_no = "1"
 		pe.reference_date = nowdate()
-		pe.insert()
+		pe.insert(ignore_permissions=True)
 		pe.submit()
 
 		for overdue_payment in dunning.overdue_payments:
@@ -89,7 +89,7 @@ class TestDunning(FrappeTestCase):
 		dunning.submit()
 		pe = get_payment_entry("Dunning", dunning.name)
 		pe.reference_no, pe.reference_date = "2", nowdate()
-		pe.insert()
+		pe.insert(ignore_permissions=True)
 		pe.submit()
 		sales_invoice.load_from_db()
 		dunning.load_from_db()

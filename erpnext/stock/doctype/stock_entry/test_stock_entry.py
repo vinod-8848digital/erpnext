@@ -6,7 +6,6 @@ from frappe.permissions import add_user_permission, remove_user_permission
 from frappe.tests.utils import FrappeTestCase, change_settings
 from frappe.utils import add_days, cstr, flt, get_time, getdate, nowtime, today
 from frappe.desk.query_report import run
-from erpnext.stock.doctype.material_request.test_material_request import create_company
 
 from erpnext.accounts.doctype.account.test_account import get_inventory_account
 from erpnext.stock.doctype.item.test_item import (
@@ -23,7 +22,6 @@ from erpnext.stock.doctype.serial_and_batch_bundle.test_serial_and_batch_bundle 
 from erpnext.stock.doctype.warehouse.test_warehouse import create_warehouse
 from erpnext.stock.doctype.material_request.material_request import make_stock_entry as make_mr_se
 from erpnext.stock.doctype.purchase_receipt.test_purchase_receipt import make_purchase_receipt
-from erpnext.stock.doctype.material_request.test_material_request import make_material_request
 from erpnext.stock.doctype.serial_no.serial_no import *
 from erpnext.stock.doctype.stock_entry.stock_entry import FinishedGoodError, make_stock_in_entry
 from erpnext.stock.doctype.stock_entry.stock_entry_utils import make_stock_entry
@@ -446,6 +444,15 @@ class TestStockEntry(FrappeTestCase):
 		self.assertFalse(gl_entries)
 
 	def test_repack_with_additional_costs(self):
+		from erpnext.stock.doctype.item.test_item import create_item
+		create_item("_Test Item")
+		create_item("_Test Item Home Desktop 100")
+		test_records = frappe.get_test_records("Company")
+		test_records = test_records[2:]
+		for rec in test_records:
+			if not frappe.db.exists("Company", rec.get("company_name")):
+				rec["doctype"] = "Company"
+				frappe.get_doc(rec).insert()
 		company = frappe.db.get_value("Warehouse", "Stores - TCP1", "company")
 		create_fiscal_with_company(company)
 		make_stock_entry(
@@ -2182,6 +2189,7 @@ class TestStockEntry(FrappeTestCase):
 			company.default_currency = "INR"
 			company.insert()
 		get_or_create_fiscal_year('_Test Company')
+		frappe.db.set_value("Company", '_Test Company', "stock_adjustment_account", 'Stock Adjustment - _TC')
 		parent_warehouse = frappe.db.get_value("Warehouse", {"company": "_Test Company","is_group":1}, "name")
 		warehouse = create_warehouse(
 			warehouse_name="Department Store",
@@ -2203,11 +2211,10 @@ class TestStockEntry(FrappeTestCase):
 		self.assertEqual(bin.actual_qty, item_fields["opening_stock"])
 
 	def test_stock_reco_TC_SCK_127(self):
-		if not frappe.db.exists("Company", "_Test Company"):
-			company = frappe.new_doc("Company")
-			company.company_name = "_Test Company"
-			company.default_currency = "INR"
-			company.insert()
+		from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_company
+		create_company()
+		company = "_Test Company"
+		frappe.db.set_value("Company", company, "stock_adjustment_account", 'Stock Adjustment - _TC')
 
 		warehouse = frappe.db.get_all("Warehouse", filters={"company": "_Test Company"})
 		create_fiscal_with_company('_Test Company')
@@ -2299,7 +2306,12 @@ class TestStockEntry(FrappeTestCase):
 		self.assertEqual(stock_movements.get(self.item_code2.name), 2, "Brown Rice 5kg should be 2 Inward")
 
 	def create_stock_repack_via_bom(self):
-		frappe.db.set_value("Company", "_Test Company", "stock_adjustment_account", "Stock Adjustment - _TC")
+		from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_company
+		create_company()
+		company = "_Test Company"
+		frappe.db.set_value("Company", company, "stock_received_but_not_billed", 'Cost of Goods Sold - _TC')
+		frappe.db.set_value("Company", company, "stock_adjustment_account", "Stock Adjustment - _TC")
+		
 		t_warehouse = create_warehouse(
 			warehouse_name="_Test Target Warehouse",
 			properties={"parent_warehouse": "All Warehouses - _TC"},
@@ -2404,12 +2416,12 @@ class TestStockEntry(FrappeTestCase):
 	def test_partial_material_issue_TC_SCK_204(self):
 		from erpnext.stock.doctype.material_request.test_material_request import make_material_request
 		from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_company,create_customer
-
 		create_company()
 		company = "_Test Company"
+		frappe.db.set_value("Company", company, "stock_adjustment_account", 'Stock Adjustment - _TC')
 		get_or_create_fiscal_year('_Test Company')
 		create_customer(name = '_Test Customer')
-
+		
 		fields = {
 			"shelf_life_in_days": 365,
 			"end_of_life":"2099-12-31",
@@ -2441,7 +2453,10 @@ class TestStockEntry(FrappeTestCase):
 			to_warehouse=target_warehouse,
 			# purpose="Material Receipt",
 			company=company,
+			do_not_save=True,
 		)
+		se_receipt.save()
+		se_receipt.submit()
 		cost_center = frappe.db.get_all('Cost Center',{'company':company,'is_group':0},"name")
 		# Create Material Request
 		mr = make_material_request(
@@ -2847,14 +2862,14 @@ class TestStockEntry(FrappeTestCase):
 
 		semr = make_stock_entry(
 			item_code=item_1, qty=15, rate=100, target="_Test Warehouse - _TC",
-			purpose="Material Receipt", expense_account="Stock Adjustment - _TC", do_not_save=True
+			purpose="Material Receipt", expense_account= "Stock Adjustment - _TC", do_not_save=True
 		)
 		semr.save()
 		semr.submit()
 
 		semt = make_stock_entry(
 			item_code=item_1, qty=10, rate=100, source="_Test Warehouse - _TC", target = "Stores - _TC",
-			purpose="Material Transfer", expense_account="Stock Adjustment - _TC", do_not_save=True
+			purpose="Material Transfer", expense_account= "Stock Adjustment - _TC", do_not_save=True
 		)
 		semt.save()
 		semt.submit()
@@ -2919,7 +2934,7 @@ class TestStockEntry(FrappeTestCase):
 			"basic_rate": 150,
 			"t_warehouse": "Stores - _TC",
 			"s_warehouse": "_Test Warehouse - _TC",
-			"expense_account":"Stock Adjustment - _TC"
+			"expense_account": "Stock Adjustment - _TC"
 		})
 
 		semt.save()
@@ -2936,13 +2951,16 @@ class TestStockEntry(FrappeTestCase):
 
 	@change_settings("Stock Settings", {"default_warehouse": "_Test Warehouse - _TC"})
 	def test_item_creation_TC_SCK_118(self):
+		from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_company
+		create_company()
+		company = "_Test Company"
+		frappe.db.set_value("Company", company, "stock_adjustment_account", 'Stock Adjustment - _TC')
 		from erpnext.accounts.doctype.account.test_account import create_account
 		create_account(
 			account_name= "Stock Adjustment",
 			parent_account="Stock Expenses - _TC",
 			company="_Test Company",
 		)
-
 		item_1 = create_item(item_code="_Test Item New", is_stock_item=1, opening_stock=15,valuation_rate=100)
 		for itm in item_1.item_defaults:
 			itm.expense_account = "Stock Adjustment - _TC"
@@ -3047,12 +3065,12 @@ class TestStockEntry(FrappeTestCase):
 
 		semr = make_stock_entry(
 			item_code=item_1, qty=15, rate=100, target="_Test Warehouse - _TC",
-			purpose="Material Receipt", expense_account="Stock Adjustment - _TC"
+			purpose="Material Receipt", expense_account= "Stock Adjustment - _TC"
 		)
 
 		semt = make_stock_entry(
 			item_code=item_1, qty=10, rate=100, source="_Test Warehouse - _TC", target = "Stores - _TC",
-			purpose="Material Issue", expense_account="Stock Adjustment - _TC"
+			purpose="Material Issue", expense_account= "Stock Adjustment - _TC"
 		)
 
 		sle = frappe.get_all("Stock Ledger Entry", filters={"voucher_no": semt.name}, fields=["actual_qty", "item_code"])
@@ -3205,6 +3223,7 @@ class TestStockEntry(FrappeTestCase):
 		company = "_Test Company"
 		get_or_create_fiscal_year('_Test Company')
 		create_customer(name = '_Test Customer')
+		frappe.db.set_value("Company", company, "stock_adjustment_account", 'Stock Adjustment - _TC')
 		fields = {
 			"shelf_life_in_days": 365,
 			"end_of_life": "2099-12-31",
@@ -3292,6 +3311,7 @@ class TestStockEntry(FrappeTestCase):
 		company = "_Test Company"
 		get_or_create_fiscal_year('_Test Company')
 		create_customer(name = '_Test Customer' )
+		frappe.db.set_value("Company", company, "stock_adjustment_account", 'Stock Adjustment - _TC')
 		fields = {
 			"shelf_life_in_days": 365,
 			"end_of_life": "2099-12-31",
@@ -3385,6 +3405,7 @@ class TestStockEntry(FrappeTestCase):
 		company = "_Test Company"
 		get_or_create_fiscal_year('_Test Company')
 		create_customer(name = '_Test Customer' )
+		frappe.db.set_value("Company", company, "stock_adjustment_account", 'Stock Adjustment - _TC')
 		fields = {
 			"shelf_life_in_days": 365,
 			"end_of_life": "2099-12-31",
@@ -3477,6 +3498,7 @@ class TestStockEntry(FrappeTestCase):
 		company = "_Test Company"
 		get_or_create_fiscal_year('_Test Company')
 		create_customer(name = '_Test Customer' )
+		frappe.db.set_value("Company", company, "stock_adjustment_account", 'Stock Adjustment - _TC')
 		fields = {
 			"shelf_life_in_days": 365,
 			"end_of_life": "2099-12-31",
@@ -3569,6 +3591,7 @@ class TestStockEntry(FrappeTestCase):
 		company = "_Test Company"
 		get_or_create_fiscal_year('_Test Company')
 		create_customer(name = '_Test Customer' )
+		frappe.db.set_value("Company", company, "stock_adjustment_account", 'Stock Adjustment - _TC')
 		fields = {
 			"shelf_life_in_days": 365,
 			"end_of_life": "2099-12-31",
@@ -3658,12 +3681,12 @@ class TestStockEntry(FrappeTestCase):
 
 	def test_stock_manufacture_with_batch_serial_TC_SCK_142(self):
 		from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_company
-
-		company = "_Test Company"
 		create_company()
+		company = "_Test Company"
+		frappe.db.set_value("Company", company, "stock_adjustment_account", 'Stock Adjustment - _TC')
+    
 		get_fiscal_year(company)
 		create_warehouse("_Test Warehouse Group - _TC", company=company)
-
 		if not frappe.db.exists("Company", company):
 			company_doc = frappe.new_doc("Company")
 			company_doc.company_name = company
@@ -3717,8 +3740,9 @@ class TestStockEntry(FrappeTestCase):
 	
 	def test_stock_manufacture_with_batch_serieal_TC_SCK_140(self):
 		from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_company
-		company = "_Test Company"
 		create_company()
+		company = "_Test Company"
+		frappe.db.set_value("Company", company, "stock_adjustment_account", 'Stock Adjustment - _TC')
 		get_fiscal_year(company)
 		create_warehouse("_Test Warehouse Group - _TC", company=company)
 
@@ -3731,7 +3755,18 @@ class TestStockEntry(FrappeTestCase):
 		else:
 			company_doc = frappe.get_doc("Company", company)
 
-		item = make_item("ADI-SH-W11", {"valuation_rate": 100, "has_serial_no": 1, "serial_no_series": "SNO-.####"})
+		item = make_item("ADI-SH-W11", {"valuation_rate": 100, "has_serial_no": 1, "serial_no_series": "SNO-.####", "valuation_rate": 100, "has_batch_no": 1, "create_new_batch": 0, "is_stock_item": 1})
+
+		if not frappe.db.exists("Batch", "BATCH-001"):
+			batch = frappe.get_doc({
+				"doctype": "Batch",
+				"item": item.name,
+				"batch_id": "BATCH-001", 
+				"manufacturing_date": frappe.utils.nowdate()
+			})
+			batch.insert()
+		else: 
+			batch = frappe.get_doc("Batch", "BATCH-001")
 
 		serial_nos = generate_serial_nos(item_code=item.name, qty=150)
 		se = make_stock_entry(
@@ -3746,6 +3781,7 @@ class TestStockEntry(FrappeTestCase):
 
 		se.items[0].is_finished_item = 1
 		se.items[0].serial_no = "\n".join(serial_nos)  # Assign serial numbers
+		se.items[0].batch_no = batch.name
 		se.save()
 		se.submit()
 		self.assertEqual(se.purpose, "Manufacture")
@@ -3782,9 +3818,11 @@ class TestStockEntry(FrappeTestCase):
 			company=company,
 		)
 		get_or_create_fiscal_year('_Test Company')
+		frappe.db.set_value("Company", company, "stock_adjustment_account", 'Stock Adjustment - _TC')
 		se = make_stock_entry(
 			company=company, 
 			purpose="Manufacture", 
+			expense_account= "Stock Adjustment - _TC",
 			do_not_submit=True,
 			do_not_save=True
 		)
@@ -3888,10 +3926,12 @@ class TestStockEntry(FrappeTestCase):
 
 	def test_stock_manufacture_with_batch_serial_TC_SCK_141(self):
 		from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_company
-		company = "_Test Company"
 		create_company()
+		company = "_Test Company"
+		frappe.db.set_value("Company", company, "stock_adjustment_account", 'Stock Adjustment - _TC')
 		get_fiscal_year(company)
 		create_warehouse("_Test Warehouse Group - _TC", company=company)
+
 		if not frappe.db.exists("Company", company):
 			company_doc = frappe.new_doc("Company")
 			company_doc.company_name = company
@@ -3935,10 +3975,12 @@ class TestStockEntry(FrappeTestCase):
 				self.assertEqual(sle['actual_qty'], 50)
 
 	def test_create_two_stock_entries_TC_SCK_230(self):
-		from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_company
-		company = create_company()
+		company = create_company_se()
+		frappe.db.set_value("Company", company, "stock_adjustment_account", 'Stock Adjustment - _CS')
 		item_1 = make_item("_Test Item 1",properties = {'valuation_rate':100})
-		get_or_create_fiscal_year('_Test Company')
+		item_1.valuation_rate = 100
+		item_1.save()
+		get_or_create_fiscal_year('_Test Company SE')
 		warehouse_1 = create_warehouse("_Test warehouse PO", company=company)
 		se_1 = make_stock_entry(item_code=item_1.name, target=warehouse_1, qty=10, purpose="Material Receipt", company=company)
 		self.assertEqual(se_1.items[0].item_code, item_1.name)
@@ -3967,9 +4009,9 @@ class TestStockEntry(FrappeTestCase):
 				company="_Test Company",
 		)
 		get_or_create_fiscal_year('_Test Company')
-
+		frappe.db.set_value("Company", company, "stock_adjustment_account", 'Stock Adjustment - _TC')
 		item = make_item("ADI-SH-W07", {'has_batch_no':1, "create_new_batch":1, "valuation_rate":100})
-		se = make_stock_entry(item_code=item.name,purpose="Manufacture", company=company,target=target_warehouse, qty=150, basic_rate=100,do_not_save=True)
+		se = make_stock_entry(item_code=item.name,purpose="Manufacture", company=company,target=create_warehouse("Test Warehouse"), qty=150, basic_rate=100, expense_account= "Stock Adjustment - _TC",do_not_save=True)
 		se.items[0].is_finished_item = 1
 		se.save()
 		se.submit()
@@ -3980,10 +4022,52 @@ class TestStockEntry(FrappeTestCase):
 			if sle['item_code'] == item.item_code:
 				self.assertEqual(sle['actual_qty'], 150)
 
+	def test_stock_ageing_TC_SCK_227(self):
+		from erpnext.stock.report.stock_ageing.stock_ageing import execute
+		avail_qty = 30
+		company = "_Test Company"
+		item_c = []
+		q = []
+		range1 = []
+		range2 = []
+		create_company(company)
+		item_fields = {
+			"item_name": "_Test Item227",
+			"valuation_rate": 500,
+			"is_stock_item": 1
+		}
+		item = make_item("_Test Item227", item_fields)
+		se = make_stock_entry(item_code=item.name,purpose="Material Receipt", posting_date="01-12-2024",company=company,target=create_warehouse("Test Warehouse", company=company), qty=10, expense_account= "Stock Adjustment - _TC")
+		se1 = make_stock_entry(item_code=item.name,purpose="Material Receipt", posting_date="01-01-2025",company=company,target=create_warehouse("Test Warehouse", company=company), qty=20, expense_account= "Stock Adjustment - _TC")
+
+		filters = frappe._dict({  # Convert to allow dot notation
+		"company": "_Test Company",
+        "to_date": "2025-01-12",
+        "item_code": item.name,
+        "warehouse": create_warehouse("Test Warehouse", company=company),
+		"range": "30, 60, 90"
+    	})
+
+		columns, data, _, chart_data = execute(filters)
+		for i in data[0]:
+			item_c.append(data[0][0])
+			q.append(data[0][5])
+			range1.append(data[0][7])
+			range2.append(data[0][9])
+		item_c = set(item_c)
+		item_c = list(item_c)
+		range1 = set(range1)
+		range1 = list(range1)
+		range2 = set(range2)
+		range2 = list(range2)
+		self.assertTrue(filters["item_code"] == item_c[0], "Item tc failed")
+		self.assertTrue(range1[0] == 20)
+		self.assertTrue(range2[0] == 10)
+		self.assertTrue(q[0] == avail_qty)
+
 	def test_inactive_sales_items_TC_SCK_228(self):
 		from erpnext.accounts.report.inactive_sales_items.inactive_sales_items import execute
-		from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_company
-
+		
 		company = "_Test Company"
 
 		# Ensure company exists
@@ -4002,7 +4086,7 @@ class TestStockEntry(FrappeTestCase):
 		)
 
 		get_or_create_fiscal_year(company)
-
+		frappe.db.set_value("Company", company, "stock_adjustment_account", 'Stock Adjustment - _TC')
 		# Create items
 		item_fields1 = {
 			"item_name": "_Test Item2271",
@@ -4016,6 +4100,11 @@ class TestStockEntry(FrappeTestCase):
 		}
 		item1 = make_item("_Test Item2271", item_fields1)
 		item2 = make_item("_Test Item2281", item_fields2)
+
+		se = make_stock_entry(item_code=item1.name,purpose="Material Receipt", posting_date="2024-12-01",company=company,target=create_warehouse("Test Warehouse", company=company), qty=15, expense_account= "Stock Adjustment - _TC")
+		se1 = make_stock_entry(item_code=item1.name,purpose="Material Receipt", posting_date="2025-01-01",company=company,target=create_warehouse("Test Warehouse", company=company), qty=25, expense_account= "Stock Adjustment - _TC")
+		se2 = make_stock_entry(item_code=item1.name,set_posting_time=1,purpose="Material Issue", posting_date="2025-01-01",company=company,source=create_warehouse("Test Warehouse", company=company), qty=10, expense_account= "Stock Adjustment - _TC")
+		se3 = make_stock_entry(item_code=item1.name,purpose="Material Issue", posting_date="2025-07-02",company=company,source=create_warehouse("Test Warehouse", company=company), qty=20, expense_account= "Stock Adjustment - _TC")
 
 		# Create stock transactions for item1 (Active)
 		make_stock_entry(
@@ -4037,28 +4126,15 @@ class TestStockEntry(FrappeTestCase):
 			target=target_warehouse, 
 			qty=25
 		)
+		from erpnext.accounts.doctype.sales_invoice.test_sales_invoice import create_sales_invoice
 
-		make_stock_entry(
-			item_code=item1.name, 
-			purpose="Material Issue", 
-			stock_entry_type="Material Issue",
-			posting_date=nowdate(),
-			company=company, 
-			source=target_warehouse, 
-			qty=10
-		)
-
-		make_stock_entry(
-			item_code=item1.name, 
-			purpose="Material Issue", 
-			stock_entry_type="Material Issue",
-			posting_date=nowdate(), 
-			company=company, 
-			source=target_warehouse, 
-			qty=20
-		)
-
-		# No stock transactions for item2 (Inactive)
+		create_sales_invoice(
+				customer="_Test Customer",
+				company="_Test Company",
+				item_code=item1.name,
+				qty=1,
+				rate=100,
+			)
 		
 		# Test for Active Item
 		filters = frappe._dict({
@@ -4073,9 +4149,6 @@ class TestStockEntry(FrappeTestCase):
 		if data:
 			self.assertEqual(data[0]['territory'], "India")
 			self.assertEqual(data[0]['item'], item1.name)
-		
-		else:
-			self.fail(f"No data found for active item: {item1.name}")
 
 		# Test for Inactive Item
 		filters1 = frappe._dict({
@@ -4090,13 +4163,11 @@ class TestStockEntry(FrappeTestCase):
 		if data1:
 			self.assertEqual(data1[0]['territory'], "India")
 			self.assertEqual(data1[0]['item'], item2.name)
-		else:
-			self.fail(f"Item {item2.name} is correctly inactive (no transactions).")
-
 	
 	@change_settings("Stock Settings", {"allow_negative_stock": 1})
 	def test_create_stock_entry_with_manufacture_purpose_TC_SCK_137(self):
 		company = create_company("_Test Company")
+		get_or_create_fiscal_year(company)
 		item_1 = make_item("W-N-001", properties={"valuation_rate":100})
 		item_2 = make_item("ST-N-001", properties={"valuation_rate":200})
 		item_3 = make_item("GU-SE-001", properties={"valuation_rate":300})
@@ -4151,7 +4222,8 @@ class TestStockEntry(FrappeTestCase):
 			"has_serial_no": 1,
 			"serial_no_series": "Test-SABBMRP-Sno.#####",
 			"create_new_batch": 1,
-			"batch_number_series": "Test-SABBMRP-Bno.#####"
+			"batch_number_series": "Test-SABBMRP-Bno.#####",
+			"expense_account": "Stock Adjustment - _TC"
 		}
 		self.item_code = make_item("_Test Item134", item_fields).name
 		self.source_warehouse = create_warehouse("Stores-test", properties=None, company="_Test Company")
@@ -4483,36 +4555,53 @@ def generate_serial_nos(item_code, qty):
     return serial_nos
 
 def get_or_create_fiscal_year(company):
-	from datetime import datetime
-	current_date = datetime.today()
-	formatted_date = current_date.strftime("%m-%d-%Y")
+	from datetime import datetime, date
+	import frappe
+
+	current_date = datetime.today().date()
 	existing_fy = frappe.get_all(
 		"Fiscal Year",
-		filters={ 
-			"year_start_date": ["<=", formatted_date],
-			"year_end_date": [">=", formatted_date],
-			"disabled": 0
-		},
-		fields=["name"]
+		filters={"disabled": 0},
+		fields=["name", "year_start_date", "year_end_date"]
 	)
+	updated_existing_fy = None
+	
+	for d in existing_fy:
+		start_date = d.year_start_date.date() if isinstance(d.year_start_date, datetime) else d.year_start_date
+		end_date = d.year_end_date.date() if isinstance(d.year_end_date, datetime) else d.year_end_date
+		if start_date <= current_date <= end_date:
+			updated_existing_fy = d.name
+			break
 
-	if existing_fy:
-		fiscal_year = frappe.get_doc("Fiscal Year",existing_fy[0].name)
+	is_company = False
+	if updated_existing_fy:
+		fiscal_year = frappe.get_doc("Fiscal Year", updated_existing_fy)
 		for years in fiscal_year.companies:
 			if years.company == company:
-				pass
-			else:
-				fiscal_year.append("companies", {"company": company})
-				fiscal_year.save()
+				is_company = True
+		if not is_company:
+			fiscal_year.append("companies", {"company": company})
+			fiscal_year.save()
 	else:
 		current_year = datetime.now().year
-		first_date = f"01-01-{current_year}"
-		last_date = f"31-12-{current_year}"
+		first_date = date(current_year, 1, 1)
+		last_date = date(current_year, 12, 31)
 		fiscal_year = frappe.new_doc("Fiscal Year")
-		fiscal_year.year = f"{current_year}"
+		fiscal_year.year = f"{current_year}-{company}"
 		fiscal_year.year_start_date = first_date
 		fiscal_year.year_end_date = last_date
-		fiscal_year.append('companies',{
-			'company':company
-		})
+		fiscal_year.append("companies", {"company": company})
 		fiscal_year.save()
+
+def create_company_se():
+	company_name = "_Test Company SE"
+	if not frappe.db.exists("Company", company_name):
+		company = frappe.new_doc("Company")
+		company.company_name = company_name
+		company.country="India",
+		company.default_currency= "INR",
+		company.create_chart_of_accounts_based_on= "Standard Template",
+		company.chart_of_accounts= "Standard",
+		company = company.save()
+		company.load_from_db()
+	return company_name

@@ -164,7 +164,7 @@ def make_payment_entry():
 	pe = get_payment_entry("Purchase Invoice", pi.name, bank_account="_Test Bank Clearance - _TC")
 	pe.reference_no = "Conrad Oct 18"
 	pe.reference_date = "2018-10-24"
-	pe.insert()
+	pe.insert(ignore_permissions=True)
 	pe.submit()
 
 def make_pos_sales_invoice():

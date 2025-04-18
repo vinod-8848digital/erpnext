@@ -52,5 +52,5 @@ def make_payment_entry_to_irs_1099_supplier():
 	pe.reference_date = "2016-01-10"
 	pe.party_type = "Supplier"
 	pe.party = "_US 1099 Test Supplier"
-	pe.insert()
+	pe.insert(ignore_permissions=True)
 	pe.submit()

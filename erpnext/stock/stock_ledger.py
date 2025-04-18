@@ -1838,8 +1838,8 @@ def get_valuation_rate(
 			)
 
 	if (
-		not allow_zero_rate
-		and not valuation_rate
+		(valuation_rate is None or flt(valuation_rate) == 0)
+		and not cint(allow_zero_rate)
 		and raise_error_if_no_rate
 		and cint(erpnext.is_perpetual_inventory_enabled(company))
 	):

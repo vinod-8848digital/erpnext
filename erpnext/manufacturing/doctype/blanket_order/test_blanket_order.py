@@ -11,7 +11,7 @@ from erpnext.stock.doctype.item.test_item import make_item
 from .blanket_order import make_order
 from erpnext.buying.doctype.purchase_order.purchase_order import make_purchase_receipt
 from erpnext.stock.doctype.purchase_receipt.purchase_receipt import make_purchase_invoice
-
+from erpnext.buying.doctype.purchase_order.test_purchase_order import get_or_create_fiscal_year
 
 class TestBlanketOrder(FrappeTestCase):
 	def setUp(self):
@@ -255,11 +255,20 @@ class TestBlanketOrder(FrappeTestCase):
 	def test_blanket_order_to_sales_invoice_TC_S_054(self):
 		from erpnext.selling.doctype.sales_order.sales_order import make_delivery_note
 		from erpnext.stock.doctype.delivery_note.delivery_note import make_sales_invoice
+		from erpnext.stock.doctype.stock_entry.stock_entry_utils import make_stock_entry
 		frappe.flags.args.doctype = "Sales Order"
-
+		get_or_create_fiscal_year('_Test Company')
 		bo = make_blanket_order(blanket_order_type="Selling",quantity=50,rate=1000)
 		so = make_order(bo.name)
+		make_stock_entry(
+			item_code=bo.items[0].item_code,
+			qty=50,
+			to_warehouse="_Test Warehouse - _TC", 
+			rate=1000,
+			purpose="Material Receipt"
+		)
 		so.delivery_date = add_days(nowdate(), 5)
+		so.currency = "INR"
 		so.submit()
 
 		bo.reload()
@@ -285,15 +294,19 @@ class TestBlanketOrder(FrappeTestCase):
 		from erpnext.stock.doctype.stock_entry.test_stock_entry import make_stock_entry
 		
 		frappe.flags.args.doctype = "Sales Order"
-
-		bo = make_blanket_order(blanket_order_type="Selling", quantity=50, rate=1000)
+		get_or_create_fiscal_year('_Test Company')
+		customer = frappe.get_doc("Customer", "_Test Customer")
+		customer.default_currency = "INR"
+		customer.save()
+		customer.reload()
+		bo = make_blanket_order(blanket_order_type="Selling",quantity=50,rate=1000)
 		so = make_order(bo.name)
+		so.currency = 'INR'
 		so.delivery_date = add_days(nowdate(), 5)
 		so.submit()
-
 		bo.reload()
 		self.assertEqual(bo.items[0].ordered_qty, 50)
-
+	
 		make_stock_entry(
 			item_code=bo.items[0].item_code,
 			qty=50,
@@ -301,7 +314,6 @@ class TestBlanketOrder(FrappeTestCase):
 			rate=1000,
 			purpose="Material Receipt"
 		)
-
 		si = make_sales_invoice(so.name)
 		si.update_stock = 1
 		si.insert()
@@ -381,7 +393,7 @@ def create_taxes_interstate():
 		acc.company = "_Test Company"
 		account_name_cgst = frappe.db.exists("Account", {"account_name" : "Input Tax CGST","company": "_Test Company" })
 		if not account_name_cgst:
-			account_name_cgst = acc.insert()
+			account_name_cgst = acc.insert(ignore_permissions=True)
 
 		
 		acc = frappe.new_doc("Account")
@@ -390,7 +402,7 @@ def create_taxes_interstate():
 		acc.company = "_Test Company"
 		account_name_sgst = frappe.db.exists("Account", {"account_name" : "Input Tax SGST","company": "_Test Company" })
 		if not account_name_sgst:
-			account_name_sgst = acc.insert()
+			account_name_sgst = acc.insert(ignore_permissions=True)
 		
 		return [
 			{

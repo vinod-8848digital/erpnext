@@ -549,7 +549,8 @@ class TestSubscription(FrappeTestCase):
     
 	def test_subscription_plan_with_template_for_pi_TC_ACC_086(self):
 		create_plan(plan_name="_Test Plan For PI", cost=900, currency="INR")
-
+		from erpnext.buying.doctype.purchase_order.test_purchase_order import get_or_create_fiscal_year
+		get_or_create_fiscal_year("_Test Company")
 		subscription = create_subscription(
 			start_date=nowdate(),
 			party_type="Supplier",
@@ -569,7 +570,8 @@ class TestSubscription(FrappeTestCase):
 		
 	def test_subscription_plan_with_template_for_si_TC_ACC_087(self):
 		create_plan(plan_name="_Test Plan For SI", cost=900, currency="INR")
-
+		from erpnext.buying.doctype.purchase_order.test_purchase_order import get_or_create_fiscal_year
+		get_or_create_fiscal_year("_Test Company")
 		subscription = create_subscription(
 			start_date=nowdate(),
 			party_type="Customer",

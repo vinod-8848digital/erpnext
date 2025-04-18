@@ -16,13 +16,59 @@ from frappe.utils.nestedset import (
 
 test_records = frappe.get_test_records("Item Group")
 
-
 class TestItem(unittest.TestCase):
+
+	def setUp(self):
+		self.insert_dependencies()
+
+		for doc in test_records:
+			if not frappe.db.exists("Item Group", doc["item_group_name"]):
+				frappe.get_doc(doc).insert()
+
+	def insert_dependencies(self):
+		if not frappe.db.exists("Company", "_Test Company"):
+			frappe.get_doc({
+				"doctype": "Company",
+				"company_name": "_Test Company",
+				"abbr": "_TC",
+				"default_currency": "INR"
+			}).insert()
+
+		if not frappe.db.exists("Cost Center", "_Test Cost Center 2 - _TC"):
+			frappe.get_doc({
+				"doctype": "Cost Center",
+				"cost_center_name": "_Test Cost Center 2",
+				"company": "_Test Company",
+				"is_group": 0,
+			}).insert()
+
+		if not frappe.db.exists("Warehouse", "_Test Warehouse - _TC"):
+			frappe.get_doc({
+				"doctype": "Warehouse",
+				"warehouse_name": "_Test Warehouse",
+				"company": "_Test Company",
+				"is_group": 0,
+			}).insert()
+
+		if not frappe.db.exists("Item Tax Template", "_Test Account Excise Duty @ 10 - _TC"):
+			frappe.get_doc({
+				"doctype": "Item Tax Template",
+				"title": "_Test Account Excise Duty @ 10",
+				"company": "_Test Company",
+				"taxes": [
+					{
+						"tax_type": "Excise Duty",
+						"tax_rate": 10
+					}
+				]
+			}).insert()
+
 	def test_basic_tree(self, records=None):
 		min_lft = 1
 		max_rgt = frappe.db.sql("select max(rgt) from `tabItem Group`")[0][0]
 
 		if not records:
+			test_records = frappe.get_test_records("Item Group")	
 			records = test_records[2:]
 
 		for item_group in records:

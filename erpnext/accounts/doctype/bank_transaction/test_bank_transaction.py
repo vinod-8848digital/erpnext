@@ -350,7 +350,7 @@ def add_vouchers(gl_account="_Test Bank - _TC"):
 	pe = get_payment_entry("Purchase Invoice", pi.name, bank_account=gl_account)
 	pe.reference_no = "Conrad Oct 18"
 	pe.reference_date = "2018-10-24"
-	pe.insert()
+	pe.insert(ignore_permissions=True)
 	pe.submit()
 
 	try:
@@ -369,14 +369,14 @@ def add_vouchers(gl_account="_Test Bank - _TC"):
 	pe = get_payment_entry("Purchase Invoice", pi.name, bank_account=gl_account)
 	pe.reference_no = "Herr G Oct 18"
 	pe.reference_date = "2018-10-24"
-	pe.insert()
+	pe.insert(ignore_permissions=True)
 	pe.submit()
 
 	pi = make_purchase_invoice(supplier="Mr G", qty=1, rate=1700)
 	pe = get_payment_entry("Purchase Invoice", pi.name, bank_account=gl_account)
 	pe.reference_no = "Herr G Nov 18"
 	pe.reference_date = "2018-11-01"
-	pe.insert()
+	pe.insert(ignore_permissions=True)
 	pe.submit()
 
 	try:
@@ -405,21 +405,21 @@ def add_vouchers(gl_account="_Test Bank - _TC"):
 
 	pi = make_purchase_invoice(supplier="Poore Simon's", qty=1, rate=3900, is_paid=1, do_not_save=1)
 	pi.cash_bank_account = gl_account
-	pi.insert()
+	pi.insert(ignore_permissions=True)
 	pi.submit()
 	pe = get_payment_entry("Purchase Invoice", pi.name, bank_account=gl_account)
 	pe.reference_no = "Poore Simon's Oct 18"
 	pe.reference_date = "2018-10-28"
 	pe.paid_amount = 690
 	pe.received_amount = 690
-	pe.insert()
+	pe.insert(ignore_permissions=True)
 	pe.submit()
 
 	si = create_sales_invoice(customer="Poore Simon's", qty=1, rate=3900)
 	pe = get_payment_entry("Sales Invoice", si.name, bank_account=gl_account)
 	pe.reference_no = "Poore Simon's Oct 18"
 	pe.reference_date = "2018-10-28"
-	pe.insert()
+	pe.insert(ignore_permissions=True)
 	pe.submit()
 
 	try:

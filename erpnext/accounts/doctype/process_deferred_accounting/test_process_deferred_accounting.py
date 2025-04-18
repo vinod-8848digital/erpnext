@@ -107,6 +107,8 @@ class TestProcessDeferredAccounting(unittest.TestCase):
 		item = create_item("_Test Item for Deferred Accounting", is_purchase_item=True)
 		item.enable_deferred_expense = 1
 		item.item_defaults[0].deferred_expense_account = deferred_account
+		if frappe.db.has_column("Item", "gst_hsn_code"):
+			item.gst_hsn_code = "01011010"
 		item.save()
 
 		# Step 6: Create Purchase Invoice
@@ -202,6 +204,8 @@ class TestProcessDeferredAccounting(unittest.TestCase):
 		item.enable_deferred_revenue = 1
 		item.deferred_revenue_account = deferred_account
 		item.no_of_months = 12
+		if frappe.db.has_column("Item", "gst_hsn_code"):
+			item.gst_hsn_code = "01011010"
 		item.save()
 
 		# Step 5: Create Sales Invoice

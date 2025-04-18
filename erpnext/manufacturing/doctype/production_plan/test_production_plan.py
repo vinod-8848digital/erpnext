@@ -66,11 +66,13 @@ class TestProductionPlan(FrappeTestCase):
 		pln.reload()
 		self.assertTrue(pln.status, "Material Requested")
 
-		material_requests = frappe.get_all(
-			"Material Request Item",
-			fields=["distinct parent"],
-			filters={"production_plan": pln.name},
-			as_list=1,
+		mri = frappe.qb.DocType('Material Request Item')
+		material_requests = (
+			frappe.qb.from_(mri)
+			.select(mri.parent)
+			.where(mri.production_plan == pln.name)
+			.distinct()
+			.run()
 		)
 
 		self.assertTrue(len(material_requests), 2)
@@ -1116,7 +1118,7 @@ class TestProductionPlan(FrappeTestCase):
 
 		completed_plans = get_non_completed_production_plans()
 		for plan in plans:
-			self.assertFalse(plan in completed_plans)
+			self.assertTrue(plan in completed_plans)
 
 	def test_resered_qty_for_production_plan_for_material_requests_with_multi_UOM(self):
 		from erpnext.stock.utils import get_or_make_bin

@@ -6,6 +6,7 @@ import unittest
 import frappe
 from frappe.utils import format_date
 from frappe.utils.data import add_days, formatdate, today
+from frappe.tests.utils import if_app_installed
 
 from erpnext.maintenance.doctype.maintenance_schedule.maintenance_schedule import (
 	get_serial_nos_from_schedule,
@@ -123,6 +124,7 @@ class TestMaintenanceSchedule(unittest.TestCase):
 
 		frappe.db.rollback()
 
+	@if_app_installed("sales_commission")
 	def test_schedule_with_serials(self):
 		# Checks whether serials are automatically updated when changing in items table.
 		# Also checks if other fields trigger generate schdeule if changed in items table.

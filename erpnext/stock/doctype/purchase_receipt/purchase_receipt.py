@@ -9,7 +9,7 @@ from frappe.model.mapper import get_mapped_doc
 from frappe.query_builder.functions import CombineDatetime
 from frappe.utils import cint, flt, get_datetime, getdate, nowdate
 from pypika import functions as fn
-
+from frappe.query_builder import DocType
 import erpnext
 # from erpnext.accounts.doctype.work_breakdown_structure.work_breakdown_structure import check_available_budget
 from erpnext.accounts.utils import get_account_currency
@@ -989,27 +989,32 @@ def get_billed_amount_against_pr(pr_items):
 
 
 def get_billed_amount_against_po(po_items):
-	# Get billed amount directly against Purchase Order
-	if not po_items:
-		return {}
+    # Get billed amount directly against Purchase Order
+    if not po_items:
+        return {}
 
-	purchase_invoice = frappe.qb.DocType("Purchase Invoice")
-	purchase_invoice_item = frappe.qb.DocType("Purchase Invoice Item")
+    PurchaseInvoice = DocType("Purchase Invoice")
+    PurchaseInvoiceItem = DocType("Purchase Invoice Item")
 
-	query = (
-		frappe.qb.from_(purchase_invoice_item)
-		.select(fn.Sum(purchase_invoice_item.amount).as_("billed_amt"), purchase_invoice_item.po_detail)
-		.where(
-			(purchase_invoice_item.po_detail.isin(po_items))
-			& (purchase_invoice_item.docstatus == 1)
-			& (purchase_invoice.docstatus == 1)
-			& (purchase_invoice_item.pr_detail.isnull())
-			& (purchase_invoice.update_stock == 0)
-		)
-		.groupby(purchase_invoice_item.po_detail)
-	).run(as_dict=1)
+    query = (
+        frappe.qb.from_(PurchaseInvoiceItem)
+        .join(PurchaseInvoice)
+        .on(PurchaseInvoice.name == PurchaseInvoiceItem.parent)
+        .select(
+            fn.Sum(PurchaseInvoiceItem.amount).as_("billed_amt"),
+            PurchaseInvoiceItem.po_detail
+        )
+        .where(
+            (PurchaseInvoiceItem.po_detail.isin(po_items)) &
+            (PurchaseInvoiceItem.docstatus == 1) &
+            (PurchaseInvoice.docstatus == 1) &
+            (PurchaseInvoiceItem.pr_detail.isnull()) &
+            (PurchaseInvoice.update_stock == 0)
+        )
+        .groupby(PurchaseInvoiceItem.po_detail)
+    ).run(as_dict=True)
 
-	return {d.po_detail: flt(d.billed_amt) for d in query}
+    return {d.po_detail: flt(d.billed_amt) for d in query}
 
 
 def update_billing_percentage(pr_doc, update_modified=True, adjust_incoming_rate=False):
@@ -1017,6 +1022,9 @@ def update_billing_percentage(pr_doc, update_modified=True, adjust_incoming_rate
 	buying_settings = frappe.get_single("Buying Settings")
 	total_amount, total_billed_amount = 0, 0
 	item_wise_returned_qty = get_item_wise_returned_qty(pr_doc)
+
+	if adjust_incoming_rate:
+		item_wise_billed_qty = get_billed_qty_against_purchase_receipt(pr_doc)
 
 	for item in pr_doc.items:
 		returned_qty = flt(item_wise_returned_qty.get(item.name))
@@ -1036,8 +1044,7 @@ def update_billing_percentage(pr_doc, update_modified=True, adjust_incoming_rate
 
 		if adjust_incoming_rate:
 			adjusted_amt = 0.0
-			item_wise_billed_qty = get_billed_qty_against_purchase_receipt(pr_doc)
- 
+
 			if (
 				item.billed_amt is not None
 				and item.amount is not None
@@ -1067,8 +1074,10 @@ def get_billed_qty_against_purchase_receipt(pr_doc):
 	query = (
 		frappe.qb.from_(table)
 		.select(table.pr_detail, fn.Sum(table.qty).as_("qty"))
-		.where((table.pr_detail.isin(pr_names)) & (table.docstatus == 1))
+ 		.where((table.pr_detail.isin(pr_names)) & (table.docstatus == 1))
+ 		.groupby(table.pr_detail)
 	)
+
 	invoice_data = query.run(as_list=1)
 
 	if not invoice_data:

@@ -186,9 +186,11 @@ class WorkOrder(Document):
 	def validate_sales_order(self):
 		if self.sales_order:
 			self.check_sales_order_on_hold_or_close()
+			is_projects_installed = "projects" in frappe.get_installed_apps()
+			project_column = ", so.project" if is_projects_installed else ""
 			so = frappe.db.sql(
 				"""
-				select so.name, so_item.delivery_date, so.project
+				select so.name, so_item.delivery_date{0}
 				from `tabSales Order` so
 				inner join `tabSales Order Item` so_item on so_item.parent = so.name
 				left join `tabProduct Bundle Item` pk_item on so_item.item_code = pk_item.parent
@@ -196,7 +198,7 @@ class WorkOrder(Document):
 					and so.skip_delivery_note  = 0 and (
 					so_item.item_code=%s or
 					pk_item.item_code=%s )
-			""",
+			""".format(project_column),
 				(self.sales_order, self.production_item, self.production_item),
 				as_dict=1,
 			)
@@ -205,7 +207,7 @@ class WorkOrder(Document):
 				so = frappe.db.sql(
 					"""
 					select
-						so.name, so_item.delivery_date, so.project
+						so.name, so_item.delivery_date{0}
 					from
 						`tabSales Order` so, `tabSales Order Item` so_item, `tabPacked Item` packed_item
 					where so.name=%s
@@ -214,7 +216,7 @@ class WorkOrder(Document):
 						and so.skip_delivery_note = 0
 						and so_item.item_code = packed_item.parent_item
 						and so.docstatus = 1 and packed_item.item_code=%s
-				""",
+				""".format(project_column),
 					(self.sales_order, self.production_item),
 					as_dict=1,
 				)
@@ -1625,7 +1627,7 @@ def create_job_card(work_order, row, enable_capacity_planning=False, auto_create
 			"posting_date": nowdate(),
 			"for_quantity": row.job_card_qty or work_order.get("qty", 0),
 			"operation_id": row.get("name"),
-			"bom_no": work_order.bom_no,
+			"bom_no": row.get("bom"),
 			"project": work_order.project if "projects" in frappe.get_installed_apps() else "",
 			"company": work_order.company,
 			"sequence_id": row.get("sequence_id"),

@@ -188,7 +188,7 @@ def get_common_filters(doc):
 
 
 def get_gl_filters(doc, entry, tax_id, presentation_currency):
-	return {
+	filters = {
 		"from_date": doc.from_date,
 		"to_date": doc.to_date,
 		"party_type": "Customer",
@@ -197,23 +197,23 @@ def get_gl_filters(doc, entry, tax_id, presentation_currency):
 		"presentation_currency": presentation_currency,
 		"group_by": doc.group_by,
 		"currency": doc.currency,
-		"project": [p.project_name for p in doc.project],
 		"show_opening_entries": 0,
 		"include_default_book_entries": 0,
 		"tax_id": tax_id if tax_id else None,
 		"show_net_values_in_party_account": doc.show_net_values_in_party_account,
 	}
+	if frappe.db.has_column("Process Statement Of Accounts", "project"):
+		filters["project"] = [p.project_name for p in doc.project]
+	return filters
 
 
 def get_ar_filters(doc, entry):
-	return {
+	filters =  {
 		"report_date": doc.posting_date if doc.posting_date else None,
 		"party_type": "Customer",
 		"party": [entry.customer],
 		"customer_name": entry.customer_name if entry.customer_name else None,
 		"payment_terms_template": doc.payment_terms_template if doc.payment_terms_template else None,
-		"sales_partner": doc.sales_partner if doc.sales_partner else None,
-		"sales_person": doc.sales_person if doc.sales_person else None,
 		"territory": doc.territory if doc.territory else None,
 		"based_on_payment_terms": doc.based_on_payment_terms,
 		"report_name": "Accounts Receivable",
@@ -223,6 +223,12 @@ def get_ar_filters(doc, entry):
 		"range3": 90,
 		"range4": 120,
 	}
+	if frappe.db.has_column("Process Statement Of Accounts", "sales_partner"):
+		filters["sales_partner"] = doc.sales_partner if doc.sales_partner else None
+	if frappe.db.has_column("Process Statement Of Accounts", "sales_person"):
+		filters["sales_person"] = doc.sales_person if doc.sales_person else None,
+	return filters
+
 
 
 def get_html(doc, filters, entry, col, res, ageing):

@@ -67,8 +67,11 @@ def get_data(conditions, filters):
 			soi.delivery_date as delivery_date,
 			so.name as sales_order,
 			so.status, so.customer, soi.item_code,
-			DATEDIFF(CURRENT_DATE, soi.delivery_date) as delay_days,
-			IF(so.status in ('Completed','To Bill'), 0, (SELECT delay_days)) as delay,
+			(CURRENT_DATE - soi.delivery_date) as delay_days,
+			CASE 
+				WHEN so.status IN ('Completed', 'To Bill') THEN 0 
+				ELSE (CURRENT_DATE - soi.delivery_date)
+			END as delay,
 			soi.qty, soi.delivered_qty,
 			(soi.qty - soi.delivered_qty) AS pending_qty,
 			IFNULL(SUM(sii.qty), 0) as billed_qty,
@@ -89,7 +92,7 @@ def get_data(conditions, filters):
 			and so.status not in ('Stopped', 'On Hold')
 			and so.docstatus = 1
 			{conditions}
-		GROUP BY soi.name
+		GROUP BY soi.name ,so.transaction_date,so.name
 		ORDER BY so.transaction_date ASC, soi.item_code ASC
 	""",
 		filters,

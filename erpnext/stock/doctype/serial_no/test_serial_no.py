@@ -47,6 +47,9 @@ class TestSerialNo(FrappeTestCase):
 		self.assertTrue(SerialNoCannotCannotChangeError, sr.save)
 
 	def test_inter_company_transfer(self):
+		from erpnext.buying.doctype.purchase_order.test_purchase_order import validate_fiscal_year
+		validate_fiscal_year("_Test Company 1")
+		validate_fiscal_year("_Test Company")
 		se = make_serialized_item(target_warehouse="_Test Warehouse - _TC")
 		serial_nos = get_serial_nos_from_bundle(se.get("items")[0].serial_and_batch_bundle)
 

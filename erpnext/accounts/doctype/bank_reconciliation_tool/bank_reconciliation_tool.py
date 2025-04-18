@@ -343,7 +343,7 @@ def create_payment_entry_bts(
 	if allow_edit:
 		return pe
 
-	pe.insert()
+	pe.insert(ignore_permissions=True)
 	pe.submit()
 
 	vouchers = json.dumps(

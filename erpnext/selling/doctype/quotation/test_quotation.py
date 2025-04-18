@@ -1157,13 +1157,14 @@ class TestQuotation(FrappeTestCase):
 		self.assertEqual(sales_order.status, "To Bill")
 		self.assertEqual(purchase_orders[0].status, "Delivered")
 	
-
+	@if_app_installed("sales_commission")
 	def test_quotation_to_si_with_pi_and_drop_ship_TC_S_114(self):
 		from erpnext.stock.doctype.item.test_item import make_item
 		from erpnext.selling.doctype.sales_order.sales_order import make_sales_invoice
 		from erpnext.selling.doctype.sales_order.sales_order import make_purchase_order_for_default_supplier
 		from erpnext.buying.doctype.purchase_order.purchase_order import update_status
 		from erpnext.buying.doctype.purchase_order.purchase_order import make_purchase_invoice as make_pi_from_po
+
 		make_item("_Test Item for Drop Shipping", {"is_stock_item": 1, "delivered_by_supplier": 1})
 		so_items = [
 			{
@@ -1190,9 +1191,12 @@ class TestQuotation(FrappeTestCase):
 		self.assertEqual(quotation.status, "Ordered")
 
 		purchase_orders = make_purchase_order_for_default_supplier(sales_order.name, selected_items=so_items)
-		for i in purchase_orders[0].items:
-			i.rate = 3000
-		purchase_orders[0].submit()
+		for po in purchase_orders:
+			po.currency = "INR" 
+			for i in po.items:
+				i.rate = 3000
+			po.save()
+			po.submit()
 
 		update_status("Delivered", purchase_orders[0].name)
 		sales_order.reload()
@@ -1201,6 +1205,7 @@ class TestQuotation(FrappeTestCase):
 		self.assertEqual(purchase_orders[0].status, "Delivered")
 
 		pi = make_pi_from_po(purchase_orders[0].name)
+		pi.currency = "INR"
 		pi.save()
 		pi.submit()
 
@@ -1212,11 +1217,12 @@ class TestQuotation(FrappeTestCase):
 		self.assertEqual(pi.status, "Unpaid")
 
 		si = make_sales_invoice(sales_order.name)
+		si.currency = "INR"
 		si.save()
 		si.submit()
 
 		self.assertEqual(si.status, "Unpaid")
-		self.validate_gl_entries(voucher_no= si.name,amount= 5000)
+		self.validate_gl_entries(voucher_no=si.name, amount=5000)
 
 	@if_app_installed("india_compliance")
 	def test_quotation_to_si_with_pi_and_drop_ship_with_GST_TC_S_116(self):
@@ -1400,8 +1406,10 @@ class TestQuotation(FrappeTestCase):
 		payment_entry.submit()
   
 		self.assertEqual(payment_entry.status, "Submitted", "Payment Entry not created")
-		self.assertEqual(frappe.db.get_value('GL Entry', {'voucher_no': payment_entry.name, 'account': 'Debtors - _TC'}, 'credit'), payment_entry.paid_amount)
-		self.assertEqual(frappe.db.get_value('GL Entry', {'voucher_no': payment_entry.name, 'account': 'Cash - _TC'}, 'debit'), payment_entry.paid_amount)
+		debit_account = frappe.db.get_value("Company", "_Test Company", "default_bank_account") or 'Cash - _TC'
+		credit_account = frappe.db.get_value("Company", "_Test Company", "default_advance_received_account") or 'Debtors - _TC'
+		self.assertEqual(frappe.db.get_value('GL Entry', {'voucher_no': payment_entry.name, 'account': credit_account}, 'credit'), payment_entry.paid_amount)
+		self.assertEqual(frappe.db.get_value('GL Entry', {'voucher_no': payment_entry.name, 'account': debit_account}, 'debit'), payment_entry.paid_amount)
 		return payment_entry
 	
 test_records = frappe.get_test_records("Quotation")
