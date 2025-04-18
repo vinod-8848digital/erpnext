@@ -3420,6 +3420,169 @@ class TestPurchaseOrder(FrappeTestCase):
 		po.submit()
 		self.assertEqual(po.items[0].rate, 130)
 
+	def test_close_or_unclose_purchase_orders_with_close_status(self):
+		from .purchase_order import close_or_unclose_purchase_orders
+
+		po_1 = create_purchase_order()
+		po_2 = create_purchase_order()
+
+		names = [po_1.name, po_2.name]
+
+		close_or_unclose_purchase_orders(json.dumps(names), "Closed")
+
+		po_1.load_from_db()
+		po_2.load_from_db()
+
+		self.assertEqual(po_1.status, "Closed")
+		self.assertEqual(po_2.status, "Closed")
+
+		close_or_unclose_purchase_orders(json.dumps(names), "Open")
+
+		po_1.load_from_db()
+		po_2.load_from_db()
+
+		self.assertEqual(po_1.status, "To Receive and Bill")
+		self.assertEqual(po_2.status, "To Receive and Bill")
+
+	def test_validate_available_budget(self):
+		from unittest.mock import patch
+		project_name = "test_project"
+		if not frappe.db.exists("Project",{"project_name": project_name}):
+			frappe.get_doc(
+				{
+					"doctype": "Project",
+					"company": "_Test Company",
+					"project_name": project_name,
+					"is_wbs": 1
+				}
+			).insert()
+
+		project = frappe.db.get_value("Project", {"project_name": project_name})
+
+		wbs = frappe.get_doc(
+			{
+				"doctype": "Work Breakdown Structure",
+				"project": project,
+				"wbs_name": "test_wbs",
+				"company": "_Test Company",
+				"gl_account": "Cash - _TC"
+			}
+		)
+		wbs.insert()
+		wbs.submit()
+
+		self.assertEqual(wbs.docstatus, 1)
+
+		zero_budget = frappe.get_doc(
+			{
+				"doctype": "Zero Budget",
+				"project": project,
+				"posting_date": today(),
+				"zero_budget_item": [
+					{
+						"wbs_element": wbs.name,
+						"zero_budget": 100
+					}
+				]
+			}
+		)
+		zero_budget.insert()
+		zero_budget.submit()
+
+		self.assertEqual(wbs.docstatus, 1)
+
+		wbs.load_from_db()
+
+		wbs_1 = frappe.copy_doc(wbs)
+		wbs_1.insert()
+		wbs_1.submit()
+
+		with patch("frappe.msgprint") as mock_msgprint:
+			args = {
+				"qty":1,
+				"rate": 200,
+				"do_not_submit": True
+			}
+			po = create_purchase_order(**args)
+			po.items[0].work_breakdown_structure = wbs.name
+			po.save()
+
+			self.assertTrue(mock_msgprint.called)
+			msg_args, _ = mock_msgprint.call_args
+			self.assertIn("Available Budget Limit Exceeded", msg_args[0])
+
+			po.append(
+				"items",
+				{
+					"item_code": "_Test Item",
+					"rate": 200,
+					"qty": 1,
+					"warehouse": "_Test Warehouse - _TC",
+					"work_breakdown_structure": wbs_1.name
+				}
+			)
+			po.save()
+			self.assertTrue(mock_msgprint.called)
+			msg_args, _ = mock_msgprint.call_args
+			self.assertIn("Available Budget Limit Exceeded", msg_args[0])
+
+	def test_update_committed_overall_budget(self):
+		project_name = "test_project"
+		if not frappe.db.exists("Project",{"project_name": project_name}):
+			frappe.get_doc(
+				{
+					"doctype": "Project",
+					"company": "_Test Company",
+					"project_name": project_name,
+					"is_wbs": 1
+				}
+			).insert()
+
+		project = frappe.db.get_value("Project", {"project_name": project_name})
+
+		wbs = frappe.get_doc(
+			{
+				"doctype": "Work Breakdown Structure",
+				"project": project,
+				"wbs_name": "test_wbs",
+				"company": "_Test Company",
+				"gl_account": "Cash - _TC"
+			}
+		)
+		wbs.insert()
+		wbs.submit()
+
+		self.assertEqual(wbs.docstatus, 1)
+
+		zero_budget = frappe.get_doc(
+			{
+				"doctype": "Zero Budget",
+				"project": project,
+				"posting_date": today(),
+				"zero_budget_item": [
+					{
+						"wbs_element": wbs.name,
+						"zero_budget": 100
+					}
+				]
+			}
+		)
+		zero_budget.insert()
+		zero_budget.submit()
+
+		self.assertEqual(wbs.docstatus, 1)
+
+		args = {
+			"qty":1,
+			"rate": 200,
+			"do_not_submit": True
+		}
+		po = create_purchase_order(**args)
+		po.items[0].work_breakdown_structure = wbs.name
+		po.save()
+		po.submit()
+		self.assertEqual(po.docstatus, 1)
+
 	def test_po_pr_pi_multiple_flow_TC_B_065(self):
 		# Scenario : PO=>2PR=>2PI
 		from erpnext.stock.doctype.warehouse.test_warehouse import create_warehouse
