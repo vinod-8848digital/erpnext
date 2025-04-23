@@ -3873,6 +3873,20 @@ class TestPurchaseOrder(FrappeTestCase):
 		self.assertEqual(frappe.response["type"], "redirect")
 		self.assertIn("/purchase-invoices/", frappe.response["location"])
 
+	def test_get_last_purchase_rate_code_coverage(self):
+		po_1 = create_purchase_order()
+		po_1.get_last_purchase_rate()
+		self.assertEqual(po_1.docstatus, 1)
+		self.assertEqual(po_1.items[0].last_purchase_rate, 500)
+
+		item = make_test_item("test__item_1")
+		args = {
+			"item_code": item.item_code,
+		}
+		po = create_purchase_order(**args)
+		po.get_last_purchase_rate()
+		self.assertEqual(po.items[0].base_price_list_rate, 500)
+
 	def test_po_pr_pi_multiple_flow_TC_B_065(self):
 		# Scenario : PO=>2PR=>2PI
 		from erpnext.stock.doctype.warehouse.test_warehouse import create_warehouse
