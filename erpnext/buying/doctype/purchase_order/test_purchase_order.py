@@ -3837,6 +3837,27 @@ class TestPurchaseOrder(FrappeTestCase):
 
 		self.assertIn("Row #1: Finished Good Item Qty can not be zero", str(e.exception))
 
+	def test_make_purchase_invoice_from_portal_code_coverage(self):
+		from .purchase_order import make_purchase_invoice_from_portal
+
+		po = create_purchase_order()
+		with self.assertRaises(frappe.PermissionError) as context:
+			make_purchase_invoice_from_portal(po.name)
+
+		self.assertIn("Not Permitted", str(context.exception))
+
+		args = {
+			"do_not_save": True
+		}
+		po_1 = create_purchase_order(**args)
+		po_1.contact_email = frappe.session.user
+		po_1.save()
+		po_1.submit()
+		make_purchase_invoice_from_portal(po_1.name)
+
+		self.assertEqual(frappe.response["type"], "redirect")
+		self.assertIn("/purchase-invoices/", frappe.response["location"])
+
 	def test_po_pr_pi_multiple_flow_TC_B_065(self):
 		# Scenario : PO=>2PR=>2PI
 		from erpnext.stock.doctype.warehouse.test_warehouse import create_warehouse
