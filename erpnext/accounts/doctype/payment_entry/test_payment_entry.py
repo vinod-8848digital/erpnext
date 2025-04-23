@@ -2367,14 +2367,20 @@ def create_purchase_invoice(**args):
 	pi.save()
 	return pi
 
-def create_company():
+def create_company(
+    company_name="_Test Company", 
+    country="India", 
+    currency="INR",
+    abbr="_TC"
+    ):
 	if not frappe.db.exists("Company", "_Test Company"):
 		frappe.get_doc({
 			"doctype": "Company",
-			"company_name": "_Test Company",
+			"company_name": company_name,
 			"company_type": "Company",
-			"default_currency": "INR",
+			"default_currency": currency,
+			"country": country,
 			"company_email": "test@example.com",
-			"abbr":"_TC"
+			"abbr": abbr
 		}).insert()
 		
