@@ -3756,45 +3756,24 @@ class TestPurchaseOrder(FrappeTestCase):
 		except frappe.exceptions.ValidationError as e:
 			self.assertIn("BOM is not specified for subcontracting item", str(e))
 
-	def test_validate_supplier_score_board_code_coverage(self):
+	def test_validate_supplier_score_board_to_prevent_po_code_coverage(self):
 		from frappe.exceptions import ValidationError
 
 		criteria = "test supplier cretiria"
 		supplier_name = "_Test Supplier"
 
-		# Create Supplier Scorecard Criteria if not exists
-		if not frappe.db.exists("Supplier Scorecard Criteria", criteria):
-			frappe.get_doc({
-				"doctype": "Supplier Scorecard Criteria",
-				"criteria_name": criteria,
-				"max_score": 100,
-				"formula": "10",
-			}).insert(ignore_permissions=True)
-
-		# Create Supplier Scorecard if not exists
-		if not frappe.db.exists("Supplier Scorecard", supplier_name):
-			frappe.get_doc({
-				"doctype": "Supplier Scorecard",
-				"supplier": supplier_name,
-				"period": "Per Week",
-				"standings": [
-					{
-						"standing_name": "Very Poor",
-						"standing_color": "Red",
-						"min_grade": 0.00,
-						"max_grade": 100.00,
-						"prevent_pos": 1
-					}
-				],
-				"criteria": [
-					{
-						"criteria_name": criteria,
-						"weight": 100
-					}
-				]
-			}).insert(ignore_permissions=True)
+		setup_supplier_scorecard(supplier_name, criteria, [
+			{
+				"standing_name": "Very Poor",
+				"standing_color": "Red",
+				"min_grade": 0.00,
+				"max_grade": 100.00,
+				"prevent_pos": 1
+			}
+		])
 
 		frappe.db.set_value("Supplier", supplier_name, "prevent_pos", 1)
+
 		args = {
 			"supplier": supplier_name,
 			"do_not_save": True
@@ -3804,15 +3783,34 @@ class TestPurchaseOrder(FrappeTestCase):
 		with self.assertRaises(ValidationError) as e:
 			po.save()
 
-		self.assertIn("Purchase Orders are not allowed for _Test Supplier", str(e.exception))
+		self.assertIn(
+			"Purchase Orders are not allowed for _Test Supplier due to a scorecard standing of Very Poor.",
+			str(e.exception)
+		)
 
-		frappe.db.set_value("Supplier", supplier_name, "prevent_pos", 0)
+	def test_validate_supplier_score_board_to_warn_po_code_coverage(self):
+		criteria = "test supplier cretiria"
+		supplier_name = "_Test Supplier"
+
+		setup_supplier_scorecard(supplier_name, criteria, [
+			{
+				"standing_name": "Very Poor",
+				"standing_color": "Red",
+				"min_grade": 0.00,
+				"max_grade": 100.00,
+				"warn_pos": 1
+			}
+		])
+
 		frappe.db.set_value("Supplier", supplier_name, "warn_pos", 1)
 
-		po_warn = create_purchase_order(**args)
-		po_warn.save()
-		po_warn.submit()
+		args = {
+			"supplier": supplier_name,
+			"do_not_submit": True
+		}
 
+		po_warn = create_purchase_order(**args)
+		po_warn.submit()
 		self.assertEqual(po_warn.docstatus, 1)
 
 	def test_validate_fg_item_for_subcontracting_code_coverage(self):
@@ -3873,7 +3871,7 @@ class TestPurchaseOrder(FrappeTestCase):
 		self.assertEqual(frappe.response["type"], "redirect")
 		self.assertIn("/purchase-invoices/", frappe.response["location"])
 
-	def test_get_last_purchase_rate_code_coverage(self):
+	def test_get_last_purchase_rate_with_old_item_code_coverage(self):
 		po_1 = create_purchase_order()
 		po_1.get_last_purchase_rate()
 		self.assertEqual(po_1.docstatus, 1)
@@ -3886,6 +3884,34 @@ class TestPurchaseOrder(FrappeTestCase):
 		po = create_purchase_order(**args)
 		po.get_last_purchase_rate()
 		self.assertEqual(po.items[0].base_price_list_rate, 500)
+
+	def test_get_last_purchase_rate_with_new_item_code_coverage(self):
+		item = make_test_item("test__item_1")
+		args = {
+			"item_code": item.item_code,
+		}
+		po = create_purchase_order(**args)
+		po.get_last_purchase_rate()
+		self.assertEqual(po.items[0].base_price_list_rate, 500)
+
+	def test_set_service_items_for_finished_goods_code_coverage(self):
+		item = make_test_item("test_items_1")
+		item.is_stock_item = 0
+		item.save()
+		args = {
+			"item_code": item.item_code,
+			"do_not_save": True
+		}
+		po = create_purchase_order(**args)
+		po.is_subcontracted = 1
+		po.items[0].item_code = ""
+		po.items[0].fg_item = "_Test FG Item"
+		po.set_service_items_for_finished_goods()
+		po.items[0].item_code = item.item_code
+		po.items[0].qty = 1
+		po.save()
+		po.submit()
+		self.assertEqual(po.docstatus, 1)
 
 	def test_po_pr_pi_multiple_flow_TC_B_065(self):
 		# Scenario : PO=>2PR=>2PI
@@ -9821,5 +9847,25 @@ def _make_blanket_order(**args):
 	from erpnext.manufacturing.doctype.blanket_order.test_blanket_order import make_blanket_order
 	return make_blanket_order(**args)
 
-def test_test_function():
-	pass
+def setup_supplier_scorecard(supplier_name, criteria_name, standing_options):
+	if not frappe.db.exists("Supplier Scorecard Criteria", criteria_name):
+		frappe.get_doc({
+			"doctype": "Supplier Scorecard Criteria",
+			"criteria_name": criteria_name,
+			"max_score": 100,
+			"formula": "10",
+		}).insert(ignore_permissions=True)
+
+	if not frappe.db.exists("Supplier Scorecard", supplier_name):
+		frappe.get_doc({
+			"doctype": "Supplier Scorecard",
+			"supplier": supplier_name,
+			"period": "Per Week",
+			"standings": standing_options,
+			"criteria": [
+				{
+					"criteria_name": criteria_name,
+					"weight": 100
+				}
+			]
+		}).insert(ignore_permissions=True)
