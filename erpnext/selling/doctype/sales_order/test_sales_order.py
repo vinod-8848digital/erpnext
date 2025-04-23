@@ -8,7 +8,7 @@ import frappe
 import frappe.permissions
 from frappe.core.doctype.user_permission.test_user_permission import create_user
 from frappe.tests.utils import FrappeTestCase, change_settings, if_app_installed
-from frappe.utils import add_days, flt, getdate, nowdate, today
+from frappe.utils import add_days, flt, getdate, nowdate, today, add_months
 from erpnext.stock.get_item_details import get_bin_details
 from erpnext.accounts.test.accounts_mixin import AccountsTestMixin
 from erpnext.controllers.accounts_controller import update_child_qty_rate
@@ -6291,6 +6291,39 @@ class TestSalesOrder(AccountsTestMixin, FrappeTestCase):
 		self.assertEqual(qty_change, -5)
 		self.assertEqual(frappe.db.get_value("Stock Reservation Entry", {"voucher_no": so.name}, "status"), "Delivered")
 
+	def test_validate_sales_mntc_quotation_coverage_TC_S_162(self):
+		make_item("_Test Item")
+		create_exchange_rate(date=today())
+
+		# creating quotation
+		qtn = frappe.get_doc(
+			{
+				"doctype": "Quotation",
+				"quotation_to": "Customer",
+				"party_name": "_Test Customer",
+				"order_type": "Sales",
+				"transaction_date": nowdate(),
+				"valid_till": add_months(nowdate(), 1),
+			}
+		)
+		qtn.append("items", {"qty": "2", "item_code": "_Test Item"})
+		qtn.submit()
+
+		so = frappe.new_doc("Sales Order")
+		so.customer = "_Test Customer"
+		so.order_type = "Maintenance" 
+		so.append("items", {
+			"item_code": "_Test Item",
+			"qty": 1,
+			"rate": 100,
+			"prevdoc_docname": qtn.name
+		})
+
+		with self.assertRaises(frappe.ValidationError) as context:
+			so.validate_sales_mntc_quotation()
+
+		self.assertIn(f"Quotation {qtn.name} not of type Maintenance", str(context.exception))
+
 @if_app_installed("india_compliance")
 def create_test_tax_data():
 		if not frappe.db.exists("Tax Category", "In-State"):
@@ -6673,3 +6706,23 @@ def get_or_create_fiscal_year(company):
 def _make_blanket_order(**args):
 	from erpnext.manufacturing.doctype.blanket_order.test_blanket_order import make_blanket_order
 	return make_blanket_order(**args)
+
+def create_exchange_rate(date):
+	# make an entry in Currency Exchange list. serves as a static exchange rate
+	if frappe.db.exists(
+		{"doctype": "Currency Exchange", "date": date, "from_currency": "USD", "to_currency": "INR"}
+	):
+		return
+	else:
+		doc = frappe.get_doc(
+			{
+				"doctype": "Currency Exchange",
+				"date": date,
+				"from_currency": "USD",
+				"to_currency": frappe.get_cached_value("Company", "_Test Company", "default_currency"),
+				"exchange_rate": 70,
+				"for_buying": True,
+				"for_selling": True,
+			}
+		)
+		doc.insert()
