@@ -58,6 +58,87 @@ class TestDeliveryNote(FrappeTestCase):
 		si.get("items")[0].rate = 200
 		self.assertRaises(frappe.ValidationError, frappe.get_doc(si).insert)
 
+	def test_onload_sets_has_unpacked_items(self):
+		dn = frappe.get_doc({
+			"doctype": "Delivery Note",
+			"customer": "_Test Customer",
+			"docstatus": 0,
+			"company": "_Test Company",
+			"items": [{
+				"item_code": "_Test Item",
+				"qty": 1,
+				"rate": 100
+			}]
+		})
+
+		dn.has_unpacked_items = lambda: True
+		dn.onload()
+		self.assertTrue(dn.get_onload().get("has_unpacked_items"))
+
+	def test_trigger_print_without_amount(self):
+		dn = frappe.get_doc({
+			"doctype": "Delivery Note",
+			"customer": "_Test Customer",
+			"company": "_Test Company",
+			"print_without_amount": 1,
+			"items": [{
+				"item_code": "_Test Item",
+				"qty": 1,
+				"rate": 100
+			}]
+		})
+
+		settings = type("Settings", (), {"compact_item_print": 0})()
+		
+		dn.before_print(settings=settings)
+
+	def test_set_actual_qty(self):
+		frappe.db.sql("""
+			DELETE FROM `tabBin` WHERE item_code = %s AND warehouse = %s
+		""", ("_Test Item", "Stores - _TC"))
+		
+		frappe.db.sql("""
+    INSERT INTO `tabBin` (name, item_code, warehouse, actual_qty)
+    VALUES (%s, %s, %s, %s)
+""", ("TEST-BIN-001", "_Test Item", "Stores - _TC", 25))
+		
+		dn = frappe.get_doc({
+			"doctype": "Delivery Note",
+			"customer": "_Test Customer",
+			"company": "_Test Company",
+			"items": [{
+				"item_code": "_Test Item",
+				"warehouse": "Stores - _TC",
+				"qty": 1,
+				"rate": 100
+			}]
+		})
+
+		dn.set_actual_qty()
+
+		self.assertEqual(dn.items[0].actual_qty, 25.0)
+
+	def test_so_required_if_check(self):
+		frappe.db.set_value("Selling Settings", None, "so_required", "Yes")
+
+		dn = frappe.new_doc("Delivery Note")
+		dn.set("items", [])  # keep items empty to avoid inner loop
+
+		dn.so_required()
+
+	def test_so_required_second_if_check(self):
+		frappe.db.set_value("Selling Settings", None, "so_required", "Yes")
+
+		dn = frappe.new_doc("Delivery Note")
+		dn.set("items", [{
+			"item_code": "_Test Item",
+			"warehouse": "Stores - _TC",
+			"against_sales_order": None  # Ensuring it triggers the second if statement
+		}])
+
+		with self.assertRaises(frappe.exceptions.ValidationError):
+			dn.so_required()
+
 	def test_delivery_note_no_gl_entry(self):
 		frappe.db.get_value("Warehouse", "_Test Warehouse - _TC", "company")
 		make_stock_entry(target="_Test Warehouse - _TC", qty=5, basic_rate=100)
