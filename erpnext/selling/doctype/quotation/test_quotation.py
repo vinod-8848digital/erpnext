@@ -1413,6 +1413,63 @@ class TestQuotation(FrappeTestCase):
 		self.assertEqual(frappe.db.get_value('GL Entry', {'voucher_no': payment_entry.name, 'account': debit_account}, 'debit'), payment_entry.paid_amount)
 		return payment_entry
 	
+
+	def test_set_indicator_on_quotation(self):
+		doc = frappe.copy_doc(test_records[0])
+		doc.save()
+
+		doc.docstatus = 1
+		doc.valid_till = add_days(nowdate(), 5)
+		doc.set_indicator()
+		self.assertEqual(doc.indicator_color, "blue")
+		self.assertEqual(doc.indicator_title, "Submitted")
+
+		doc.valid_till = add_days(nowdate(), -1)
+		doc.set_indicator()
+		self.assertEqual(doc.indicator_color, "gray")
+		self.assertEqual(doc.indicator_title, "Expired")
+
+	@if_app_installed("erpnext_crm")
+	def test_lead_to_quotation(self):
+		from erpnext_crm.erpnext_crm.doctype.lead.test_lead import make_lead
+		from erpnext_crm.erpnext_crm.doctype.lead.lead import make_opportunity
+		from erpnext_crm.erpnext_crm.doctype.opportunity.opportunity import make_quotation
+
+		lead = make_lead()
+
+		opportunity = make_opportunity(lead.name)
+		opportunity.opportunity_type = ""
+		opportunity.sales_stage = ""
+		opportunity.save()
+		quotation = make_quotation(opportunity.name)
+		quotation.append("items", {"item_code": "_Test Item", "qty": 1, "prevdoc_doctype":"Opportunity","prevdoc_docname":opportunity.name})
+		quotation.tax_category = "In-State"
+		quotation.taxes_and_charges = "Output GST In-state - _TIRC"
+		quotation.print_other_charges(quotation.name)
+		quotation.run_method("set_missing_values")
+		quotation.run_method("calculate_taxes_and_totals")
+		quotation.save()
+
+		quotation.declare_enquiry_lost(
+			[{"lost_reason": "_Test Quotation Lost Reason"}],
+			[{"competitor": "_Test Competitors"}]
+		)
+		quotation.submit()
+		opportunity.reload()
+		lead.reload()
+
+		self.assertEqual(lead.status, "Lost Quotation")
+		self.assertEqual(opportunity.status, "Lost")
+		self.assertEqual(quotation.status, "Lost")
+
+		quotation.cancel()
+		opportunity.reload()
+		lead.reload()
+
+		self.assertEqual(lead.status, "Opportunity")
+		self.assertEqual(opportunity.status, "Open")
+		self.assertEqual(quotation.status, "Cancelled")
+
 test_records = frappe.get_test_records("Quotation")
 
 
