@@ -4575,7 +4575,7 @@ def create_fiscal_with_company(company):
 	if existing_fiscal_years != []:
 		for fiscal_years in existing_fiscal_years:
 			fy_doc = frappe.get_doc("Fiscal Year",fiscal_years.get("name"))
-			if not frappe.db.exists("Fiscal Year Company", {"company": company}):
+			if not frappe.db.exists("Fiscal Year Company", {"company": company, "parent":fy_doc.name}):
 				fy_doc.append("companies", {"company": company})
 				fy_doc.save()
 	else:

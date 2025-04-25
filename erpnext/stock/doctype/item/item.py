@@ -246,7 +246,7 @@ class Item(Document):
 					"price_list_rate": self.standard_rate,
 				}
 			)
-			item_price.insert()
+			item_price.insert(ignore_permissions=True)
 
 	def set_opening_stock(self):
 		"""set opening stock"""

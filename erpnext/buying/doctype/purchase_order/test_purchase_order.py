@@ -2583,12 +2583,14 @@ class TestPurchaseOrder(FrappeTestCase):
 		frappe.db.rollback()
 
 	def test_po_with_pricing_rule_TC_B_047(self):
+		from erpnext.accounts.doctype.purchase_invoice.test_purchase_invoice import get_or_create_price_list
 		# Scenario : PO => Pricing Rule => PR 
 		get_company_supplier = create_data()
 		company = get_company_supplier.get("child_company")
 		supplier = get_company_supplier.get("supplier")
 		item = make_test_item("_test_item")
 		warehouse = "Stores - TC-3"
+		price_list = get_or_create_price_list()
 		get_or_create_fiscal_year(company)
 		po_data = {
 			"company" : company,
@@ -2597,6 +2599,8 @@ class TestPurchaseOrder(FrappeTestCase):
 			"supplier": supplier,
 			"schedule_date": today(),
 			"qty" : 1,
+			"currency":"INR",
+			"buying_price_list": price_list,
 		}
 
 		pricing_rule_record = {
@@ -2619,7 +2623,7 @@ class TestPurchaseOrder(FrappeTestCase):
 			"valid_from": today(),
 			"rate_or_discount": "Discount Percentage",
 			"discount_percentage": 10,
-			"price_list": "Standard Buying",
+			"price_list": price_list,
 			"company" : company,
 
 		}
@@ -2630,7 +2634,7 @@ class TestPurchaseOrder(FrappeTestCase):
 		frappe.get_doc(
 			{
 				"doctype": "Item Price",
-				"price_list": "Standard Buying",
+				"price_list": price_list,
 				"item_code": item.item_code,
 				"price_list_rate": 130,
 			}
@@ -7482,6 +7486,7 @@ class TestPurchaseOrder(FrappeTestCase):
 			"company": company,
 			"schedule_date": today(),
 			"set_warehouse": warehouse,
+			"currency": "INR",
 			"items": [
 				{
 					"item_code": item.item_code,
@@ -7507,6 +7512,7 @@ class TestPurchaseOrder(FrappeTestCase):
 		pi_1.bill_no =  f"test_bill_{bill_no}"
 		pi_1.items[0].qty = 3
 		pi_1.update_stock = 1
+		pi_1.currency = "INR"
 		pi_1.insert()
 		pi_1.submit()
 
@@ -7532,6 +7538,7 @@ class TestPurchaseOrder(FrappeTestCase):
 		pi_2 = make_pi_from_po(po.name)
 		pi_2.update_stock = 1
 		pi_2.bill_no = "test_bill - 1122"
+		pi_2.currency = "INR"
 		pi_2.save()
 		pi_2.submit()
 
@@ -9039,8 +9046,502 @@ class TestPurchaseOrder(FrappeTestCase):
 					self.assertEqual(item.rate, expected_items.get("rate"))
 
 		os.remove(filename)
-		
-		
+
+	def test_close_or_unclose_purchase_orders_with_close_status_TC_B_159(self):
+		from .purchase_order import close_or_unclose_purchase_orders
+
+		po_1 = create_purchase_order()
+		po_2 = create_purchase_order()
+
+		names = [po_1.name, po_2.name]
+
+		close_or_unclose_purchase_orders(json.dumps(names), "Closed")
+
+		po_1.load_from_db()
+		po_2.load_from_db()
+
+		self.assertEqual(po_1.status, "Closed")
+		self.assertEqual(po_2.status, "Closed")
+
+		close_or_unclose_purchase_orders(json.dumps(names), "Open")
+
+		po_1.load_from_db()
+		po_2.load_from_db()
+
+		self.assertEqual(po_1.status, "To Receive and Bill")
+		self.assertEqual(po_2.status, "To Receive and Bill")
+
+	def test_validate_available_budget_TC_B_160(self):
+		from unittest.mock import patch
+		project_name = "test_project"
+		if not frappe.db.exists("Project",{"project_name": project_name}):
+			frappe.get_doc(
+				{
+					"doctype": "Project",
+					"company": "_Test Company",
+					"project_name": project_name,
+					"is_wbs": 1
+				}
+			).insert()
+
+		project = frappe.db.get_value("Project", {"project_name": project_name})
+
+		wbs = frappe.get_doc(
+			{
+				"doctype": "Work Breakdown Structure",
+				"project": project,
+				"wbs_name": "test_wbs",
+				"company": "_Test Company",
+				"gl_account": "Cash - _TC"
+			}
+		)
+		wbs.insert()
+		wbs.submit()
+
+		self.assertEqual(wbs.docstatus, 1)
+
+		zero_budget = frappe.get_doc(
+			{
+				"doctype": "Zero Budget",
+				"project": project,
+				"posting_date": today(),
+				"zero_budget_item": [
+					{
+						"wbs_element": wbs.name,
+						"zero_budget": 100
+					}
+				]
+			}
+		)
+		zero_budget.insert()
+		zero_budget.submit()
+
+		self.assertEqual(wbs.docstatus, 1)
+
+		wbs.load_from_db()
+
+		wbs_1 = frappe.copy_doc(wbs)
+		wbs_1.insert()
+		wbs_1.submit()
+
+		with patch("frappe.msgprint") as mock_msgprint:
+			args = {
+				"qty":1,
+				"rate": 200,
+				"do_not_submit": True
+			}
+			po = create_purchase_order(**args)
+			po.items[0].work_breakdown_structure = wbs.name
+			po.save()
+
+			self.assertTrue(mock_msgprint.called)
+			msg_args, _ = mock_msgprint.call_args
+			self.assertIn("Available Budget Limit Exceeded", msg_args[0])
+
+			po.append(
+				"items",
+				{
+					"item_code": "_Test Item",
+					"rate": 200,
+					"qty": 1,
+					"warehouse": "_Test Warehouse - _TC",
+					"work_breakdown_structure": wbs_1.name
+				}
+			)
+			po.save()
+			self.assertTrue(mock_msgprint.called)
+			msg_args, _ = mock_msgprint.call_args
+			self.assertIn("Available Budget Limit Exceeded", msg_args[0])
+
+	def test_update_committed_overall_budge_TC_B_161(self):
+		project_name = "test_project"
+		if not frappe.db.exists("Project",{"project_name": project_name}):
+			frappe.get_doc(
+				{
+					"doctype": "Project",
+					"company": "_Test Company",
+					"project_name": project_name,
+					"is_wbs": 1
+				}
+			).insert()
+
+		project = frappe.db.get_value("Project", {"project_name": project_name})
+
+		wbs = frappe.get_doc(
+			{
+				"doctype": "Work Breakdown Structure",
+				"project": project,
+				"wbs_name": "test_wbs",
+				"company": "_Test Company",
+				"gl_account": "Cash - _TC"
+			}
+		)
+		wbs.insert()
+		wbs.submit()
+
+		self.assertEqual(wbs.docstatus, 1)
+
+		zero_budget = frappe.get_doc(
+			{
+				"doctype": "Zero Budget",
+				"project": project,
+				"posting_date": today(),
+				"zero_budget_item": [
+					{
+						"wbs_element": wbs.name,
+						"zero_budget": 100
+					}
+				]
+			}
+		)
+		zero_budget.insert()
+		zero_budget.submit()
+
+		self.assertEqual(wbs.docstatus, 1)
+
+		args = {
+			"qty":1,
+			"rate": 200,
+			"do_not_submit": True
+		}
+		po = create_purchase_order(**args)
+		po.items[0].work_breakdown_structure = wbs.name
+		po.save()
+		po.submit()
+		self.assertEqual(po.docstatus, 1)
+
+		po.load_from_db()
+		po.cancel()
+
+	def test_locked_update_committed_overall_budget_TC_B_162(self):
+		project_name = "test_project"
+		if not frappe.db.exists("Project",{"project_name": project_name}):
+			frappe.get_doc(
+				{
+					"doctype": "Project",
+					"company": "_Test Company",
+					"project_name": project_name,
+					"is_wbs": 1
+				}
+			).insert()
+
+		project = frappe.db.get_value("Project", {"project_name": project_name})
+
+		wbs = frappe.get_doc(
+			{
+				"doctype": "Work Breakdown Structure",
+				"project": project,
+				"wbs_name": "test_wbs",
+				"company": "_Test Company",
+				"gl_account": "Cash - _TC",
+			}
+		)
+		wbs.insert()
+		wbs.submit()
+
+		self.assertEqual(wbs.docstatus, 1)
+
+		zero_budget = frappe.get_doc(
+			{
+				"doctype": "Zero Budget",
+				"project": project,
+				"posting_date": today(),
+				"zero_budget_item": [
+					{
+						"wbs_element": wbs.name,
+						"zero_budget": 100
+					}
+				]
+			}
+		)
+		zero_budget.insert()
+		zero_budget.submit()
+
+		self.assertEqual(wbs.docstatus, 1)
+		frappe.db.set_value("Work Breakdown Structure", wbs.name, "locked", 1)
+
+		args = {
+			"qty":1,
+			"rate": 100,
+			"do_not_submit": True
+		}
+		po = create_purchase_order(**args)
+		po.items[0].work_breakdown_structure = wbs.name
+		po.save()
+		with self.assertRaises(frappe.exceptions.ValidationError) as cm:
+			po.submit()
+
+		self.assertIn("this WBS is locked", str(cm.exception))
+
+		frappe.db.set_value("Work Breakdown Structure", wbs.name, "locked", 0)
+		po.submit()
+		self.assertEqual(po.docstatus, 1)
+
+		frappe.db.set_value("Work Breakdown Structure", wbs.name, "locked", 1)
+		with self.assertRaises(frappe.exceptions.ValidationError) as cm:
+			po.cancel()
+
+		self.assertIn("this WBS is locked", str(cm.exception))
+
+	def test_locked_committed_overall_budget_mr_po_TC_B_163(self):
+		project_name = "test_project"
+		if not frappe.db.exists("Project",{"project_name": project_name}):
+			frappe.get_doc(
+				{
+					"doctype": "Project",
+					"company": "_Test Company",
+					"project_name": project_name,
+					"is_wbs": 1
+				}
+			).insert()
+
+		project = frappe.db.get_value("Project", {"project_name": project_name})
+
+		wbs = frappe.get_doc(
+			{
+				"doctype": "Work Breakdown Structure",
+				"project": project,
+				"wbs_name": "test_wbs",
+				"company": "_Test Company",
+				"gl_account": "Cash - _TC",
+			}
+		)
+		wbs.insert()
+		wbs.submit()
+
+		self.assertEqual(wbs.docstatus, 1)
+
+		zero_budget = frappe.get_doc(
+			{
+				"doctype": "Zero Budget",
+				"project": project,
+				"posting_date": today(),
+				"zero_budget_item": [
+					{
+						"wbs_element": wbs.name,
+						"zero_budget": 100
+					}
+				]
+			}
+		)
+		zero_budget.insert()
+		zero_budget.submit()
+
+		args = {
+			"qty": 1,
+			"rate": 100
+		}
+		mr = make_material_request(**args)
+		self.assertEqual(mr.docstatus, 1)
+
+		frappe.db.set_value("Work Breakdown Structure", wbs.name, "locked", 1)
+		po = make_purchase_order(mr.name)
+		po.supplier = "_Test Supplier"
+		po.items[0].work_breakdown_structure = wbs.name
+		po.save()
+		with self.assertRaises(frappe.exceptions.ValidationError) as cm:
+			po.submit()
+
+		self.assertIn("this WBS is locked", str(cm.exception))
+
+		frappe.db.set_value("Work Breakdown Structure", wbs.name, "locked", 0)
+		po.submit()
+		self.assertEqual(po.docstatus, 1)
+
+		frappe.db.set_value("Work Breakdown Structure", wbs.name, "locked", 1)
+		with self.assertRaises(frappe.exceptions.ValidationError) as cm:
+			po.cancel()
+
+		self.assertIn("this WBS is locked", str(cm.exception))
+
+	def test_validate_bom_for_subcontracting_items_TC_B_164(self):
+		item = make_test_item("__Test_item_")
+		frappe.db.set_value("Item",{"item_code": item.item_code}, "is_sub_contracted_item", 1)
+		args = {
+			"item_code": item.item_code,
+			"do_not_save": True
+		}
+		po = create_purchase_order(**args)
+		po.is_old_subcontracting_flow = 1
+		# Expecting validation error due to missing BOM
+		try:
+			po.save()
+		except frappe.exceptions.ValidationError as e:
+			self.assertIn("BOM is not specified for subcontracting item", str(e))
+
+	def test_validate_supplier_score_board_to_prevent_po_TC_B_165(self):
+		from frappe.exceptions import ValidationError
+
+		criteria = "test supplier cretiria"
+		supplier_name = "_Test Supplier"
+
+		setup_supplier_scorecard(supplier_name, criteria, [
+			{
+				"standing_name": "Very Poor",
+				"standing_color": "Red",
+				"min_grade": 0.00,
+				"max_grade": 100.00,
+				"prevent_pos": 1
+			}
+		])
+
+		frappe.db.set_value("Supplier", supplier_name, "prevent_pos", 1)
+
+		args = {
+			"supplier": supplier_name,
+			"do_not_save": True
+		}
+
+		po = create_purchase_order(**args)
+		with self.assertRaises(ValidationError) as e:
+			po.save()
+
+		self.assertIn(
+			"Purchase Orders are not allowed for _Test Supplier due to a scorecard standing of Very Poor.",
+			str(e.exception)
+		)
+
+	def test_validate_supplier_score_board_to_warn_po_TC_B_166(self):
+		criteria = "test supplier cretiria"
+		supplier_name = "_Test Supplier"
+
+		setup_supplier_scorecard(supplier_name, criteria, [
+			{
+				"standing_name": "Very Poor",
+				"standing_color": "Red",
+				"min_grade": 0.00,
+				"max_grade": 100.00,
+				"warn_pos": 1
+			}
+		])
+
+		frappe.db.set_value("Supplier", supplier_name, "warn_pos", 1)
+
+		args = {
+			"supplier": supplier_name,
+			"do_not_submit": True
+		}
+
+		po_warn = create_purchase_order(**args)
+		po_warn.submit()
+		self.assertEqual(po_warn.docstatus, 1)
+
+	def test_validate_fg_item_for_subcontracting_TC_B_167(self):
+		item = make_test_item("__test_item")
+		item.is_stock_item = 0
+		item.save()
+		args = {
+			"item_code": item.item_code,
+			"do_not_save": True
+		}
+		po = create_purchase_order(**args)
+		po.is_subcontracted = 1
+		with self.assertRaises(frappe.exceptions.ValidationError) as e:
+			po.save()
+
+		self.assertIn("Row #1: Finished Good Item is not specified for service item __test_item", str(e.exception))
+		frappe.db.set_value("Item", "_Test FG Item", "is_sub_contracted_item", 0)
+		po.items[0].fg_item = "_Test FG Item"
+		with self.assertRaises(frappe.exceptions.ValidationError) as e:
+			po.save()
+
+		self.assertIn("Row #1: Finished Good Item _Test FG Item must be a sub-contracted item", str(e.exception))
+
+		frappe.db.set_value("Item", "_Test FG Item", "is_sub_contracted_item", 1)
+		frappe.db.set_value("Item", "_Test FG Item", "default_bom", "")
+
+		po.items[0].fg_item = "_Test FG Item"
+		with self.assertRaises(frappe.exceptions.ValidationError) as e:
+			po.save()
+
+		self.assertIn("Row #1: Default BOM not found for FG Item _Test FG Item", str(e.exception))
+
+		frappe.db.set_value("Item", "_Test FG Item", "default_bom", "BOM-_Test FG Item-001")
+		po.items[0].fg_item_qty = ""
+		with self.assertRaises(frappe.exceptions.ValidationError) as e:
+			po.save()
+
+		self.assertIn("Row #1: Finished Good Item Qty can not be zero", str(e.exception))
+
+	def test_make_purchase_invoice_from_portal_TC_B_168(self):
+		from .purchase_order import make_purchase_invoice_from_portal
+
+		po = create_purchase_order()
+		with self.assertRaises(frappe.PermissionError) as context:
+			make_purchase_invoice_from_portal(po.name)
+
+		self.assertIn("Not Permitted", str(context.exception))
+
+		args = {
+			"do_not_save": True
+		}
+		po_1 = create_purchase_order(**args)
+		po_1.contact_email = frappe.session.user
+		po_1.save()
+		po_1.submit()
+		make_purchase_invoice_from_portal(po_1.name)
+
+		self.assertEqual(frappe.response["type"], "redirect")
+		self.assertIn("/purchase-invoices/", frappe.response["location"])
+
+	def test_get_last_purchase_rate_with_old_item_TC_B_169(self):
+		po_1 = create_purchase_order()
+		po_1.get_last_purchase_rate()
+		self.assertEqual(po_1.docstatus, 1)
+		self.assertEqual(po_1.items[0].last_purchase_rate, 500)
+
+		item = make_test_item("test__item_1")
+		args = {
+			"item_code": item.item_code,
+		}
+		po = create_purchase_order(**args)
+		po.get_last_purchase_rate()
+		self.assertEqual(po.items[0].base_price_list_rate, 500)
+
+	def test_get_last_purchase_rate_with_new_item_code_TC_B_170(self):
+		item = make_test_item("test__item_1")
+		args = {
+			"item_code": item.item_code,
+		}
+		po = create_purchase_order(**args)
+		po.get_last_purchase_rate()
+		self.assertEqual(po.items[0].base_price_list_rate, 500)
+
+	def test_set_service_items_for_finished_goods_TC_B_171(self):
+		item = make_test_item("test_items_1")
+		item.is_stock_item = 0
+		item.save()
+		filters = {
+			"is_active": 1,
+			"finished_good": "_Test FG Item",
+			"finished_good_qty": 1,
+			"service_item": item.item_code,
+			"finished_good_bom": "BOM-_Test FG Item-001",
+			"service_item_uom": "Nos",
+			"conversion_factor": 1
+		}
+		if not frappe.db.exists("Subcontracting BOM", filters):
+			sub_contracting_bom = frappe.get_doc({
+				"doctype": "Subcontracting BOM",
+				**filters
+			})
+			sub_contracting_bom.insert()
+
+		args = {
+			"item_code": item.item_code,
+			"do_not_save": True
+		}
+		po = create_purchase_order(**args)
+		po.is_subcontracted = 1
+		po.items[0].item_code = ""
+		po.items[0].fg_item = "_Test FG Item"
+		po.set_service_items_for_finished_goods()
+		po.items[0].item_code = item.item_code
+		po.items[0].qty = 1
+		po.save()
+		po.submit()
+		self.assertEqual(po.docstatus, 1)
+
 def create_po_for_sc_testing():
 	from erpnext.controllers.tests.test_subcontracting_controller import (
 		make_bom_for_subcontracted_items,
@@ -9182,6 +9683,7 @@ def create_purchase_order(**args):
 	po.additional_discount_percentage = args.additional_discount_percentage or None
 	po.discount_amount = args.discount_amount or None
 	po.shipping_rule = args.shipping_rule or None
+	po.buying_price_list = args.buying_price_list or "Standard Buying"
 
 	if args.rm_items:
 		for row in args.rm_items:
@@ -9206,7 +9708,7 @@ def create_purchase_order(**args):
 
 	if not args.do_not_save:
 		po.set_missing_values()
-		po.insert()
+		po.insert(ignore_permissions=True)
 		if not args.do_not_submit:
 			if po.is_subcontracted:
 				supp_items = po.get("supplied_items")
@@ -9339,7 +9841,7 @@ def create_new_account(account_name,company,parent_account, account_type = None,
 					"tax_rate": tax_rate
 				}
 			)
-			account.insert(ignore_if_duplicate=1)
+			account.insert(ignore_if_duplicate=1, ignore_permissions=True)
 			return account.name
 
 		else:

@@ -10,7 +10,7 @@ import json
 from frappe.tests.utils import FrappeTestCase, change_settings, if_app_installed
 from frappe.utils import flt, today, add_days, nowdate, getdate
 from datetime import date
-
+from erpnext.stock.doctype.material_request.material_request import make_purchase_order_based_on_supplier
 from erpnext.stock.doctype.item.test_item import create_item
 from erpnext.stock.doctype.material_request.material_request import (
 	make_in_transit_stock_entry,
@@ -2573,6 +2573,8 @@ class TestMaterialRequest(FrappeTestCase):
 			gl_stock_debit = frappe.db.get_value('GL Entry',{'voucher_no':return_pr1.name, 'account': 'Stock In Hand - _TC'},'credit')
 			self.assertEqual(gl_stock_debit, 500)
 
+	@change_settings("Stock Settings", {"over_delivery_receipt_allowance": 100})
+	@change_settings("Accounts Settings", {"over_billing_allowance": 100})
 	def test_mr_to_partial_pr_TC_B_023(self):
 		# MR => 1RFQ => 2SQ => 2PO => 1PR => 1PI
 		from erpnext.buying.doctype.purchase_order.test_purchase_order import get_or_create_fiscal_year
@@ -3047,6 +3049,121 @@ class TestMaterialRequest(FrappeTestCase):
 		target_warehouse_qty = frappe.db.get_value('Stock Ledger Entry',{'voucher_no':se.name, 'voucher_type':'Stock Entry','warehouse':target_wh},['qty_after_transaction'])
 		self.assertEqual(from_warehouse_qty, 0)
 		self.assertEqual(target_warehouse_qty, 0)
+
+	def test_mr_to_pe_flow_TC_B_080(self):
+		from erpnext.stock.doctype.purchase_receipt.test_purchase_receipt import get_sl_entries, get_gl_entries
+		# Scenario : MR=>PO=> Partial PE=>PR=>PI=>Rm PE (With GST)
+		mr_dict_list = {
+				"company" : "_Test Company",
+				"purpose":"Purchase",
+				"item_code" : "Testing-31",
+				"warehouse" : "Stores - _TC",
+				"qty" : 4,
+				"rate" : 3000,
+				"uom":"Nos"
+			}
+		mr = make_material_request(**mr_dict_list)
+		self.assertEqual(mr.status, "Pending")
+		acc = frappe.new_doc("Account")
+		acc.account_name = "Input Tax IGST"
+		acc.parent_account = "Tax Assets - _TC"
+		acc.company = "_Test Company"
+		account_name = frappe.db.exists("Account", {"account_name" : "Input Tax IGST","company": "_Test Company" })
+		if not account_name:
+			account_name = acc.insert()
+		doc_po = make_purchase_order(mr.name)
+		doc_po.supplier = "_Test Supplier"
+		doc_po.append("taxes", {
+                    "charge_type": "On Net Total",
+                    "account_head": account_name,
+                    "rate": 18,
+                    "description": "Input GST",
+                })
+		doc_po.insert()
+		doc_po.submit()
+		self.assertEqual(doc_po.grand_total, 14160)
+		self.assertEqual(doc_po.status, "To Receive and Bill")
+		mr.reload()
+		self.assertEqual(mr.status, "Ordered")
+		args = {
+			"mode_of_payment" : "Cash",
+			"reference_no" : "For Testing"
+		}
+		pe = make_payment_entry(doc_po.doctype, doc_po.name, 6000, args)
+		doc_po.reload()
+		self.assertEqual(doc_po.advance_paid, 6000)
+		pe_gl_entries = get_gl_entries(pe.doctype, pe.name)
+		for gl_entries in pe_gl_entries:
+			if gl_entries['account'] == "Cash - _TC":
+				self.assertEqual(gl_entries['credit'], 6000)
+		pr = make_test_pr(doc_po.name)
+		self.assertEqual(pr.status, "To Bill")
+		pr_sle = get_sle(pr.name)
+		self.assertEqual(pr_sle[0]['actual_qty'], 4)
+		pr_gl_enties = get_gl_entries(pe.doctype, pe.name)
+		for gl_entries_pr in pr_gl_enties:
+			if gl_entries_pr['account'] == "Stock In Hand - _TC":
+				self.assertEqual(gl_entries_pr['debit'], 12000)
+			elif gl_entries_pr['account'] == "Stock Received But Not Billed - _TC":
+				self.assertEqual(gl_entries_pr['credit'], 12000)
+		pi = make_purchase_invoice(pr.name)
+		pi.set_advances()
+		for advance in pi.advances:
+			advance.allocated_amount = 6000 if advance.reference_name == pe.name else 0
+		self.assertEqual(pi.advances[0].allocated_amount, 6000)
+		pi.save()
+		pi.submit()
+		self.assertEqual(pi.status, "Partly Paid")
+		self.assertEqual(pi.outstanding_amount, 8160)
+		doc_po.reload()
+		pr.reload()
+		self.assertEqual(doc_po.status, "Completed")
+		self.assertEqual(pr.status, "Completed")
+		args = {
+			"mode_of_payment" : "Cash",
+			"reference_no" : "For Testing"
+		}
+		pi.reload()
+		make_payment_entry(pi.doctype, pi.name, pi.outstanding_amount, args)
+		pi.reload()
+		self.assertEqual(pi.status, "Paid")
+
+	def test_fetching_item_from_open_mr_TC_B_096(self):
+		#Scenario :Fetching Items from Open Material Requests
+		item = create_item("_Test Item")
+		supplier = create_supplier(supplier_name="_Test Supplier")
+		company = "_Test Company"
+		if not frappe.db.exists("Company", company):
+			company = frappe.new_doc("Company")
+			company.company_name = company
+			company.country="India",
+			company.default_currency= "INR",
+			company.save()
+		else:
+			company = frappe.get_doc("Company", company) 
+		frappe.db.set_value("Item Default", {"parent": item.item_code, "company": company.name}, "default_supplier", supplier.name)
+		mr_dict_list = {
+				"company" : company.name,
+				"purpose":"Purchase",
+				"item_code" : item.item_code,
+				"warehouse" : create_warehouse("Stores - _TC", company=company.name),
+				"qty" : 1,
+				"rate" : 100,
+			}
+		mr = make_material_request(**mr_dict_list)
+		po = make_purchase_order_based_on_supplier(source_name=mr.name, args={"supplier":supplier.name})
+		po.warehouse = "Stores - _TC"
+		po.items[0].rate = 100 if po.items[0].item_code == item.item_code else 0
+		po.save()
+		po.submit()
+		self.assertEqual(po.items[0].material_request, mr.name)
+		mr.reload()
+		self.assertEqual(mr.status, "Ordered")
+		pr = make_test_pr(po.name)
+		self.assertEqual(pr.items[0].material_request, mr.name)
+		self.assertEqual(pr.items[0].purchase_order, po.name)
+		mr.reload()
+		self.assertEqual(mr.status, "Received")	
 
 	def test_mr_po_pi_TC_SCK_082(self):
 		# MR =>  PO => PI
@@ -5997,8 +6114,10 @@ class TestMaterialRequest(FrappeTestCase):
 		self.assertEqual(doc_po.status, 'Completed')
 		self.assertEqual(doc_pi.status, 'Paid')
 
+	@change_settings("Global Defaults", {"default_currency": "INR"})
 	def test_mr_to_pi_with_partial_PE_TC_B_077(self):
 		# MR =>  PO => [Partial]PE => PR => PI [PE with oustanding amount]
+		make_item(item_code="Testing-31")
 		mr_dict_list = {
 				"company" : "_Test Company",
 				"item_code" : "Testing-31",
@@ -7661,3 +7780,6 @@ def create_uom(uom):
 		new_uom.uom_name = uom
 		new_uom.save()
 		return new_uom.uom_name
+
+def get_sle(voucher_no):
+	return frappe.get_all("Stock Ledger Entry", filters={"voucher_no": voucher_no}, fields=['actual_qty', 'item_code']) 
