@@ -34,6 +34,56 @@ from erpnext.buying.doctype.purchase_order.purchase_order import make_purchase_i
 from erpnext.buying.doctype.supplier.test_supplier import create_supplier
 
 class TestMaterialRequest(FrappeTestCase):
+	def setUp(self):
+		frappe.set_user("Administrator")  # Ensure full access for setup
+
+		# Create a test Material Request
+		# self.mr = frappe.get_doc({
+		# 	"doctype": "Material Request",
+		# 	"material_request_type": "Purchase",
+		# 	"schedule_date": frappe.utils.add_days(frappe.utils.nowdate(), 1),
+		# 	"company": frappe.defaults.get_user_default("Company"),
+		# 	"items": [{
+		# 		"item_code": frappe.get_all("Item", limit=1)[0].name,
+		# 		"qty": 1,
+		# 		"schedule_date": frappe.utils.add_days(frappe.utils.nowdate(), 1)
+		# 	}]
+		# }).insert()
+		# self.mr.submit()
+		mr = frappe.copy_doc(test_records[0]).insert()
+
+		self.assertRaises(frappe.ValidationError, make_purchase_order, mr.name)
+
+		mr = frappe.get_doc("Material Request", mr.name)
+		mr.submit()
+
+		# Create a test user with limited permissions
+		self.test_user = "test_user@example.com"
+		if not frappe.db.exists("User", self.test_user):
+			frappe.get_doc({
+				"doctype": "User",
+				"email": self.test_user,
+				"first_name": "Test",
+				"roles": [{"role": "Accounts User"}]  # No "Stock User" or "Material Request" write role
+			}).insert()
+
+	def test_permission_denied(self):
+		# Set context to limited user
+		frappe.set_user(self.test_user)
+
+		# Try to call the method, expect a PermissionError
+		with self.assertRaises(PermissionError):
+			self.update_status(self.mr.name, "Stopped")
+
+	def test_permission_allowed(self):
+		# Set context to Administrator (has write permission)
+		frappe.set_user("Administrator")
+
+		# Should pass without exception
+		self.update_status(self.mr.name, "Stopped")
+		updated_mr = frappe.get_doc("Material Request", self.mr.name)
+		self.assertEqual(updated_mr.status, "Stopped")
+		
 	def test_make_purchase_order(self):
 		mr = frappe.copy_doc(test_records[0]).insert()
 
@@ -3074,11 +3124,11 @@ class TestMaterialRequest(FrappeTestCase):
 		doc_po = make_purchase_order(mr.name)
 		doc_po.supplier = "_Test Supplier"
 		doc_po.append("taxes", {
-                    "charge_type": "On Net Total",
-                    "account_head": account_name,
-                    "rate": 18,
-                    "description": "Input GST",
-                })
+					"charge_type": "On Net Total",
+					"account_head": account_name,
+					"rate": 18,
+					"description": "Input GST",
+				})
 		doc_po.insert()
 		doc_po.submit()
 		self.assertEqual(doc_po.grand_total, 14160)
@@ -4523,7 +4573,7 @@ class TestMaterialRequest(FrappeTestCase):
 			"item_code" : "_Test Item",
 			"warehouse" : "Stores - _TC",
 			"supplier": "_Test Supplier",
-            "schedule_date": today(),
+			"schedule_date": today(),
 			"qty" : 1,
 			"rate" : 10000,
 			"do_not_submit":1
@@ -7456,6 +7506,17 @@ class TestMaterialRequest(FrappeTestCase):
 			self.assertEqual(cogs_gle[0], cogs_gle[1])
 			self.assertEqual(current_bin_qty, bin_qty)
 
+	def test_check_modified_date_con_fail(self):
+		mr = frappe.copy_doc(test_records[0]).insert()
+		mr = frappe.get_doc("Material Request", mr.name)
+		mr.submit()
+		new_modified = frappe.utils.add_days(mr.modified, 1)
+		frappe.db.set_value("Material Request", mr.name, "modified", new_modified)
+		frappe.db.commit()
+		with self.assertRaises(frappe.ValidationError) as ctx:
+			mr.check_modified_date()
+		self.assertIn("has been modified. Please refresh.", str(ctx.exception))
+	
 def get_in_transit_warehouse(company):
 	if not frappe.db.exists("Warehouse Type", "Transit"):
 		frappe.get_doc(
