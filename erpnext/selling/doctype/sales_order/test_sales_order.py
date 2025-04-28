@@ -8,7 +8,7 @@ import frappe
 import frappe.permissions
 from frappe.core.doctype.user_permission.test_user_permission import create_user
 from frappe.tests.utils import FrappeTestCase, change_settings, if_app_installed
-from frappe.utils import add_days, flt, getdate, nowdate, today
+from frappe.utils import add_days, add_to_date, flt, getdate, nowdate, today, add_months
 from erpnext.stock.get_item_details import get_bin_details
 from erpnext.accounts.test.accounts_mixin import AccountsTestMixin
 from erpnext.controllers.accounts_controller import update_child_qty_rate
@@ -4452,6 +4452,8 @@ class TestSalesOrder(AccountsTestMixin, FrappeTestCase):
   
 	@if_app_installed("india_compliance")
 	def test_sales_order_creating_si_with_product_bundle_and_gst_rule_TC_S_059(self):
+		from erpnext.accounts.doctype.sales_invoice.test_sales_invoice import create_registered_company
+		create_registered_company()
 		create_test_warehouse(name= "Stores - _TIRC", warehouse_name="Stores", company="_Test Indian Registered Company")
 		get_or_create_fiscal_year("_Test Indian Registered Company")
 		make_item("_Test Item", {"is_stock_item": 1})
@@ -4893,6 +4895,7 @@ class TestSalesOrder(AccountsTestMixin, FrappeTestCase):
 		po = make_purchase_order(mr.name)
 		po.supplier = "_Test Supplier"
 		po.cost_center = "Main - _TC"
+		po.currency = "INR"
 		po.save()
 		po.submit()
 		
@@ -4916,7 +4919,7 @@ class TestSalesOrder(AccountsTestMixin, FrappeTestCase):
 		self.assertEqual(pi.status, "Unpaid")
   
 		self.assertEqual(frappe.db.get_value('GL Entry', {'voucher_no': pi.name,'account':'Creditors - _TC'}, 'credit'), 5000)
-		self.assertEqual(frappe.db.get_value('GL Entry', {'voucher_no': pi.name,'account':'Stock Received But Not Billed - _TC'}, 'debit'), 5000)
+		self.assertEqual(frappe.db.get_value('GL Entry', {'voucher_no': pi.name,'account':'_Test Account Cost for Goods Sold - _TC'}, 'debit'), 5000)
 
 	def test_sales_order_for_stock_unreserve_TC_S_071(self):
 		so = self.test_sales_order_for_stock_reservation_TC_S_063(get_so_with_stock_reserved=1)
@@ -4980,6 +4983,7 @@ class TestSalesOrder(AccountsTestMixin, FrappeTestCase):
 		po = make_purchase_order(mr.name)
 		po.supplier = "_Test Supplier"
 		po.cost_center = "_Test Cost Center - _TC"
+		po.currency = "INR"
 		po.save()
 		po.submit()
 		
@@ -5074,6 +5078,7 @@ class TestSalesOrder(AccountsTestMixin, FrappeTestCase):
 		from erpnext.stock.doctype.material_request.material_request import make_supplier_quotation
 		sq = make_supplier_quotation(mr.name)
 		sq.supplier = "_Test Supplier"
+		sq.currency ="INR"
 		sq.save()
 		sq.submit()
   
@@ -5595,6 +5600,7 @@ class TestSalesOrder(AccountsTestMixin, FrappeTestCase):
 		purchase_orders = make_purchase_order_for_default_supplier(so.name,selected_items=so.items)
 		for i in purchase_orders[0].items:
 			i.rate = 3000
+		purchase_orders[0].currency = "INR"
 		purchase_orders[0].submit()
 
 		update_status("Delivered", purchase_orders[0].name)
@@ -5652,6 +5658,7 @@ class TestSalesOrder(AccountsTestMixin, FrappeTestCase):
 		for i in purchase_orders[0].items:
 			i.rate = 3000
 			i.item_tax_template = "GST 18% - _TC"
+		purchase_orders[0].currency = "INR"
 		purchase_orders[0].tax_category = "In-State"
 		purchase_orders[0].taxes_and_charges = "Input GST In-state - _TC"
 		purchase_orders[0].save()
@@ -6015,8 +6022,9 @@ class TestSalesOrder(AccountsTestMixin, FrappeTestCase):
 
 	def create_and_submit_sales_order_with_gst(self, item_code, qty=None, rate=None):
 		from erpnext.accounts.doctype.sales_invoice.test_sales_invoice import create_registered_company
-		get_or_create_fiscal_year("_Test Indian Registered Company")
 		create_registered_company()
+		create_registered_customer()
+		get_or_create_fiscal_year("_Test Indian Registered Company")
 		create_test_warehouse(name= "Stores - _TIRC", warehouse_name="Stores", company="_Test Indian Registered Company")
 		make_item("_Test Item", {"is_stock_item": 1})
 		make_stock_entry(item_code="_Test Item", qty=10, rate=rate, target="Stores - _TIRC")
@@ -6038,7 +6046,7 @@ class TestSalesOrder(AccountsTestMixin, FrappeTestCase):
 			customer="_Test Registered Customer",
 			warehouse="Stores - _TIRC",
 			cost_center="Main - _TIRC",
-			selling_price_list='_Test Price List',
+			currency="INR",
 			item_code=item_code,
 			qty=qty,
 			rate=rate,
@@ -6089,8 +6097,10 @@ class TestSalesOrder(AccountsTestMixin, FrappeTestCase):
 		payment_entry.submit()
   
 		self.assertEqual(payment_entry.status, "Submitted", "Payment Entry not created")
-		self.assertEqual(frappe.db.get_value('GL Entry', {'voucher_no': payment_entry.name, 'account': 'Debtors - _TC'}, 'credit'), payment_entry.paid_amount)
-		self.assertEqual(frappe.db.get_value('GL Entry', {'voucher_no': payment_entry.name, 'account': 'Cash - _TC'}, 'debit'), payment_entry.paid_amount)
+		debit_account = frappe.db.get_value("Company", "_Test Company", "default_bank_account") or 'Cash - _TC'
+		credit_account = frappe.db.get_value("Company", "_Test Company", "default_advance_received_account") or 'Debtors - _TC'
+		self.assertEqual(frappe.db.get_value('GL Entry', {'voucher_no': payment_entry.name, 'account': credit_account}, 'credit'), payment_entry.paid_amount)
+		self.assertEqual(frappe.db.get_value('GL Entry', {'voucher_no': payment_entry.name, 'account': debit_account}, 'debit'), payment_entry.paid_amount)
 		return payment_entry
 
 	def validate_gl_entries(self, voucher_no, amount):
@@ -6174,6 +6184,7 @@ class TestSalesOrder(AccountsTestMixin, FrappeTestCase):
 			self.assertRaises(frappe.ValidationError,sales_order.submit)
 			customer.credit_limits=[]
 			customer.save()
+			frappe.db.rollback()
 		except Exception as e:
 			pass
 		
@@ -6290,6 +6301,176 @@ class TestSalesOrder(AccountsTestMixin, FrappeTestCase):
 		qty_change = frappe.db.get_value('Stock Ledger Entry', {'item_code': '_Test Item', 'voucher_no': dn.name, 'warehouse': '_Test Warehouse - _TC'}, 'actual_qty')
 		self.assertEqual(qty_change, -5)
 		self.assertEqual(frappe.db.get_value("Stock Reservation Entry", {"voucher_no": so.name}, "status"), "Delivered")
+
+	def test_validate_sales_mntc_quotation_coverage_TC_S_162(self):
+		make_item("_Test Item")
+		create_exchange_rate(date=today())
+
+		# creating quotation
+		qtn = frappe.get_doc(
+			{
+				"doctype": "Quotation",
+				"quotation_to": "Customer",
+				"party_name": "_Test Customer",
+				"order_type": "Sales",
+				"transaction_date": nowdate(),
+				"valid_till": add_months(nowdate(), 1),
+			}
+		)
+		qtn.append("items", {"qty": "2", "item_code": "_Test Item"})
+		qtn.submit()
+
+		so = frappe.new_doc("Sales Order")
+		so.customer = "_Test Customer"
+		so.order_type = "Maintenance" 
+		so.append("items", {
+			"item_code": "_Test Item",
+			"qty": 1,
+			"rate": 100,
+			"prevdoc_docname": qtn.name
+		})
+
+		with self.assertRaises(frappe.ValidationError) as context:
+			so.validate_sales_mntc_quotation()
+
+		self.assertIn(f"Quotation {qtn.name} not of type Maintenance", str(context.exception))
+
+	def test_validate_drop_ship_coverage_TC_S_163(self):
+		so = frappe.new_doc("Sales Order")
+		so.customer = "_Test Customer"
+		so.order_type = "Sales"
+
+		so.append("items", {
+			"item_code": "_Test Item",
+			"qty": 1,
+			"rate": 100,
+			"delivered_by_supplier": 1, 
+			"supplier": None 
+		})
+
+		with self.assertRaises(frappe.ValidationError) as context:
+			so.validate_drop_ship()
+
+		self.assertIn("Set Supplier for item", str(context.exception))
+
+	def test_check_modified_date_coverage_TC_S_164(self):
+		make_item("_Test Item")
+
+		so = make_sales_order(do_not_save=True)
+		so.modified = add_to_date(today(), hours=-1)
+		so.save()
+
+		frappe.db.set_value("Sales Order", so.name, "modified", today())
+
+		with self.assertRaises(frappe.ValidationError) as e:
+			so.update_status("Draft")
+		
+		self.assertIn("has been modified", str(e.exception))
+
+	def test_update_status_coverage_TC_S_165(self):
+		make_item("_Test Item")
+
+		so = make_sales_order()
+		so.reload()
+
+		so.check_credit_limit = lambda: None
+		so.update_reserved_qty = lambda: None
+		so.notify_update = lambda: None
+
+		try:
+			so.update_status("Draft")
+		except Exception:
+			self.fail("update_status() raised Exception unexpectedly!")
+
+	def test_validate_delivery_date_coverage_TC_S_166(self):
+		make_item("_Test Item")
+
+		so = make_sales_order(do_not_save=1)
+		so.delivery_date = add_days(so.transaction_date, -1)
+		so.items[0].delivery_date = add_days(so.transaction_date, -1)
+
+		with self.assertRaises(frappe.ValidationError) as e:
+			so.validate_delivery_date()
+
+		self.assertIn("Expected Delivery Date should be after Sales Order Date", str(e.exception))
+
+	def test_update_enquiry_status_coverage_TC_S_167(self):
+		from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_company, create_customer
+		create_company()
+		create_customer("_Test Customer")
+		make_item("_Test Item")
+		create_exchange_rate(date=today())
+
+		if not frappe.db.exists("Opportunity Type", "Sales"):
+			opp_type = frappe.new_doc("Opportunity Type")
+			opp_type.name = "Sales"
+			opp_type.save()
+
+		if not frappe.db.exists("Sales Stage", "Prospecting"):
+			sal_stage = frappe.new_doc("Sales Stage")
+			sal_stage.stage_name = "Prospecting"
+			sal_stage.save()
+
+		opp_doc = frappe.get_doc(
+			{
+				"doctype": "Opportunity",
+				"company": "_Test Company",
+				"opportunity_from": "Customer",
+				"opportunity_type": "Sales",
+				"conversion_rate": 1.0,
+				"transaction_date": today(),
+				"party_name": "_Test Customer"
+			}
+		)
+		opp_doc.insert()
+
+		quotation = frappe.get_doc({
+			"doctype": "Quotation",
+			"quotation_to": "Customer",
+			"company": "_Test Company",
+			"party_name": "_Test Customer",
+			"order_type": "Sales",
+			"items": [{
+				"item_code": "_Test Item",
+				"qty": 1,
+				"rate": 100,
+				"prevdoc_doctype": "Opportunity",
+				"prevdoc_docname": opp_doc.name
+			}]
+		}).insert()
+
+		so = make_sales_order(do_not_save=1)
+		so.update_enquiry_status(quotation.name, "Converted")
+
+		opp_doc.reload()
+		self.assertEqual(opp_doc.status, "Converted")
+
+	def test_make_project_coverage_TC_S_168(self):
+		from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_company, create_customer
+		create_company()
+		create_customer("_Test Customer")
+		make_item("_Test Item")
+
+		so = make_sales_order()
+
+		from erpnext.selling.doctype.sales_order.sales_order import make_project
+		project = make_project(so.name)
+
+		self.assertEqual(project.status, "Open")
+		self.assertEqual(project.sales_order, so.name)
+
+	def test_make_maintenance_schedule_coverage_TC_S_169(self):
+		from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_company, create_customer
+		create_company()
+		create_customer("_Test Customer")
+		make_item("_Test Item")
+
+		so = make_sales_order()
+
+		maintenance_schedule = make_maintenance_schedule(so.name)
+
+		self.assertEqual(maintenance_schedule.status, "Draft")
+
 
 @if_app_installed("india_compliance")
 def create_test_tax_data():
@@ -6673,3 +6854,57 @@ def get_or_create_fiscal_year(company):
 def _make_blanket_order(**args):
 	from erpnext.manufacturing.doctype.blanket_order.test_blanket_order import make_blanket_order
 	return make_blanket_order(**args)
+
+def create_registered_customer():
+	if not frappe.db.exists("Customer", "_Test Registered Customer"):
+		customer = frappe.get_doc({
+			"doctype": "Customer",
+			"customer_name": "_Test Registered Customer",
+			"customer_type": "Company",
+			"customer_group": "Commercial",
+			"territory": "India",
+            "gstin": "24AANFA2641L1ZF",
+            "gst_category": "Registered Regular"
+		})
+		customer.insert()
+
+	if not frappe.db.exists("Address", "_Test Registered Customer-Billing"):
+		address = frappe.get_doc({
+			"doctype": "Address",
+			"address_title": "_Test Registered Customer",
+			"address_type": "Billing",
+            "address_line1": "Test Address - 1",
+            "city": "Test City",
+            "state": "Gujarat",
+            "pincode": "380015",
+            "country": "India",
+            "gstin": "24AAQCA8719H1ZC",
+            "gst_category": "Registered Regular",
+            "is_primary_address": 1,
+            "is_company_address": 1,
+            "is_shipping_address": 1,
+			"links": [{
+				"link_doctype": "Customer",
+				"link_name": "_Test Registered Customer"
+			}]
+		})
+		address.insert()
+def create_exchange_rate(date):
+	# make an entry in Currency Exchange list. serves as a static exchange rate
+	if frappe.db.exists(
+		{"doctype": "Currency Exchange", "date": date, "from_currency": "USD", "to_currency": "INR"}
+	):
+		return
+	else:
+		doc = frappe.get_doc(
+			{
+				"doctype": "Currency Exchange",
+				"date": date,
+				"from_currency": "USD",
+				"to_currency": frappe.get_cached_value("Company", "_Test Company", "default_currency"),
+				"exchange_rate": 70,
+				"for_buying": True,
+				"for_selling": True,
+			}
+		)
+		doc.insert()

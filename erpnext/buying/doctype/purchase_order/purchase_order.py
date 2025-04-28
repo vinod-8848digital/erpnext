@@ -42,7 +42,7 @@ class PurchaseOrder(BuyingController):
 
 	from typing import TYPE_CHECKING
 
-	if TYPE_CHECKING:
+	if TYPE_CHECKING:  # pragma: no cover
 		from erpnext.accounts.doctype.payment_schedule.payment_schedule import PaymentSchedule
 		from erpnext.accounts.doctype.pricing_rule_detail.pricing_rule_detail import PricingRuleDetail
 		from erpnext.accounts.doctype.purchase_taxes_and_charges.purchase_taxes_and_charges import PurchaseTaxesandCharges
@@ -895,7 +895,7 @@ def is_po_fully_subcontracted(po_name):
 	query = (
 		frappe.qb.from_(table)
 		.select(table.name)
-		.where((table.parent == po_name) & (table.qty != table.sco_qty))
+		.where((table.parent == po_name) & (table.qty != table.subcontracted_quantity))
 	)
 	return not query.run(as_dict=True)
 
