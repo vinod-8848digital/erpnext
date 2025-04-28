@@ -51,16 +51,14 @@ class TestPaymentOrder(FrappeTestCase):
 	def test_payment_order_for_purchase_invoice_TC_ACC_121(self):
 		from erpnext.accounts.doctype.purchase_invoice.test_purchase_invoice import check_gl_entries
 		from erpnext.accounts.doctype.payment_request.payment_request import make_payment_request
-		from erpnext.accounts.doctype.payment_order.payment_order import make_payment_records
 		from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_records
-
 		create_records("_Test Supplier")
 		# Step 1: Create a Purchase Invoice
-		purchase_invoice = make_purchase_invoice()	
+		purchase_invoice = make_purchase_invoice()
 		# Step 2: Create a Payment Request
-		payment_request=make_payment_request(
-			dt="Purchase Invoice",
+		payment_request=make_payment_request( 
 			dn=purchase_invoice.name,
+			dt="Purchase Invoice",
 			return_doc=1,
 		)
 		payment_request.is_payment_order_required=1
@@ -84,8 +82,7 @@ class TestPaymentOrder(FrappeTestCase):
 				}
 			]
 		}).insert().save().submit()
-
-		make_payment_records(payment_order.name, "_Test Supplier")
+		make_journal_entry(payment_order, "_Test Supplier", is_multicurrency=True)
 		jv_name=frappe.get_value('Journal Entry Account', {'reference_type': "Purchase Invoice", 'reference_name': purchase_invoice.name}, 'parent')
 		if jv_name:
 			jv_doc=frappe.get_doc("Journal Entry", jv_name)
@@ -117,3 +114,36 @@ def create_payment_order_against_payment_entry(ref_doc, order_type, bank_account
 	doc.save()
 	doc.submit()
 	return doc
+def make_journal_entry(doc, supplier, mode_of_payment=None, is_multicurrency=False):
+	from erpnext.accounts.party import get_party_account
+	je = frappe.new_doc("Journal Entry")
+	je.payment_order = doc.name
+	je.posting_date = frappe.utils.nowdate()
+	mode_of_payment_type = frappe._dict(frappe.get_all("Mode of Payment", fields=["name", "type"], as_list=1))
+
+	je.voucher_type = "Bank Entry"
+	if mode_of_payment and mode_of_payment_type.get(mode_of_payment) == "Cash":
+		je.voucher_type = "Cash Entry"
+	if is_multicurrency:
+		je.multi_currency = True
+	paid_amt = 0
+	party_account = get_party_account("Supplier", supplier, doc.company)
+	for d in doc.references:
+		if d.supplier == supplier and (not mode_of_payment or mode_of_payment == d.mode_of_payment):
+			je.append(
+				"accounts",
+				{
+					"account": party_account,
+					"debit_in_account_currency": d.amount,
+					"party_type": "Supplier",
+					"party": supplier,
+					"reference_type": d.reference_doctype,
+					"reference_name": d.reference_name,
+				},
+			)
+
+			paid_amt += d.amount
+	je.append("accounts", {"account": doc.account, "credit_in_account_currency": paid_amt})
+
+	je.flags.ignore_mandatory = True
+	je.save()
