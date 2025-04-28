@@ -587,6 +587,9 @@ class SalesOrder(SellingController):
 		def _get_delivery_date(ref_doc_delivery_date, red_doc_transaction_date, transaction_date):
 			delivery_date = auto_repeat_doc.get_next_schedule_date(schedule_date=ref_doc_delivery_date)
 
+			if type(transaction_date) == str:
+				transaction_date = getdate(transaction_date)
+    
 			if delivery_date <= transaction_date:
 				delivery_date_diff = frappe.utils.date_diff(ref_doc_delivery_date, red_doc_transaction_date)
 				delivery_date = frappe.utils.add_days(transaction_date, delivery_date_diff)

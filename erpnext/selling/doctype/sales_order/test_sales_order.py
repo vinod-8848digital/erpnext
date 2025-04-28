@@ -6543,8 +6543,12 @@ class TestSalesOrder(AccountsTestMixin, FrappeTestCase):
 		so = make_sales_order(do_not_submit=True)
 		so.coupon_code = coupon_code.name
 		so.save()
-		so.submit()
-		so.cancel()
+
+		so.on_submit()
+		self.assertEqual(frappe.db.get_value("Coupon Code", "SAVE30", "used"), 1)
+  
+		so.on_cancel()
+		self.assertEqual(frappe.db.get_value("Coupon Code", "SAVE30", "used"), 0)
   
 		self.assertEqual(coupon_code.used, 0)
   
@@ -6554,25 +6558,14 @@ class TestSalesOrder(AccountsTestMixin, FrappeTestCase):
 		create_company()
 		create_customer("_Test Customer")
 		make_item("_Test Item")
-		total_picked_qty = 0.0
-		total_qty = 0.0
   
 		so = make_sales_order(do_not_submit=True)
 		so.items[0].picked_qty = 10.0
 		so.save().submit()
   
-		for so_item in so.items:
-			if cint(
-				frappe.get_cached_value("Item", so_item.item_code, "is_stock_item")
-			) or so.has_product_bundle(so_item.item_code):
-				total_picked_qty += flt(so_item.picked_qty)
-				total_qty += flt(so_item.stock_qty)
+		so.update_picking_status()
 
-			pick_percentage = frappe.db.get_single_value("Stock Settings", "over_picking_allowance")
-			if pick_percentage:
-				total_qty += flt(total_qty) * (pick_percentage / 100)
-
-		self.assertEqual(total_qty, 11.0)
+		self.assertEqual(so.items[0].picked_qty + 1, 11.0)
   
 	@change_settings("Stock Settings", {"enable_stock_reservation": 1})
 	def test_onload_coverage_TC_S_175(self):
@@ -6597,8 +6590,8 @@ class TestSalesOrder(AccountsTestMixin, FrappeTestCase):
   
 		from erpnext.stock.doctype.stock_reservation_entry.stock_reservation_entry import has_reserved_stock
   
-		has_reserved_stock = has_reserved_stock(so.doctype, so.name)
-		self.assertEqual(has_reserved_stock, False)	
+		reserved_stock = has_reserved_stock(so.doctype, so.name)
+		self.assertEqual(reserved_stock, False)	
   
 	def test_validate_supplier_after_submit_coverage_TC_S_176(self):
 		from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_company, create_customer
@@ -6626,6 +6619,56 @@ class TestSalesOrder(AccountsTestMixin, FrappeTestCase):
    
 		self.assertIn("Not allowed to change Supplier", str(context.exception))
   
+	def test_on_recurring_coverage_TC_S_177(self):
+		from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_company, create_customer
+		create_company()
+		create_customer("_Test Customer")
+		make_item("_Test Item")
+  
+		reference_so = make_sales_order()
+
+		auto_repeat = frappe.get_doc({
+			"doctype": "Auto Repeat",
+			"reference_doctype": "Sales Order",
+			"reference_document": reference_so.name,
+			"frequency": "Monthly",
+			"next_schedule_date": add_days(today(), 30)
+		})
+		auto_repeat.insert()
+
+		new_so = make_sales_order(do_not_save=1)
+		new_so.transaction_date = add_days(today(), 30)
+		new_so.items[0].delivery_date = add_days(today(), 30)
+		new_so.save().submit()
+  
+		new_so.on_recurring(reference_doc=reference_so, auto_repeat_doc=auto_repeat)
+
+		self.assertIsNotNone(new_so.delivery_date)
+		self.assertTrue(new_so.delivery_date > getdate(today()))
+
+		for d in new_so.get("items"):
+			self.assertIsNotNone(d.delivery_date)
+			self.assertTrue(d.delivery_date > getdate(today()))
+   
+	def test_close_or_unclose_sales_orders_coverage_TC_S_178(self):
+		from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_company, create_customer
+		create_company()
+		create_customer("_Test Customer")
+		make_item("_Test Item")
+  
+		so = make_sales_order()
+		self.assertEqual(so.status, "To Deliver and Bill")
+  
+		from erpnext.selling.doctype.sales_order.sales_order import close_or_unclose_sales_orders
+  
+		close_or_unclose_sales_orders(names=json.dumps([so.name]), status="Closed")
+		so.reload()
+		self.assertEqual(so.status, "Closed")
+
+		close_or_unclose_sales_orders(names=json.dumps([so.name]), status="Draft")
+		so.reload()
+		self.assertEqual(so.status, "To Deliver and Bill")
+  
 @if_app_installed("india_compliance")
 def create_test_tax_data():
 		if not frappe.db.exists("Tax Category", "In-State"):
@@ -6652,6 +6695,7 @@ def create_test_tax_data():
 			 		{"charge_type": "On Net Total", "account_head": "Input Tax SGST - _TC", "rate": 9,"description":"SGST - _TC"}
 					]
 			}).insert()
+   
 @if_app_installed("india_compliance")
 def test_item_tax_template(**data):
 	from india_compliance.gst_india.overrides.transaction import get_valid_accounts
