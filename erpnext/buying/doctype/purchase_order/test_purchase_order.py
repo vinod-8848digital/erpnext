@@ -2507,10 +2507,12 @@ class TestPurchaseOrder(FrappeTestCase):
 
 	def test_po_with_pricing_rule_TC_B_046(self):
 		# Scenario : PO => Pricing Rule => PR => PI
+		from erpnext.accounts.doctype.purchase_invoice.test_purchase_invoice import get_or_create_price_list
 		get_data = get_company_or_supplier()
 		company = get_data.get("company")
 		supplier = get_data.get("supplier")
 		item = make_test_item("_test_item_2")
+		price_list = get_or_create_price_list()
 
 		po_data = {
 			"company" : company,
@@ -2519,6 +2521,8 @@ class TestPurchaseOrder(FrappeTestCase):
 			"supplier": supplier,
 			"schedule_date": today(),
 			"qty" : 1,
+			"currency":"INR",
+			"buying_price_list": price_list,
 		}
 
 		pricing_rule_record = {
@@ -2541,7 +2545,7 @@ class TestPurchaseOrder(FrappeTestCase):
 			"valid_from": today(),
 			"rate_or_discount": "Discount Percentage",
 			"discount_percentage": 10,
-			"price_list": "Standard Buying",
+			"price_list": price_list,
 			"company" : company,
 
 		}
@@ -2552,7 +2556,7 @@ class TestPurchaseOrder(FrappeTestCase):
 		frappe.get_doc(
 			{
 				"doctype": "Item Price",
-				"price_list": "Standard Buying",
+				"price_list": price_list,
 				"item_code": item.item_code,
 				"price_list_rate": 130
 			}
@@ -9071,9 +9075,10 @@ class TestPurchaseOrder(FrappeTestCase):
 		self.assertEqual(po_1.status, "To Receive and Bill")
 		self.assertEqual(po_2.status, "To Receive and Bill")
 
+	@if_app_installed("projects")
 	def test_validate_available_budget_TC_B_160(self):
 		from unittest.mock import patch
-		project_name = "test_project"
+		project_name = "test_project" + frappe.generate_hash(length=5)
 		if not frappe.db.exists("Project",{"project_name": project_name}):
 			frappe.get_doc(
 				{
@@ -9153,8 +9158,9 @@ class TestPurchaseOrder(FrappeTestCase):
 			msg_args, _ = mock_msgprint.call_args
 			self.assertIn("Available Budget Limit Exceeded", msg_args[0])
 
+	@if_app_installed("projects")
 	def test_update_committed_overall_budge_TC_B_161(self):
-		project_name = "test_project"
+		project_name = "test_project" + frappe.generate_hash(length=5)
 		if not frappe.db.exists("Project",{"project_name": project_name}):
 			frappe.get_doc(
 				{
@@ -9213,8 +9219,9 @@ class TestPurchaseOrder(FrappeTestCase):
 		po.load_from_db()
 		po.cancel()
 
+	@if_app_installed("projects")
 	def test_locked_update_committed_overall_budget_TC_B_162(self):
-		project_name = "test_project"
+		project_name = "test_project" + frappe.generate_hash(length=5)
 		if not frappe.db.exists("Project",{"project_name": project_name}):
 			frappe.get_doc(
 				{
@@ -9283,8 +9290,9 @@ class TestPurchaseOrder(FrappeTestCase):
 
 		self.assertIn("this WBS is locked", str(cm.exception))
 
+	@if_app_installed("projects")
 	def test_locked_committed_overall_budget_mr_po_TC_B_163(self):
-		project_name = "test_project"
+		project_name = "test_project" + frappe.generate_hash(length=5)
 		if not frappe.db.exists("Project",{"project_name": project_name}):
 			frappe.get_doc(
 				{

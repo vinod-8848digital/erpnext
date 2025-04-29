@@ -153,6 +153,57 @@ class TestSupplier(FrappeTestCase):
 		# Rollback
 		address.delete()
 
+	def setUp(self):
+        # Create a Supplier
+		self.supplier = create_supplier(supplier_name = "Test Supplier for Contact")
+
+        # Create a Contact linked to the Supplier
+		self.contact = frappe.get_doc({
+            "doctype": "Contact",
+            "first_name": "John",
+            "last_name": "Doe",
+            "email_id": "john.doe@example.com",
+            "links": [{
+                "link_doctype": "Supplier",
+                "link_name": self.supplier.name
+            }]
+        }).insert(ignore_permissions=True)
+
+	def test_get_supplier_primary_contact(self):
+		from erpnext.buying.doctype.supplier.supplier import get_supplier_primary_contact
+
+		# Simulate a search
+		results = get_supplier_primary_contact(
+		doctype="Contact",
+		txt="John",
+		searchfield="name",
+		start=0,
+		page_len=10,
+		filters={"supplier": self.supplier.name}
+		)
+
+		# Validate the result
+		self.assertTrue(results)
+		self.assertIn(self.contact.name, results[0])
+
+	def test_create_primary_contact(self):
+		supplier = frappe.get_doc({
+            "doctype": "Supplier",
+            "supplier_name": "Test Supplier",
+            "supplier_group": "All Supplier Groups",
+            "mobile_no": "1234567890",
+            "email_id": "test@example.com"
+        })
+		supplier.insert()
+
+		supplier.create_primary_contact()
+
+		supplier.reload()
+
+		self.assertIsNotNone(supplier.supplier_primary_contact)
+		self.assertEqual(supplier.mobile_no, "1234567890")
+		self.assertEqual(supplier.email_id, "test@example.com")
+
 
 def create_supplier(**args):
 	args = frappe._dict(args)

@@ -7140,14 +7140,12 @@ def create_internal_parties():
 	create_customer_group("_Test Customer Group")
 	create_territory("_Test Territory")
 
-	create_company(company_name="_Test Company 1", country="India", currency="INR", abbr="_TC1")
 	create_internal_customer(
 		customer_name="_Test Internal Customer",
 		represents_company="_Test Company 1",
 		allowed_to_interact_with="Wind Power LLC",
 	)
 
-	create_company(company_name="_Test Company with perpetual inventory", country="India", currency="INR", abbr="_TCPI")
 	create_internal_customer(
 		customer_name="_Test Internal Customer 2",
 		represents_company="_Test Company with perpetual inventory",
@@ -7208,7 +7206,7 @@ def setup_accounts():
 	## Create internal transfer account
 	account = create_account(
 		account_name="Unrealized Profit",
-		parent_account="Current Liabilities - _TCPI",
+		parent_account="Current Liabilities - TCP1",
 		company="_Test Company with perpetual inventory",
 	)
 

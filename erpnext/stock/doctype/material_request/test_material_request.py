@@ -4742,7 +4742,10 @@ class TestMaterialRequest(FrappeTestCase):
 		self.assertEqual(doc_mr.docstatus, 1)
 
 		doc_po = make_test_po(doc_mr.name)
+		doc_po.currency = "INR"
+
 		doc_pi = create_purchase_invoice(doc_po.name)
+		doc_pi.currency = "INR"
 		doc_pi.update_stock = 1
 		doc_pi.has_serial_no = 1
 		doc_pi.set_warehouse = warehouse
@@ -4765,6 +4768,7 @@ class TestMaterialRequest(FrappeTestCase):
 		self.assertEqual(serial_cnt, 1)
 
 		doc_pi1 = create_purchase_invoice(doc_po.name)
+		doc_pi1.currency = "INR"
 		doc_pi1.update_stock = 1
 		doc_pi1.has_serial_no = 1
 		doc_pi1.set_warehouse = warehouse
@@ -4850,8 +4854,9 @@ class TestMaterialRequest(FrappeTestCase):
 		serial_cnt = frappe.db.count('Serial No',{'purchase_document_no':pr1.name})
 		self.assertEqual(serial_cnt, 1)
 	def test_create_material_req_to_2po_to_pi_TC_SCK_095(self):
+		from erpnext.buying.doctype.purchase_order.test_purchase_order import get_or_create_fiscal_year
 		create_company()
-		create_fiscal_year()
+		get_or_create_fiscal_year('_Test Company MR')
 		supplier = create_supplier(supplier_name="_Test Supplier MR")
 		warehouse = create_warehouse("_Test warehouse PO", company="_Test Company MR")
 		item = item_create("_Test MR")
@@ -4930,6 +4935,7 @@ class TestMaterialRequest(FrappeTestCase):
 		self.assertEqual(mr.docstatus, 1)
 
 		po1 = make_purchase_order(mr.name)
+		po1.currency = "INR"
 		po1.supplier = "_Test Supplier"
 		po1.items[0].qty = 1
 		po1.items[0].rate = rate
@@ -4939,6 +4945,7 @@ class TestMaterialRequest(FrappeTestCase):
 
 		po2 = make_purchase_order(mr.name)
 		po2.supplier = "_Test Supplier"
+		po2.currency = "INR"
 		po2.items[0].qty = 1
 		po2.items[0].rate = rate
 		po2.insert()
@@ -5451,6 +5458,7 @@ class TestMaterialRequest(FrappeTestCase):
 	
 		#partially qty
 		po = make_purchase_order(mr.name)
+		po.currency = "INR"
 		po.supplier = supplier
 		po.get("items")[0].item_code = item.item_code
 		po.get("items")[0].rate = 100
@@ -5461,6 +5469,7 @@ class TestMaterialRequest(FrappeTestCase):
 		#remaining qty
 		po1 = make_purchase_order(mr.name)
 		po1.supplier = supplier
+		po1.currency = "INR"
 		po1.get("items")[0].rate = 100
 		po1.get("items")[0].qty = 1
 		po1.insert()
@@ -5721,6 +5730,7 @@ class TestMaterialRequest(FrappeTestCase):
 		#partially qty
 		po = make_purchase_order(mr.name)
 		po.supplier = supplier
+		po.currency = "INR"
 		po.get("items")[0].item_code = item.item_code
 		po.get("items")[0].rate = 100
 		po.get("items")[0].qty = 1
@@ -5730,6 +5740,7 @@ class TestMaterialRequest(FrappeTestCase):
 		#remaining qty
 		po1 = make_purchase_order(mr.name)
 		po1.supplier = supplier
+		po1.currency = "INR"
 		po1.get("items")[0].rate = 100
 		po1.get("items")[0].qty = 1
 		po1.insert()
@@ -5769,11 +5780,12 @@ class TestMaterialRequest(FrappeTestCase):
 
 	@if_app_installed("india_compliance")
 	def test_mr_to_po_pr_with_serial_no_TC_B_156(self):
-		company = create_company()
-		warehouse = "Stores - _CM"
-		supplier = create_supplier(supplier_name="_Test Supplier MR")
+		from erpnext.buying.doctype.purchase_order.test_purchase_order import get_or_create_fiscal_year
+		company = "_Test Company"
+		get_or_create_fiscal_year(company)
+		warehouse = "Stores - _TC"
+		supplier = "_Test Supplier 1"
 		item_code = "_Test Item With Serial No"
-		create_fiscal_year()
 		quantity = 2
 		gst_hsn_code = "11112222"
 		if not frappe.db.exists("GST HSN Code", gst_hsn_code):
@@ -5856,11 +5868,12 @@ class TestMaterialRequest(FrappeTestCase):
 
 	@if_app_installed("india_compliance")
 	def test_mr_to_po_pr_with_multiple_serial_nos_TC_B_157(self):
-		company = create_company()
-		warehouse = "Stores - _CM"
-		supplier = create_supplier(supplier_name="_Test Supplier MR")
+		from erpnext.buying.doctype.purchase_order.test_purchase_order import get_or_create_fiscal_year
+		company = "_Test Company"
+		get_or_create_fiscal_year("_Test Company")
+		warehouse = "Stores - _TC"
+		supplier = "_Test Supplier 1"
 		item_code = "_Test Item With Serial No"
-		create_fiscal_year()
 		total_quantity = 5
 		first_pr_quantity = 3
 		second_pr_quantity = 2
@@ -6690,8 +6703,9 @@ class TestMaterialRequest(FrappeTestCase):
 		self.assertEqual(current_bin_qty, bin_qty)
 
 	def test_create_mr_po_pr_serl_part_retn_tc_sck_210(self):
+		from erpnext.buying.doctype.purchase_order.test_purchase_order import get_or_create_fiscal_year
 		create_company()
-		create_fiscal_year()
+		get_or_create_fiscal_year("_Test Company MR")
 		company = "_Test Company MR"
 		warehouse = create_warehouse("_Test warehouse PO", company="_Test Company MR")
 		supplier = create_supplier(supplier_name="_Test Supplier MR")
@@ -6768,8 +6782,9 @@ class TestMaterialRequest(FrappeTestCase):
 		self.assertEqual(gl_stock_debit, 500)
 
 	def test_create_mr_po_2pr_serial_part_return_tc_sck_211(self):
+		from erpnext.buying.doctype.purchase_order.test_purchase_order import get_or_create_fiscal_year
 		create_company()
-		create_fiscal_year()
+		get_or_create_fiscal_year("_Test Company MR")
 		company = "_Test Company MR"
 		warehouse = create_warehouse("_Test warehouse PO", company="_Test Company MR")
 		supplier = create_supplier(supplier_name="_Test Supplier MR")
@@ -6861,8 +6876,9 @@ class TestMaterialRequest(FrappeTestCase):
 		self.assertEqual(gl_stock_debit, 500)
 
 	def test_mr_2po_2pr_serl_part_retn_tc_sck_212(self):
+		from erpnext.buying.doctype.purchase_order.test_purchase_order import get_or_create_fiscal_year
 		create_company()
-		create_fiscal_year()
+		get_or_create_fiscal_year("_Test Company MR")
 		company = "_Test Company MR"
 		warehouse = create_warehouse("_Test warehouse PO", company="_Test Company MR")
 		supplier = create_supplier(supplier_name="_Test Supplier MR")
@@ -6962,8 +6978,9 @@ class TestMaterialRequest(FrappeTestCase):
 			self.assertEqual(gl_stock_debit, 500)
 
 	def test_create_mr_to_2po_to_1pr_serl_part_retn_tc_sck_213(self):
+		from erpnext.buying.doctype.purchase_order.test_purchase_order import get_or_create_fiscal_year
 		create_company()
-		create_fiscal_year()
+		get_or_create_fiscal_year("_Test Company MR")
 		company = "_Test Company MR"
 		warehouse = create_warehouse("_Test warehouse PO", company="_Test Company MR")
 		supplier = create_supplier(supplier_name="_Test Supplier MR")
@@ -7656,7 +7673,7 @@ def make_test_sq(source_name, rate = 0, received_qty=0, item_dict = None, type =
 	return doc_sq
 
 
-def make_test_po(source_name, type = "Material Request", received_qty = 0, item_dict = None, args = None):
+def make_test_po(source_name, type = "Material Request", received_qty = 0, item_dict = None, args = None,currency = "INR"):
 	if type == "Material Request":
 		doc_po = make_purchase_order(source_name)
 
@@ -7675,6 +7692,8 @@ def make_test_po(source_name, type = "Material Request", received_qty = 0, item_
 	if args is not None:
 		args = frappe._dict(args)
 		doc_po.update(args)
+	if currency:
+		doc_po.currency = currency
 
 	doc_po.insert()
 	doc_po.submit()
