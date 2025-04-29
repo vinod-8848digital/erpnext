@@ -1020,14 +1020,13 @@ class TestJournalEntry(unittest.TestCase):
 		credit_account = "Creditors - _TC"
 		amount_sgst = 5000.0
 		amount_cgst = 5000.0
-
+		create_custom_test_accounts()
 		# Fetch Tax Accounts dynamically
 		tax_accounts = frappe.get_all(
 			"Account",
 			filters={"company":"_Test Company","account_type": "Tax", "parent_account": ["like", "%Assets%"]},
 			fields=["name"]
 		)
-
 		# Identify SGST and CGST accounts based on their name
 		debit_account_sgst = None
 		debit_account_cgst = None
@@ -1624,6 +1623,13 @@ def create_custom_test_accounts():
 		["_Test Account Cost for Goods Sold", "Expenses", 0, None, None],
 		["_Test Bank", "Bank Accounts", 0, "Bank", None],
 		["_Test Account IGST", "_Test Account Tax Assets", 0, "Tax", None],
+		# Newly added accounts
+		["Input Tax CGST", "_Test Account Tax Assets", 0, "Tax", None],
+		["Input Tax SGST", "_Test Account Tax Assets", 0, "Tax", None],
+		["Input Tax IGST", "_Test Account Tax Assets", 0, "Tax", None],
+		["Output Tax SGST Refund", "_Test Account Tax Assets", 0, "Tax", None],
+		["Output Tax CGST Refund", "_Test Account Tax Assets", 0, "Tax", None],
+		["Output Tax IGST Refund", "_Test Account Tax Assets", 0, "Tax", None],
 	]
 
 	company = "_Test Company"

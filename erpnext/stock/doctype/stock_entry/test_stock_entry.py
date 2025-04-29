@@ -498,6 +498,7 @@ class TestStockEntry(FrappeTestCase):
 		repack.submit()
 
 		stock_in_hand_account = get_inventory_account(repack.company, repack.get("items")[1].t_warehouse)
+		stock_adjust_account = frappe.get_cached_value("Company", company, "stock_adjustment_account")
 		rm_stock_value_diff = abs(
 			frappe.db.get_value(
 				"Stock Ledger Entry",
@@ -526,9 +527,10 @@ class TestStockEntry(FrappeTestCase):
 			"Stock Entry",
 			repack.name,
 			sorted(
-				[[stock_in_hand_account, 1200, 0.0], ["Expenses Included In Valuation - TCP1", 0.0, 1200.0]]
+				[[stock_in_hand_account, 1200, 0.0],[stock_adjust_account, 1200, 0.0],[stock_adjust_account, 0.0, 1200], ["Expenses Included In Valuation - TCP1", 0.0, 1200.0]]
 			),
 		)
+
 
 	def check_stock_ledger_entries(self, voucher_type, voucher_no, expected_sle):
 		expected_sle.sort(key=lambda x: x[1])
@@ -3260,7 +3262,7 @@ class TestStockEntry(FrappeTestCase):
 		self.assertEqual(sle.actual_qty, 10)
 		
 	def test_stock_entry_tc_sck_136(self):
-		item_code = make_item("_Test Item Stock Entry New", {"valuation_rate": 100})
+		item_code = make_item("_Test Item Stock Entry New", {"valuation_rate": 100, "expense_account": "Stock Adjustment - _TC"})
 		se = make_stock_entry(item_code=item_code, target="_Test Warehouse - _TC", qty=1, do_not_submit=True)
 		se.stock_entry_type = "Manufacture"
 		se.items[0].is_finished_item = 1
@@ -4227,29 +4229,32 @@ class TestStockEntry(FrappeTestCase):
 	def test_create_stock_entry_with_manufacture_purpose_TC_SCK_137(self):
 		company = create_company("_Test Company")
 		get_or_create_fiscal_year(company)
-		item_1 = make_item("W-N-001", properties={"valuation_rate":100})
-		item_2 = make_item("ST-N-001", properties={"valuation_rate":200})
-		item_3 = make_item("GU-SE-001", properties={"valuation_rate":300})
+		item_1 = make_item("W-N-001", properties={"valuation_rate":100, "expense_account": "Stock Adjustment - _TC"})
+		item_2 = make_item("ST-N-001", properties={"valuation_rate":200, "expense_account": "Stock Adjustment - _TC"})
+		item_3 = make_item("GU-SE-001", properties={"valuation_rate":300, "expense_account": "Stock Adjustment - _TC"})
 		se = make_stock_entry(purpose="Manufacture", company=company, do_not_submit=True, do_not_save=True)
 		items = [
 			{
 				"s_warehouse": create_warehouse("Test Store 1", company=company),
 				"item_code": item_1.name,
 				"qty": 10,
-				"conversion_factor": 1
+				"conversion_factor": 1,
+				"expense_account": "Stock Adjustment - _TC"
 			},
 			{
 				"s_warehouse": create_warehouse("Test Store 2", company=company),
 				"item_code": item_2.name,
 				"qty": 50,
-				"conversion_factor": 1
+				"conversion_factor": 1,
+				"expense_account": "Stock Adjustment - _TC"
 			},
 			{
 				"t_warehouse": create_warehouse("Test Store 2", company=company),
 				"item_code": item_3.name,
 				"qty": 10,
 				"is_finished_item":1,
-				"conversion_factor": 1
+				"conversion_factor": 1,
+				"expense_account": "Stock Adjustment - _TC"
 			}
 		]
 		se.items = []
@@ -4321,7 +4326,8 @@ class TestStockEntry(FrappeTestCase):
 			"has_serial_no": 1,
 			"serial_no_series": "Test-SABBMRP-Sno.#####",
 			"create_new_batch": 1,
-			"batch_number_series": "Test-SABBMRP-Bno.#####"
+			"batch_number_series": "Test-SABBMRP-Bno.#####",
+			"expense_account": "Stock Adjustment - _TC"
 		}
 		item_fields2 = {
 			"item_name" : "_Test Item1352",
@@ -4330,7 +4336,8 @@ class TestStockEntry(FrappeTestCase):
 			"has_serial_no": 1,
 			"serial_no_series": "Test1-SABBMRP-Sno.#####",
 			"create_new_batch": 1,
-			"batch_number_series": "Test1-SABBMRP-Bno.#####"
+			"batch_number_series": "Test1-SABBMRP-Bno.#####",
+			"expense_account": "Stock Adjustment - _TC"
 		}
 		self.item_code1 = make_item("_Test Item134", item_fields1).name
 		self.item_code2 = make_item("_Test Item135", item_fields2).name
