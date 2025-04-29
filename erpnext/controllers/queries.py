@@ -28,8 +28,8 @@ def employee_query(doctype, txt, searchfield, start, page_len, filters):
 		"""select {fields} from `tabEmployee`
 		where status in ('Active', 'Suspended')
 			and docstatus < 2
-			and ({key} like %(txt)s
-				or employee_name like %(txt)s)
+			and ({key} ilike %(txt)s
+				or employee_name ilike %(txt)s)
 			{fcond} {mcond}
 		order by
 			(case when locate(%(_txt)s, name) > 0 then locate(%(_txt)s, name) else 99999 end),

@@ -679,10 +679,10 @@ def make_contact(args, is_primary_contact=1):
 	else:
 		values.update(
 			{
+				"first_name": args.get("name"),
 				"company_name": args.get(party_name_key),
 			}
 		)
-
 	contact = frappe.get_doc(values)
 
 	if args.get("email_id"):
