@@ -153,6 +153,108 @@ class TestSupplier(FrappeTestCase):
 		# Rollback
 		address.delete()
 
+	def setUp(self):
+		self.supplier = create_supplier(supplier_name = "Test Supplier for Contact")
+
+		self.contact = frappe.get_doc({
+            "doctype": "Contact",
+            "first_name": "John",
+            "last_name": "Doe",
+            "email_id": "john.doe@example.com",
+            "links": [{
+                "link_doctype": "Supplier",
+                "link_name": self.supplier.name
+            }]
+        }).insert(ignore_permissions=True)
+
+	def test_get_supplier_primary_contact(self):
+		from erpnext.buying.doctype.supplier.supplier import get_supplier_primary_contact
+		results = get_supplier_primary_contact(
+		doctype="Contact",
+		txt="John",
+		searchfield="name",
+		start=0,
+		page_len=10,
+		filters={"supplier": self.supplier.name}
+		)
+
+		self.assertTrue(results)
+		self.assertIn(self.contact.name, results[0])
+
+	def test_create_primary_contact(self):
+		supplier = frappe.get_doc({
+            "doctype": "Supplier",
+            "supplier_name": "Test Supplier",
+            "supplier_group": "All Supplier Groups",
+            "mobile_no": "1234567890",
+            "email_id": "test@example.com"
+        })
+		supplier.insert(ignore_permissions=True)
+
+		supplier.create_primary_contact()
+
+		supplier.reload()
+
+		self.assertIsNotNone(supplier.supplier_primary_contact)
+		self.assertEqual(supplier.mobile_no, "1234567890")
+		self.assertEqual(supplier.email_id, "test@example.com")
+
+	def test_create_primary_address(self):
+			supplier = frappe.get_doc({
+				"doctype": "Supplier",
+				"supplier_name": "Test Supplier",
+				"supplier_group": "All Supplier Groups",
+				"address_line1": "Testt",
+				"city": "Pune",
+				"state": "Maharashtra",
+				"country": "India",
+				"pincode": "411018"
+			})
+			supplier.insert(ignore_if_duplicate=True, ignore_permissions=True)
+
+			supplier.create_primary_address()
+
+			supplier.reload()
+
+			self.assertIsNotNone(supplier.supplier_primary_address)
+			self.assertIsNotNone(supplier.primary_address)
+			self.assertIn("Testt", supplier.primary_address)
+
+	def test_after_rename(self):
+		supplier = frappe.get_doc({
+			"doctype": "Supplier",
+			"supplier_name": "Original Name",
+			"supplier_group": "All Supplier Groups"
+		})
+		supplier.insert(ignore_permissions=True)
+
+		frappe.db.set_default("supp_master_name", "Supplier Name")
+
+		new_name = "Renamed Supplier"
+		frappe.rename_doc("Supplier", supplier.name, new_name, force=True)
+		renamed = frappe.get_doc("Supplier", new_name)
+
+		self.assertEqual(renamed.name, new_name)
+		self.assertEqual(renamed.supplier_name, new_name)
+
+	def test_on_trash(self):
+		supplier = frappe.get_doc({
+			"doctype": "Supplier",
+			"supplier_name": "Test Trash Supplier",
+			"supplier_group": "All Supplier Groups",
+			"address_line1": "Testt",
+			"city": "Pune",
+			"state": "Maharashtra",
+			"country": "India",
+			"pincode": "411018",
+			"mobile_no": "1234567890",
+            "email_id": "test@example.com"
+		})
+		supplier.insert(ignore_permissions=True)
+
+		supplier.delete()
+
+		self.assertFalse(frappe.db.exists("Supplier", supplier.name))
 
 def create_supplier(**args):
 	args = frappe._dict(args)
