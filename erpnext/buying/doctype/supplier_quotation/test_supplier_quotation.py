@@ -5,7 +5,7 @@
 import frappe
 from frappe.tests.utils import FrappeTestCase
 from erpnext.buying.doctype.supplier_quotation.supplier_quotation import make_quotation
-from frappe.utils import add_days, add_months, flt, getdate, nowdate
+from frappe.utils import add_days, add_months, flt, getdate, nowdate, today
 
 
 class TestPurchaseOrder(FrappeTestCase):
@@ -61,5 +61,45 @@ class TestPurchaseOrder(FrappeTestCase):
 		set_expired_status()
 		sq.reload()
 		self.assertEqual(sq.status, "Expired")
+
+	def test_validate_valid_till_TC_B_175(self):
+		sq = frappe.copy_doc(test_records[0]).insert()
+		sq.transaction_date = today()
+		sq.valid_till = add_days(today(), -1)
+		self.assertRaises(frappe.ValidationError, sq.save)
+
+	def test_check_supplier_quotation_status_on_cancel_TC_B_176(self):
+		sq = frappe.copy_doc(test_records[0]).insert()
+		sq = frappe.get_doc("Supplier Quotation", sq.name)
+		sq.submit()
+		self.assertEqual(sq.docstatus, 1)
+
+		sq.load_from_db()
+		sq.cancel()
+		self.assertEqual(sq.status, "Cancelled")
+
+	def test_make_pi_from_sq_TC_B_177(self):
+		from .supplier_quotation import make_purchase_invoice
+
+		sq = frappe.copy_doc(test_records[0]).insert()
+		sq = frappe.get_doc("Supplier Quotation", sq.name)
+		sq.submit()
+		self.assertEqual(sq.docstatus, 1)
+
+		pi = make_purchase_invoice(sq.name)
+		pi.insert()
+		pi.submit()
+		self.assertEqual(pi.docstatus, 1)
+
+	def test_get_list_context_TC_B_178(self):
+		from .supplier_quotation import get_list_context
+		context = {}
+		result = get_list_context(context)
+
+		self.assertIsInstance(result, dict)
+		self.assertTrue(result.get("show_sidebar"))
+		self.assertTrue(result.get("show_search"))
+		self.assertTrue(result.get("no_breadcrumbs"))
+		self.assertEqual(result.get("title"), ("Supplier Quotation"))
 
 test_records = frappe.get_test_records("Supplier Quotation")
