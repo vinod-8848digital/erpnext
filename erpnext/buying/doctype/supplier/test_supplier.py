@@ -194,7 +194,7 @@ class TestSupplier(FrappeTestCase):
             "mobile_no": "1234567890",
             "email_id": "test@example.com"
         })
-		supplier.insert()
+		supplier.insert(ignore_permissions=True)
 
 		supplier.create_primary_contact()
 
@@ -204,6 +204,64 @@ class TestSupplier(FrappeTestCase):
 		self.assertEqual(supplier.mobile_no, "1234567890")
 		self.assertEqual(supplier.email_id, "test@example.com")
 
+	def test_create_primary_address(self):
+			supplier = frappe.get_doc({
+				"doctype": "Supplier",
+				"supplier_name": "Test Supplier",
+				"supplier_group": "All Supplier Groups",
+				"address_line1": "Testt",
+				"city": "Pune",
+				"state": "Maharashtra",
+				"country": "India",
+				"pincode": "411018"
+			})
+			supplier.insert(ignore_if_duplicate=True, ignore_permissions=True)
+
+			# Manually call the method
+			supplier.create_primary_address()
+
+			# Reload the supplier to check if values were updated
+			supplier.reload()
+
+			self.assertIsNotNone(supplier.supplier_primary_address)
+			self.assertIsNotNone(supplier.primary_address)
+			self.assertIn("Testt", supplier.primary_address)
+
+	def test_after_rename(self):
+		supplier = frappe.get_doc({
+			"doctype": "Supplier",
+			"supplier_name": "Original Name",
+			"supplier_group": "All Supplier Groups"
+		})
+		supplier.insert(ignore_permissions=True)
+
+		frappe.db.set_default("supp_master_name", "Supplier Name")
+
+		new_name = "Renamed Supplier"
+		frappe.rename_doc("Supplier", supplier.name, new_name, force=True)
+		renamed = frappe.get_doc("Supplier", new_name)
+
+		self.assertEqual(renamed.name, new_name)
+		self.assertEqual(renamed.supplier_name, new_name)
+
+	def test_on_trash(self):
+		supplier = frappe.get_doc({
+			"doctype": "Supplier",
+			"supplier_name": "Test Trash Supplier",
+			"supplier_group": "All Supplier Groups",
+			"address_line1": "Testt",
+			"city": "Pune",
+			"state": "Maharashtra",
+			"country": "India",
+			"pincode": "411018",
+			"mobile_no": "1234567890",
+            "email_id": "test@example.com"
+		})
+		supplier.insert(ignore_permissions=True)
+
+		supplier.delete()
+
+		self.assertFalse(frappe.db.exists("Supplier", supplier.name))
 
 def create_supplier(**args):
 	args = frappe._dict(args)
