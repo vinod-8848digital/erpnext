@@ -419,6 +419,7 @@ class TestDeliveryNote(FrappeTestCase):
 				"doctype": "Item",
 				"item_code": "Test Item",
 				"item_name": "Test Item",
+				"item_group": "Products",
 				"stock_uom": "Nos",
 				"is_stock_item": 1,
 				"gst_hsn_code": "01011010"
@@ -480,6 +481,7 @@ class TestDeliveryNote(FrappeTestCase):
 				"doctype": "Item",
 				"item_code": "Test Item",
 				"item_name": "Test Item",
+				"item_group": "Products",
 				"stock_uom": "Nos",
 				"is_stock_item": 1,
 				"gst_hsn_code": "01011010"
@@ -541,6 +543,7 @@ class TestDeliveryNote(FrappeTestCase):
 				"doctype": "Item",
 				"item_code": "Book",
 				"item_name": "Book",
+				"item_group": "Products",
 				"stock_uom": "Nos",
 				"is_stock_item": 1,
 				"gst_hsn_code": "01011010"
@@ -614,6 +617,7 @@ class TestDeliveryNote(FrappeTestCase):
 				"item_code": "Book",
 				"item_name": "Book",
 				"stock_uom": "Nos",
+				"item_group": "Products",
 				"is_stock_item": 1,
 				"gst_hsn_code": "01011010"
 			}).insert(ignore_permissions=True)
@@ -675,6 +679,7 @@ class TestDeliveryNote(FrappeTestCase):
 				"item_code": "Book",
 				"item_name": "Book",
 				"stock_uom": "Nos",
+				"item_group": "Products",
 				"is_stock_item": 1,
 				"gst_hsn_code": "01011010"
 			}).insert(ignore_permissions=True)
