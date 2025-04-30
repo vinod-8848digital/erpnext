@@ -390,7 +390,7 @@ class TestCustomer(FrappeTestCase):
 		self.assertEqual(middle, "Michael")
 		self.assertEqual(last, "Doe")
 	
-	def test_customer_bank_details(self):
+	def test_customer_bank_details_TC_S_183(self):
 		bank_name = "Test SBI"
 		if not frappe.db.exists("Bank", bank_name):
 			frappe.get_doc({
@@ -419,7 +419,7 @@ class TestCustomer(FrappeTestCase):
 			customer.save()
 		self.assertIn("is not a company bank account", str(context.exception))
 
-	def test_customer_with_address(self):
+	def test_customer_with_address_contact_TC_S_184(self):
 		customer_name = "_Test New Customer"
 
 		if not frappe.db.exists("Customer", customer_name):
@@ -441,7 +441,7 @@ class TestCustomer(FrappeTestCase):
 
 		self.assertIn(contact_name, result_names)
 	
-	def test_make_quotation(self):
+	def test_make_quotation_and_opportunity_TC_S_185(self):
 		customer_name = "_Test Customer New"
 
 		if not frappe.db.exists("Customer", customer_name):
