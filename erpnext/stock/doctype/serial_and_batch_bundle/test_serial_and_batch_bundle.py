@@ -81,7 +81,14 @@ class TestSerialandBatchBundle(FrappeTestCase):
 	def test_reset_serial_batch_bundle(self):
 		company = "_Test Indian Registered Company"  # Ensure company is correct
 		warehouse = "Stores - _TIRC"
-
+		if not frappe.db.exists("Fiscal Year", "2025-2026"):
+			frappe.get_doc({
+				"doctype": "Fiscal Year",
+				"year": "2025-2026",
+				"company": company,
+				"year_start_date": "2025-04-01",
+				"year_end_date": "2026-03-31"
+			}).insert()
 		# Check if the warehouse exists, and if not, create it with the correct company association
 		if not frappe.db.exists("Warehouse", "_Test Warehouse - _TC"):
 			warehouse = frappe.get_doc({
@@ -514,6 +521,66 @@ class TestSerialandBatchBundle(FrappeTestCase):
 		for entry in serial_batch_bundle.entries:
 			assert entry.incoming_rate == 100, f"Incoming rate mismatch: {entry.incoming_rate}"
 			assert entry.stock_value_difference == entry.qty * 100, f"Stock value diff mismatch: {entry.stock_value_difference}"
+
+
+	def test_make_serial_no(self):
+		from erpnext.stock.doctype.serial_and_batch_bundle.serial_and_batch_bundle import make_serial_no
+
+		# Provide sample serial_no and item_code values
+		serial_no = "TEST-SERIAL-001"
+		item_code = "Test Item"
+
+		# First, ensure the item exists
+		if not frappe.db.exists("Item", item_code):
+			frappe.get_doc({
+				"doctype": "Item",
+				"item_code": item_code,
+				"item_name": item_code,
+				"item_group": "Products",
+				"gst_hsn_code":"01011010",
+				"stock_uom": "Nos"
+			}).insert()
+
+		# Now call the make_serial_no function
+		make_serial_no(serial_no, item_code)
+
+		# Check if the serial number was created
+		self.assertTrue(frappe.db.exists("Serial No", serial_no), "Serial No was not created successfully")
+
+	def test_make_batch_no(self):
+		from erpnext.stock.doctype.serial_and_batch_bundle.serial_and_batch_bundle import make_batch_no
+
+		batch_no = "TEST-BATCH-001"
+		item_code = "Test Item"
+
+		# First, ensure the item exists with has_batch_no enabled
+		if not frappe.db.exists("Item", item_code):
+			frappe.get_doc({
+				"doctype": "Item",
+				"item_code": item_code,
+				"item_name": item_code,
+				"item_group": "Products",
+				"has_batch_no": 1,  # <-- important!
+				"gst_hsn_code": "01011010",
+				"stock_uom": "Nos"
+			}).insert()
+		else:
+			# Update existing item to have has_batch_no enabled
+			item = frappe.get_doc("Item", item_code)
+			item.has_batch_no = 1
+			item.save()
+
+		# Now call the make_batch_no function
+		make_batch_no(batch_no, item_code)
+
+		# Check if the batch was created
+		self.assertTrue(frappe.db.exists("Batch", {"batch_id": batch_no}), "Batch was not created successfully")
+
+
+
+
+
+
 
 
 
