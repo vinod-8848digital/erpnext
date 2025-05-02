@@ -2179,7 +2179,7 @@ class TestSalesOrder(AccountsTestMixin, FrappeTestCase):
 		so2.save().submit()
 
 		self.assertRaises(frappe.ValidationError, so1.update_status, "Draft")
-
+	
 	def test_item_tax_transfer_from_sales_to_purchase(self):
 		from erpnext.selling.doctype.sales_order.sales_order import make_purchase_order
 
@@ -2211,7 +2211,7 @@ class TestSalesOrder(AccountsTestMixin, FrappeTestCase):
 		po.items[0].rate = 100
 		po.submit()
 		self.assertEqual(po.taxes[0].tax_amount, 2)
-	
+  
 	def test_sales_order_discount_on_total(self):
 		make_item_price()
 		make_pricing_rule()
@@ -6701,6 +6701,83 @@ class TestSalesOrder(AccountsTestMixin, FrappeTestCase):
 		so.reload()
 		self.assertEqual(so.status, "To Deliver and Bill")
   
+		if not frappe.db.exists("User", "testuser@example.com"):
+			user = frappe.get_doc({
+				"doctype": "User",
+				"email": "testuser@example.com",
+				"first_name": "Test",
+				"roles": [{"role": "Accounts User"}] 
+			})
+			user.insert(ignore_permissions=True)
+
+		frappe.set_user("testuser@example.com")
+  
+		self.assertEqual(frappe.has_permission("Sales Order", "write"), False)
+  
+	def test_validate_serial_no_based_delivery_coverage_TC_S_181(self):
+		from erpnext.manufacturing.doctype.production_plan.test_production_plan import make_bom
+		if not frappe.db.exists("Item", "Test Serialized Item"):
+			item = make_item("Test Serialized Item")
+			item.has_serial_no = 1
+			item.maintain_stock = 1
+			item.save()
+
+		make_item("_Test Raw Item A")
+		a = make_bom(item=item.name, rate=100, raw_materials=["_Test Raw Item A"])
+   
+		so_1 = make_sales_order(item_code="Test Serialized Item", do_not_submit=1)
+		so_1.items[0].ensure_delivery_based_on_produced_serial_no = 1
+		so_1.append("items", {
+			"item_code": "Test Serialized Item",
+			"warehouse": "_Test Warehouse - _TC",
+			"qty": 1,
+			"rate": 100,
+			"delivery_date": today(),
+			"ensure_delivery_based_on_produced_serial_no": 0
+		})
+  
+		with self.assertRaises(frappe.ValidationError) as cm1:
+			so_1.validate_serial_no_based_delivery()
+  
+		self.assertTrue(
+			"Cannot ensure delivery by Serial No" in str(cm1.exception)
+		)
+
+		frappe.db.delete("BOM", {"item": "Test Serialized Item"})
+  
+		with self.assertRaises(frappe.ValidationError) as cm2:
+			so_1.validate_serial_no_based_delivery()
+  
+		self.assertTrue(
+			"No active BOM found for item" in str(cm2.exception)
+		)
+  
+	def test_set_indicator_coverage_TC_S_182(self):
+		make_item("_Test Item")
+  
+		so = make_sales_order(do_not_submit=1)
+  
+		so.set_indicator()
+		self.assertEqual(so.indicator_color, "red")
+		
+		so.submit()
+		so.set_indicator()
+		self.assertEqual(so.indicator_color, "orange")
+  
+		so.cancel()
+		so.set_indicator()
+		self.assertEqual(so.indicator_color, "red")
+  
+	def test_make_maintenance_schedule_coverage_TC_186(self):
+		from .sales_order import make_maintenance_schedule
+		make_item("_Test Item")
+  
+		so = make_sales_order()
+  
+		maint_schedule = make_maintenance_schedule(so.name)
+  
+		self.assertEqual(maint_schedule.status, "Draft")
+
 @if_app_installed("india_compliance")
 def create_test_tax_data():
 		if not frappe.db.exists("Tax Category", "In-State"):
