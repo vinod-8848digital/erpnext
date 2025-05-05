@@ -81,6 +81,12 @@ class TestSerialandBatchBundle(FrappeTestCase):
 	def test_reset_serial_batch_bundle(self):
 		company = "_Test Indian Registered Company"  # Ensure company is correct
 		warehouse = "Stores - _TIRC"
+		fiscal_year = frappe.get_doc("Fiscal Year", "2025")
+		# Check if company is already in child table
+		if not any(c.company == company for c in fiscal_year.companies):
+			fiscal_year.append("companies", {"company": company})
+			fiscal_year.save()
+
 		# Check if the warehouse exists, and if not, create it with the correct company association
 		if not frappe.db.exists("Warehouse", "_Test Warehouse - _TC"):
 			warehouse = frappe.get_doc({
@@ -224,7 +230,11 @@ class TestSerialandBatchBundle(FrappeTestCase):
 	def test_validate_returned_serial_batch_no(self):
 		company = "_Test Indian Registered Company"
 		warehouse = "Stores - _TIRC"
-
+		fiscal_year = frappe.get_doc("Fiscal Year", "2025")
+		# Check if company is already in child table
+		if not any(c.company == company for c in fiscal_year.companies):
+			fiscal_year.append("companies", {"company": company})
+			fiscal_year.save()
 		# Check or create warehouse
 		if not frappe.db.exists("Warehouse", "_Test Warehouse - _TC"):
 			warehouse = frappe.get_doc({
@@ -387,6 +397,11 @@ class TestSerialandBatchBundle(FrappeTestCase):
 	def test_update_valuation_rate(self):
 		company = "_Test Indian Registered Company"
 		warehouse = "Stores - _TIRC"
+		fiscal_year = frappe.get_doc("Fiscal Year", "2025")
+		# Check if company is already in child table
+		if not any(c.company == company for c in fiscal_year.companies):
+			fiscal_year.append("companies", {"company": company})
+			fiscal_year.save()
 
 		# Ensure warehouse exists
 		if not frappe.db.exists("Warehouse", warehouse):
