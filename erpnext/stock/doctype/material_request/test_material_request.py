@@ -7825,7 +7825,128 @@ class TestMaterialRequest(FrappeTestCase):
 		frappe.db.delete("Budget Entry", {"voucher_no": self.mr.name})
 		frappe.delete_doc("Work Breakdown Structure", self.wbs.name, force=True)
 		frappe.delete_doc("Material Request", self.mr.name, force=True)
-	
+
+	from unittest.mock import patch
+	@patch('erpnext.stock.doctype.material_request.material_request.check_available_budget')
+	def test_validate_available_budget_tc_pk_07(self, mock_check_available_budget):
+		from erpnext.stock.doctype.material_request.material_request import validate_available_budget
+		frappe.set_user("Administrator")
+
+		# Create WBS, Project first
+		self.project = frappe.get_doc({
+			"doctype": "Project",
+			"project_name": "_Test Project Validate Budget",
+			"status": "Open",
+			"company": "_Test Company"
+		}).insert(ignore_permissions=True)
+
+		self.wbs = frappe.get_doc({
+			"doctype": "Work Breakdown Structure",
+			"project": self.project.name,
+			"wbs_name": "WBS-001",
+			"wbs_level": "Level 1",
+			"overall_budget": 10000.0,
+		}).insert(ignore_permissions=True)
+
+		self.item = create_item("_Test Item Budget")
+
+		mock_check_available_budget.return_value = {
+			"available_bgt": 9999,  # Positive budget
+			"action": "Stop",
+			"wbs": self.wbs.name
+		}
+
+		self.mr = frappe.get_doc({
+			"doctype": "Material Request",
+			"material_request_type": "Purchase",
+			"transaction_date": nowdate(),
+			"schedule_date": add_days(nowdate(), 10),
+			"company": "_Test Company",
+			"items": [
+				{
+					"item_code": self.item.item_code,
+					"qty": 5,
+					"rate": 100,
+					"amount": 500,
+					"uom": self.item.stock_uom,
+					"conversion_factor": 1.0,
+					"work_breakdown_structure": self.wbs.name,
+					"schedule_date": add_days(nowdate(), 5),
+					"warehouse": create_warehouse("Stores - Budget", company="_Test Company")
+				}
+			]
+		})
+		self.mr.flags.ignore_validate = True  
+		self.mr.insert()
+
+		#Positive budget available (should not throw)
+		mock_check_available_budget.return_value = {
+			"available_bgt": 5000,
+			"action": "Stop",
+			"wbs": self.wbs.name
+		}
+		validate_available_budget(self.mr)
+
+		mock_check_available_budget.return_value = {
+			"available_bgt": -1000,
+			"action": "Warn",
+			"wbs": self.wbs.name
+		}
+		# Should not throw, only show warning
+		validate_available_budget(self.mr)
+
+		# Budget exceeded with "Stop" ➔ Should throw
+		mock_check_available_budget.return_value = {
+			"available_bgt": -500,
+			"action": "Stop",
+			"wbs": self.wbs.name
+		}
+		with self.assertRaises(frappe.ValidationError) as context:
+			validate_available_budget(self.mr)
+
+		self.assertIn("Available Budget Limit Exceeded", str(context.exception))
+
+		#Add second WBS and test "Warn" scenario
+		self.wbs2 = frappe.get_doc({
+			"doctype": "Work Breakdown Structure",
+			"project": self.project.name,
+			"wbs_name": "WBS-002",
+			"wbs_level": "Level 2",
+			"overall_budget": 5000.0,
+		}).insert(ignore_permissions=True)
+
+		self.mr.append("items", {
+			"item_code": self.item.item_code,
+			"qty": 5,
+			"rate": 100,
+			"amount": 200,
+			"uom": self.item.stock_uom,
+			"conversion_factor": 1.0,
+			"work_breakdown_structure": self.wbs2.name,
+			"schedule_date": add_days(nowdate(), 5),
+			"warehouse": create_warehouse("Stores - Budget 2", company="_Test Company")
+		})
+		self.mr.save()
+
+		def fake_check_available_budget(wbs, amt, doctype, date):
+			if wbs == self.wbs.name:
+				return {"available_bgt": -300, "action": "Warn", "wbs": wbs}
+			else:
+				return {"available_bgt": 2000, "action": "Stop", "wbs": wbs}
+
+		mock_check_available_budget.side_effect = fake_check_available_budget
+
+		validate_available_budget(self.mr)
+
+
+		# Delete Test Records
+		frappe.delete_doc("Work Breakdown Structure", self.wbs2.name, force=True)
+		frappe.delete_doc("Work Breakdown Structure", self.wbs.name, force=True)
+		frappe.delete_doc("Material Request", self.mr.name, force=True)
+		frappe.delete_doc("Work Breakdown Structure", self.wbs.name, force=True)
+		frappe.delete_doc("Project", self.project.name, force=True)
+		frappe.db.delete("Warehouse", {"warehouse_name": "Stores - Budget"})
+
 def get_in_transit_warehouse(company):
 	if not frappe.db.exists("Warehouse Type", "Transit"):
 		frappe.get_doc(
