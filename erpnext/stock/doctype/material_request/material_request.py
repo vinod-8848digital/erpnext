@@ -41,7 +41,7 @@ class MaterialRequest(BuyingController):
 		job_card: DF.Link | None
 		letter_head: DF.Link | None
 		material_request_type: DF.Literal["Purchase", "Material Transfer", "Material Issue", "Manufacture", "Customer Provided"]
-		naming_series: DF.Literal["MAT-MR-.YYYY.-"]
+		naming_series: DF.Literal["MAT-MR-.YYYY.-", "MAT/MR/.YYYY.-"]
 		per_ordered: DF.Percent
 		per_received: DF.Percent
 		scan_barcode: DF.Data | None
@@ -57,6 +57,7 @@ class MaterialRequest(BuyingController):
 		transaction_date: DF.Date
 		transfer_status: DF.Literal["", "Not Started", "In Transit", "Completed"]
 		work_order: DF.Link | None
+	# ruff: noqa
 	# end: auto-generated types
 
 	def check_if_already_pulled(self):

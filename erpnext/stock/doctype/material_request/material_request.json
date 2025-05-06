@@ -54,13 +54,14 @@
    "options": "fa fa-pushpin"
   },
   {
+   "default": "MAT/MR/.YYYY.-",
    "fieldname": "naming_series",
    "fieldtype": "Select",
    "label": "Series",
    "no_copy": 1,
    "oldfieldname": "naming_series",
    "oldfieldtype": "Select",
-   "options": "MAT-MR-.YYYY.-",
+   "options": "MAT-MR-.YYYY.-\nMAT/MR/.YYYY.-",
    "print_hide": 1,
    "reqd": 1,
    "set_only_once": 1
@@ -438,6 +439,7 @@
   }
  ],
  "quick_entry": 1,
+ "row_format": "Dynamic",
  "search_fields": "status,transaction_date",
  "show_name_in_global_search": 1,
  "sort_field": "modified",
