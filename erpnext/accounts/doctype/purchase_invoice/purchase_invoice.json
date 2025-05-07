@@ -1622,12 +1622,6 @@
    "label": "Update Outstanding for Self"
   },
   {
-   "fieldname": "sender",
-   "fieldtype": "Data",
-   "label": "Sender",
-   "options": "Email"
-  },
-  {
    "fieldname": "dispatch_address_display",
    "fieldtype": "Text Editor",
    "label": "Dispatch Address",
