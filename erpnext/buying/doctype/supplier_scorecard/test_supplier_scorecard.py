@@ -7,6 +7,9 @@ from frappe.tests.utils import FrappeTestCase
 
 
 class TestSupplierScorecard(FrappeTestCase):
+	def tearDown(self):
+		frappe.db.rollback()
+
 	def test_create_scorecard(self):
 		doc = make_supplier_scorecard().insert()
 		self.assertEqual(doc.name, valid_scorecard[0].get("supplier"))
@@ -18,6 +21,17 @@ class TestSupplierScorecard(FrappeTestCase):
 			d.weight = 0
 		self.assertRaises(frappe.ValidationError, my_doc.insert)
 
+	def test_validate_overlap_standings_TC_B_190(self):
+		my_doc = make_supplier_scorecard()
+		my_doc.load_from_db()
+		my_doc.standings[0].max_grade = 40.0
+		self.assertRaises(frappe.ValidationError, my_doc.save)
+
+	def test_validata_statnding_TC_B_191(self):
+		my_doc = make_supplier_scorecard()
+		my_doc.load_from_db()
+		my_doc.standings = ""
+		self.assertRaises(frappe.ValidationError, my_doc.save)
 
 def make_supplier_scorecard():
 	my_doc = frappe.get_doc(valid_scorecard[0])
