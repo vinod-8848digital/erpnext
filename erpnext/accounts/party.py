@@ -634,35 +634,34 @@ def get_due_date_from_template(template_name, posting_date, bill_date):
 	return due_date
 
 
-def validate_due_date(posting_date, due_date, bill_date=None, template_name=None):
+def validate_due_date(posting_date, due_date, bill_date=None, template_name=None, doctype=None):
 	if getdate(due_date) < getdate(posting_date):
 		frappe.throw(_("Due Date cannot be before Posting / Supplier Invoice Date"))
 	else:
-		if not template_name:
-			return
+		validate_due_date_with_template(posting_date, due_date, bill_date, template_name, doctype)
 
-		default_due_date = get_due_date_from_template(template_name, posting_date, bill_date).strftime(
-			"%Y-%m-%d"
-		)
 
-		if not default_due_date:
-			return
+def validate_due_date_with_template(posting_date, due_date, bill_date, template_name, doctype=None):
+	if not template_name:
+		return
 
-		if default_due_date != posting_date and getdate(due_date) > getdate(default_due_date):
-			is_credit_controller = (
-				frappe.db.get_single_value("Accounts Settings", "credit_controller") in frappe.get_roles()
+	default_due_date = format(get_due_date_from_template(template_name, posting_date, bill_date))
+
+	if not default_due_date:
+		return
+
+	if default_due_date != posting_date and getdate(due_date) > getdate(default_due_date):
+		if frappe.db.get_single_value("Accounts Settings", "credit_controller") in frappe.get_roles():
+			party_type = "supplier" if doctype == "Purchase Invoice" else "customer"
+
+			msgprint(
+				_("Note: Due Date exceeds allowed {0} credit days by {1} day(s)").format(
+					party_type, date_diff(due_date, default_due_date)
+				)
 			)
-			if is_credit_controller:
-				msgprint(
-					_("Note: Due / Reference Date exceeds allowed customer credit days by {0} day(s)").format(
-						date_diff(due_date, default_due_date)
-					)
-				)
-			else:
-				frappe.throw(
-					_("Due / Reference Date cannot be after {0}").format(formatdate(default_due_date))
-				)
 
+		else:
+			frappe.throw(_("Due / Reference Date cannot be after {0}").format(formatdate(default_due_date)))
 
 @frappe.whitelist()
 def get_address_tax_category(tax_category=None, billing_address=None, shipping_address=None):
