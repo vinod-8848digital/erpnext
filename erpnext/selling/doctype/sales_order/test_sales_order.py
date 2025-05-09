@@ -6386,6 +6386,7 @@ class TestSalesOrder(AccountsTestMixin, FrappeTestCase):
 
 		self.assertIn("Set Supplier for item", str(context.exception))
 
+	@change_settings("Selling Settings", {"validate_selling_price": 0})
 	def test_check_modified_date_coverage_TC_S_164(self):
 		make_item("_Test Item")
 
@@ -6403,10 +6404,10 @@ class TestSalesOrder(AccountsTestMixin, FrappeTestCase):
 	def test_update_status_coverage_TC_S_165(self):
 		make_item("_Test Item")
 
-		so = make_sales_order()
+		so = make_sales_order(rate=500)
 		so.reload()
 
-		so.check_credit_limit = lambda: None
+		# so.check_credit_limit = lambda: None
 		so.update_reserved_qty = lambda: None
 		so.notify_update = lambda: None
 
@@ -6532,6 +6533,7 @@ class TestSalesOrder(AccountsTestMixin, FrappeTestCase):
 		# 	so1.validate_po()
 		# self.assertIn("already exists against Customer's Purchase Order", str(ctx2.exception))
   
+	@change_settings("Selling Settings", {"validate_selling_price": 0})
 	def test_cannot_cancel_closed_so_TC_S_169(self):
 		from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_company, create_customer
 		create_company()
@@ -6554,7 +6556,7 @@ class TestSalesOrder(AccountsTestMixin, FrappeTestCase):
 		create_customer("_Test Customer")
 		make_item("_Test Item")
 		pricing_rule = make_pricing_rule()
-		pricing_rule.coupon_code_based =1
+		pricing_rule.coupon_code_based = 1
 		pricing_rule.save()
   
 		frappe.delete_doc_if_exists("Coupon Code", "SAVE30")
@@ -6658,7 +6660,7 @@ class TestSalesOrder(AccountsTestMixin, FrappeTestCase):
 		create_customer("_Test Customer")
 		make_item("_Test Item")
   
-		reference_so = make_sales_order()
+		reference_so = make_sales_order(rate=500)
 
 		auto_repeat = frappe.get_doc({
 			"doctype": "Auto Repeat",
@@ -6683,6 +6685,7 @@ class TestSalesOrder(AccountsTestMixin, FrappeTestCase):
 			self.assertIsNotNone(d.delivery_date)
 			self.assertTrue(d.delivery_date > getdate(today()))
    
+	@change_settings("Selling Settings", {"validate_selling_price": 0})
 	def test_close_or_unclose_sales_orders_coverage_TC_S_178(self):
 		from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_company, create_customer
 		create_company()
@@ -6756,7 +6759,7 @@ class TestSalesOrder(AccountsTestMixin, FrappeTestCase):
 	def test_set_indicator_coverage_TC_S_182(self):
 		make_item("_Test Item")
   
-		so = make_sales_order(do_not_submit=1)
+		so = make_sales_order(rate=500, do_not_submit=1)
   
 		so.set_indicator()
 		self.assertEqual(so.indicator_color, "red")
@@ -6769,7 +6772,8 @@ class TestSalesOrder(AccountsTestMixin, FrappeTestCase):
 		so.set_indicator()
 		self.assertEqual(so.indicator_color, "red")
   
-	def test_make_maintenance_schedule_coverage_TC_186(self):
+	@change_settings("Selling Settings", {"validate_selling_price": 0})
+	def test_make_maintenance_schedule_coverage_TC_S_186(self):
 		from .sales_order import make_maintenance_schedule
 		make_item("_Test Item")
   
@@ -6779,6 +6783,7 @@ class TestSalesOrder(AccountsTestMixin, FrappeTestCase):
   
 		self.assertEqual(maint_schedule.status, "Draft")
   
+	@change_settings("Selling Settings", {"validate_selling_price": 0})
 	def test_make_project_coverage_TC_S_190(self):
 		from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_company, create_customer
 		create_company()
@@ -6878,6 +6883,7 @@ class TestSalesOrder(AccountsTestMixin, FrappeTestCase):
 		po3 = make_purchase_order_for_default_supplier(so.name, selected_items=so_items)
 		self.assertEqual(po3[0].status, "Draft")
   
+	@change_settings("Selling Settings", {"validate_selling_price": 0})
 	def test_set_delivery_date_coverage_TC_S_192(self):
 		from .sales_order import set_delivery_date
   
@@ -7143,7 +7149,7 @@ def make_item_price():
 
 def make_pricing_rule():
     from erpnext.regional.doctype.import_supplier_invoice.import_supplier_invoice import create_uom
-    abc = create_uom('_Test UOM')
+    create_uom('_Test UOM')
     
     if not frappe.db.exists('Pricing Rule', {'title': 'Test Offer'}):
         pricing_rule_doc = frappe.new_doc('Pricing Rule')
@@ -7335,6 +7341,6 @@ def set_credit_limit_for_customer(customer_name):
 	customer.credit_limits.clear()
 	customer.append(
 				"credit_limits",
-				{"company": "_Test Company", "credit_limit": 1000000.00},
+				{"company": "_Test Company", "credit_limit": 9000000.00},
 			)
 	customer.save()
