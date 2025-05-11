@@ -3,6 +3,7 @@
 
 
 import frappe
+from frappe.utils import add_days, now
 from frappe.tests.utils import FrappeTestCase
 
 from erpnext.buying.doctype.supplier.test_supplier import create_supplier
@@ -45,6 +46,7 @@ class TestSupplierScorecard(FrappeTestCase):
 
 def setup_supplier_scorecard():
 	supplier = create_supplier(supplier_name="__test_supplier" + frappe.generate_hash(length=5))
+	frappe.db.set_value("Supplier", supplier.name, "creation", add_days(now(), -10))
 	criteria_name = frappe.get_doc(
 		{
 			"doctype": "Supplier Scorecard Criteria",
