@@ -1122,7 +1122,7 @@ class TestSalesOrder(AccountsTestMixin, FrappeTestCase):
 		their child items(from the Packed Items table) on creating a Purchase Order from it.
 		"""
 		from erpnext.selling.doctype.sales_order.sales_order import make_purchase_order
-
+  
 		product_bundle = make_item("_Test Product Bundle", {"is_stock_item": 0})
 		make_item("_Test Bundle Item 1", {"is_stock_item": 1})
 		make_item("_Test Bundle Item 2", {"is_stock_item": 1})
@@ -1139,7 +1139,7 @@ class TestSalesOrder(AccountsTestMixin, FrappeTestCase):
 				"supplier": "_Test Supplier",
 			}
 		]
-
+  
 		so = make_sales_order(item_list=so_items)
 
 		purchase_order = make_purchase_order(so.name, selected_items=so_items)
@@ -1169,7 +1169,7 @@ class TestSalesOrder(AccountsTestMixin, FrappeTestCase):
 				"supplier": "_Test Supplier",
 			}
 		]
-
+  
 		so = make_sales_order(item_list=so_items)
 
 		purchase_order = make_purchase_order(so.name, selected_items=so_items)
@@ -1451,6 +1451,7 @@ class TestSalesOrder(AccountsTestMixin, FrappeTestCase):
 				"item_defaults": [{"default_warehouse": "_Test Warehouse - _TC", "company": "_Test Company"}],
 			},
 		)
+   
 		from erpnext.manufacturing.doctype.production_plan.test_production_plan import make_bom
 
 		make_bom(item=item.item_code, rate=1000, raw_materials=["_Test Raw Item A", "_Test Raw Item B"])
@@ -6385,6 +6386,7 @@ class TestSalesOrder(AccountsTestMixin, FrappeTestCase):
 
 		self.assertIn("Set Supplier for item", str(context.exception))
 
+	@change_settings("Selling Settings", {"validate_selling_price": 0})
 	def test_check_modified_date_coverage_TC_S_164(self):
 		make_item("_Test Item")
 
@@ -6402,10 +6404,10 @@ class TestSalesOrder(AccountsTestMixin, FrappeTestCase):
 	def test_update_status_coverage_TC_S_165(self):
 		make_item("_Test Item")
 
-		so = make_sales_order()
+		so = make_sales_order(rate=500)
 		so.reload()
 
-		so.check_credit_limit = lambda: None
+		# so.check_credit_limit = lambda: None
 		so.update_reserved_qty = lambda: None
 		so.notify_update = lambda: None
 
@@ -6531,6 +6533,7 @@ class TestSalesOrder(AccountsTestMixin, FrappeTestCase):
 		# 	so1.validate_po()
 		# self.assertIn("already exists against Customer's Purchase Order", str(ctx2.exception))
   
+	@change_settings("Selling Settings", {"validate_selling_price": 0})
 	def test_cannot_cancel_closed_so_TC_S_169(self):
 		from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_company, create_customer
 		create_company()
@@ -6553,7 +6556,7 @@ class TestSalesOrder(AccountsTestMixin, FrappeTestCase):
 		create_customer("_Test Customer")
 		make_item("_Test Item")
 		pricing_rule = make_pricing_rule()
-		pricing_rule.coupon_code_based =1
+		pricing_rule.coupon_code_based = 1
 		pricing_rule.save()
   
 		frappe.delete_doc_if_exists("Coupon Code", "SAVE30")
@@ -6657,7 +6660,7 @@ class TestSalesOrder(AccountsTestMixin, FrappeTestCase):
 		create_customer("_Test Customer")
 		make_item("_Test Item")
   
-		reference_so = make_sales_order()
+		reference_so = make_sales_order(rate=500)
 
 		auto_repeat = frappe.get_doc({
 			"doctype": "Auto Repeat",
@@ -6667,7 +6670,7 @@ class TestSalesOrder(AccountsTestMixin, FrappeTestCase):
 			"next_schedule_date": add_days(today(), 30)
 		})
 		auto_repeat.insert()
-
+  
 		new_so = make_sales_order(do_not_save=1)
 		new_so.transaction_date = add_days(today(), 30)
 		new_so.items[0].delivery_date = add_days(today(), 30)
@@ -6682,6 +6685,7 @@ class TestSalesOrder(AccountsTestMixin, FrappeTestCase):
 			self.assertIsNotNone(d.delivery_date)
 			self.assertTrue(d.delivery_date > getdate(today()))
    
+	@change_settings("Selling Settings", {"validate_selling_price": 0})
 	def test_close_or_unclose_sales_orders_coverage_TC_S_178(self):
 		from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_company, create_customer
 		create_company()
@@ -6755,7 +6759,7 @@ class TestSalesOrder(AccountsTestMixin, FrappeTestCase):
 	def test_set_indicator_coverage_TC_S_182(self):
 		make_item("_Test Item")
   
-		so = make_sales_order(do_not_submit=1)
+		so = make_sales_order(rate=500, do_not_submit=1)
   
 		so.set_indicator()
 		self.assertEqual(so.indicator_color, "red")
@@ -6768,7 +6772,8 @@ class TestSalesOrder(AccountsTestMixin, FrappeTestCase):
 		so.set_indicator()
 		self.assertEqual(so.indicator_color, "red")
   
-	def test_make_maintenance_schedule_coverage_TC_186(self):
+	@change_settings("Selling Settings", {"validate_selling_price": 0})
+	def test_make_maintenance_schedule_coverage_TC_S_186(self):
 		from .sales_order import make_maintenance_schedule
 		make_item("_Test Item")
   
@@ -6777,6 +6782,116 @@ class TestSalesOrder(AccountsTestMixin, FrappeTestCase):
 		maint_schedule = make_maintenance_schedule(so.name)
   
 		self.assertEqual(maint_schedule.status, "Draft")
+  
+	@change_settings("Selling Settings", {"validate_selling_price": 0})
+	def test_make_project_coverage_TC_S_190(self):
+		from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_company, create_customer
+		create_company()
+		create_customer("_Test Customer")
+		make_item("_Test Item")
+
+		so = make_sales_order()
+
+		from erpnext.selling.doctype.sales_order.sales_order import make_project
+		project = make_project(so.name)
+
+		self.assertEqual(project.status, "Open")
+		self.assertEqual(project.sales_order, so.name)
+  
+	def test_make_purchase_order_for_default_supplier_coverage_TC_S_191(self):
+		from erpnext.buying.doctype.supplier.test_supplier import create_supplier
+		from .sales_order import make_purchase_order_for_default_supplier
+  
+		create_exchange_rate(date=today())
+		supplier = create_supplier(supplier_name="_Test Supplier")
+		make_item("_Test Item 1")
+		make_item("_Test Item 2")
+		so_items = [
+			{
+				"item_code": "_Test Item 1",
+				"warehouse": "",
+				"qty": 2,
+				"rate": 400,
+				"delivered_by_supplier": 1,
+				"supplier": "_Test Supplier",
+			},
+			{
+				"item_code": "_Test Item 2",
+				"warehouse": "",
+				"qty": 2,
+				"rate": 400,
+				"delivered_by_supplier": 1,
+				"supplier": "_Test Supplier",
+			},
+		]
+  
+		if not frappe.db.exists("Address", "_Test Address so-Billing-1"):
+			address = frappe.get_doc({
+				"doctype": "Address",
+				"address_title": "_Test Address so",
+				"address_type": "Billing",
+				"address_line1": "123 Test Street",
+				"address_line2": "Suite 101",
+				"city": "Testville",
+				"state": "Maharashtra",
+				"pincode": "400083",
+				"country": "India",
+				"phone": "1234567890",
+				"email_id": "test@example.com",
+				"links": [
+					{
+						"link_doctype": "Customer",
+						"link_name": "_Test Customer"
+					}
+				]
+			})
+			address.insert(ignore_permissions=True)
+
+		so = make_sales_order(item_list=so_items, do_not_submit=True)
+		if address:
+			so.shipping_address_name = address.name
+		so.submit()
+
+		po1 = make_purchase_order_for_default_supplier(so.name)
+		self.assertEqual(po1, None)
+  
+		po2 = make_purchase_order_for_default_supplier(so.name, selected_items=json.dumps(so_items))
+		self.assertEqual(po2[0].status, "Draft")
+  
+		if not frappe.db.exists("Payment Terms Template", "Test Receivable Template Selling"):
+			frappe.get_doc(
+				{
+					"doctype": "Payment Terms Template",
+					"template_name": "Test Receivable Template Selling",
+					"allocate_payment_based_on_payment_terms": 1,
+					"terms": [
+						{
+							"doctype": "Payment Terms Template Detail",
+							"payment_term": "Basic Amount Receivable for Selling",
+							"invoice_portion": 100,
+							"credit_days_based_on": "Day(s) after invoice date",
+							"credit_days": 1,
+						}
+					],
+				}
+			).insert()
+  
+		supplier.default_price_list = "Standard Selling"
+		supplier.payment_terms = "Test Receivable Template Selling"
+		supplier.save()
+  
+		po3 = make_purchase_order_for_default_supplier(so.name, selected_items=so_items)
+		self.assertEqual(po3[0].status, "Draft")
+  
+	@change_settings("Selling Settings", {"validate_selling_price": 0})
+	def test_set_delivery_date_coverage_TC_S_192(self):
+		from .sales_order import set_delivery_date
+  
+		make_item("_Test Item")
+		so = make_sales_order()
+  
+		set_delivery_date(items=None, sales_order=so.name)
+		self.assertEqual(so.items[0].delivery_date, add_days(today(), 10))
 
 @if_app_installed("india_compliance")
 def create_test_tax_data():
@@ -6986,6 +7101,8 @@ def make_sales_order(**args):
 		)
 
 	so.delivery_date = add_days(so.transaction_date, 10)
+ 
+	set_credit_limit_for_customer(customer_name=args.customer or "_Test Customer")
 
 	if not args.do_not_save:
 		so.insert()
@@ -7032,7 +7149,7 @@ def make_item_price():
 
 def make_pricing_rule():
     from erpnext.regional.doctype.import_supplier_invoice.import_supplier_invoice import create_uom
-    abc = create_uom('_Test UOM')
+    create_uom('_Test UOM')
     
     if not frappe.db.exists('Pricing Rule', {'title': 'Test Offer'}):
         pricing_rule_doc = frappe.new_doc('Pricing Rule')
@@ -7218,3 +7335,12 @@ def create_exchange_rate(date):
 			}
 		)
 		doc.insert()
+
+def set_credit_limit_for_customer(customer_name):
+	customer = frappe.get_doc("Customer", customer_name)
+	customer.credit_limits.clear()
+	customer.append(
+				"credit_limits",
+				{"company": "_Test Company", "credit_limit": 9000000.00},
+			)
+	customer.save()

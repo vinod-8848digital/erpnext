@@ -5,6 +5,8 @@ import frappe
 
 class TestSmsCenter(unittest.TestCase):
     def setUp(self):
+        from erpnext.buying.doctype.supplier.test_supplier import create_supplier
+        
         if not frappe.db.exists("Customer", "_Test Customer"):
             frappe.get_doc({
                 "doctype": "Customer",
@@ -23,7 +25,19 @@ class TestSmsCenter(unittest.TestCase):
                 }]
             }).insert()
             
-    def test_create_receiver_list_coverage_TC_S_187(self):
+        create_supplier(supplier_name="_Test Supplier")
+        
+        if not frappe.db.exists("Sales Partner", "_Test Coupon Partner"):
+            frappe.get_doc(
+                {
+                    "doctype": "Sales Partner",
+                    "partner_name": "_Test Coupon Partner",
+                    "commission_rate": 2,
+                    "referral_code": "COPART",
+                }
+            ).insert()
+            
+    def test_create_receiver_list_coverage_TC_S_188(self):
         send_to_options = [
             "All Customer Contact",
             "All Supplier Contact",
@@ -36,13 +50,15 @@ class TestSmsCenter(unittest.TestCase):
             doc = frappe.get_doc({
                 "doctype": "SMS Center",
                 "send_to": option,
-                "customer": "_Test Customer"
+                "customer": "_Test Customer",
+                "supplier": "_Test Supplier",
+                "sales_partner": "_Test Coupon Partner"
             })
             doc.create_receiver_list()
             
             self.assertEqual(doc.send_to, option)
             
-    def test_get_receiver_nos_coverage_TC_188(self):
+    def test_get_receiver_nos_coverage_TC_189(self):
         doc = frappe.get_doc({
                 "doctype": "SMS Center",
                 "receiver_list": "John Doe - 9876543210\nJane Smith - 9123456780"
@@ -61,4 +77,16 @@ class TestSmsCenter(unittest.TestCase):
         doc.receiver_list = ""
         result = doc.get_receiver_nos()
         self.assertEqual(result, [])
+        
+    def test_send_sms_coverage_TC_S_194(self):
+        doc = frappe.get_doc({
+            "doctype": "SMS Center",
+            "receiver_list": "John Doe - 9876543210\nJane Smith - 9123456780"
+        })
+        doc.send_sms()
+        self.assertEqual(doc.message, None)
+        
+        doc.message = "Test Send SMS"
+        doc.send_sms()
+        self.assertEqual(doc.message, "Test Send SMS")
             

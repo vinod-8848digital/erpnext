@@ -1199,7 +1199,6 @@ def get_events(start, end, filters=None):
 @frappe.whitelist()
 def make_purchase_order_for_default_supplier(source_name, selected_items=None, target_doc=None):
 	"""Creates Purchase Order for each Supplier. Returns a list of doc objects."""
-
 	from erpnext.setup.utils import get_exchange_rate
 
 	if not selected_items:
@@ -1473,9 +1472,10 @@ def set_delivery_date(items, sales_order):
 	for date in delivery_dates:
 		delivery_by_item[date.item_code] = date.delivery_date
 
-	for item in items:
-		if item.product_bundle:
-			item.schedule_date = delivery_by_item[item.product_bundle]
+	if items:
+		for item in items:
+			if item.product_bundle:
+				item.schedule_date = delivery_by_item[item.product_bundle]
 
 
 def is_product_bundle(item_code):

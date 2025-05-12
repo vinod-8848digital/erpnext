@@ -67,6 +67,9 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y postgresql-client redis-server
+      - name: Install compatible version of click
+        run: |
+          pip install "click==8.0.4"
       - name: Install Frappe Bench
         run: |
           pip install frappe-bench
@@ -172,4 +175,3 @@ jobs:
         with:
           name: test-logs
           path: /home/runner/frappe-bench/test_output.log
-          
