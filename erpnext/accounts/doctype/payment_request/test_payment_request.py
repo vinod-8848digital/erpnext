@@ -553,10 +553,11 @@ class TestPaymentRequest(FrappeTestCase):
 		self.assertEqual(pr_2.grand_total, pi.outstanding_amount)
 
 	def test_validate_payment_request_amount(self):
-		supplier = create_supplier(supplier_name="_Test Supplier")
+		supplier = create_supplier(supplier_name="_Test Supplier", default_currency="INR")
 		item = make_item("_Test Item").name
 		pi = frappe.new_doc("Purchase Invoice")
 		pi.supplier = supplier.name
+		pi.currency = "INR"
 		pi.append("items", {
 			"item_code": item,
 			"qty": 2,
