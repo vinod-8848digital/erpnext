@@ -13,6 +13,8 @@ from erpnext.buying.doctype.purchase_order.test_purchase_order import create_pur
 from erpnext.selling.doctype.sales_order.test_sales_order import make_sales_order
 from erpnext.setup.utils import get_exchange_rate
 from erpnext.accounts.doctype.payment_entry.payment_entry import get_payment_entry
+from erpnext.buying.doctype.supplier.test_supplier import create_supplier
+from erpnext.stock.doctype.item.test_item import make_item
 
 test_dependencies = ["Currency Exchange", "Journal Entry", "Contact", "Address"]
 payment_gateway = {"doctype": "Payment Gateway", "gateway": "_Test Gateway"}
@@ -549,6 +551,32 @@ class TestPaymentRequest(FrappeTestCase):
 		pr_2 = make_payment_request(dt="Purchase Invoice", dn=pi.name, mute_email=1)
 		pi.load_from_db()
 		self.assertEqual(pr_2.grand_total, pi.outstanding_amount)
+
+	def test_validate_payment_request_amount(self):
+		supplier = create_supplier(supplier_name="_Test Supplier")
+		item = make_item("_Test Item").name
+		pi = frappe.new_doc("Purchase Invoice")
+		pi.supplier = supplier.name
+		pi.append("items", {
+			"item_code": item,
+			"qty": 2,
+			"rate": 50
+		})
+		pi.save()
+		pi.submit()
+		pr_1 = make_payment_request(
+			dt="Purchase Invoice", dn=pi.name, mute_email=1, submit_doc=0, return_doc=1
+		)
+		pr_1.grand_total = 0
+		pr_1.save()
+
+	def test_validate_reference_document(self):
+		pr = frappe.new_doc("Payment Request")
+		pr.payment_request_type = "Outward"
+		pr.reference_doctype = ""
+		pr.reference_name = ""
+		pr.grand_total = 500
+		pr.save()
 
 	def test_consider_journal_entry_and_return_invoice(self):
 		from erpnext.accounts.doctype.journal_entry.test_journal_entry import make_journal_entry
