@@ -587,7 +587,7 @@ class TestPaymentRequest(FrappeTestCase):
 			dt="Purchase Invoice", dn=pi.name, mute_email=1, submit_doc=0, return_doc=1
 		)
 		pr.grand_total = 0
-		pr.save()
+		self.assertRaises(frappe.ValidationError, pr.save)
 
 	def test_validate_reference_document(self):
 		pr = frappe.new_doc("Payment Request")
@@ -597,7 +597,7 @@ class TestPaymentRequest(FrappeTestCase):
 		pr.grand_total = 500
 		self.assertEqual(pr.reference_doctype, "")
 		self.assertEqual(pr.reference_name, "")
-		pr.save()
+		self.assertRaises(frappe.ValidationError, pr.save)
 
 	def test_validate_payment_entry_already_created(self):
 		create_company()
@@ -657,10 +657,10 @@ class TestPaymentRequest(FrappeTestCase):
 		)
 		self.assertEqual(pe.paid_amount, 100)
 		self.assertEqual(pe.references[0].reference_name, pi.name)
-		pr = make_payment_request(
+		pr_1 = make_payment_request(
 			dt="Purchase Invoice", dn=pi.name, mute_email=1, submit_doc=0, return_doc=1
 		)
-		pr.save()
+		self.assertRaises(frappe.ValidationError, pr_1.save)
 
 	def test_validate_exisiting_payment_request_amount(self):
 		create_company()
@@ -720,11 +720,11 @@ class TestPaymentRequest(FrappeTestCase):
 		)
 		self.assertEqual(pe.paid_amount, 100)
 		self.assertEqual(pe.references[0].reference_name, pi.name)
-		pr = make_payment_request(
+		pr_1 = make_payment_request(
 			dt="Purchase Invoice", dn=pi.name, mute_email=1, submit_doc=0, return_doc=1
 		)
-		pr.grand_total = 200
-		pr.save()
+		pr_1.grand_total = 200
+		self.assertRaises(frappe.ValidationError, pr_1.save)
 
 
 	def test_consider_journal_entry_and_return_invoice(self):
