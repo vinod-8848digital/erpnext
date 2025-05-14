@@ -5221,20 +5221,24 @@ class TestPurchaseReceipt(FrappeTestCase):
 	def test_validate_items_quality_inspection_02(self):
 		from frappe.exceptions import ValidationError
 		from erpnext.stock.doctype.purchase_receipt.test_purchase_receipt import make_purchase_receipt
-
-		# Ensure Supplier exists
-		if not frappe.db.exists("Supplier", "Test Supplier"):
-			frappe.get_doc({
-				"doctype": "Supplier",
-				"supplier_name": "Test Supplier",
-				"supplier_type": "Company"
-			}).insert()
+		company = setup_test_company_defaults()
+		supplier = create_supplier(
+			supplier_name="Test Supplier 1",
+			supplier_group="All Supplier Groups",
+			supplier_type="Company",
+			default_currency="INR",
+		)
+		warehouse = frappe.get_all("Warehouse", filters={"company": company.name}, limit=1)[0].name
+		item_code = make_item("_Test Item225", {'item_name':"_Test Item225", "valuation_rate":500, "is_stock_item":1}).name
 
 		# Create PR using helper (do not submit yet)
 		pr = make_purchase_receipt(
-			supplier="Test Supplier",
+			supplier=supplier.name,
+			item_code = item_code,
 			qty=1,
 			rate=100,
+			uom="Nos",stock_uom = 'Nos',
+			warehouse=warehouse,
 			do_not_submit=True,
 			do_not_save=False,
 			do_not_load=False
@@ -5282,23 +5286,23 @@ class TestPurchaseReceipt(FrappeTestCase):
 	def test_get_po_qty_and_warehouse_03(self):
 		from erpnext.buying.doctype.purchase_order.test_purchase_order import create_purchase_order
 		from erpnext.stock.doctype.purchase_receipt.test_purchase_receipt import make_purchase_receipt
-
-		# Ensure supplier exists
-		supplier_name = "Test Supplier Clean"
-		if not frappe.db.exists("Supplier", supplier_name):
-			frappe.get_doc({
-				"doctype": "Supplier",
-				"supplier_name": supplier_name,
-				"supplier_type": "Company"
-			}).insert()
-
+		company = setup_test_company_defaults()
+		supplier = create_supplier(
+			supplier_name="Test Supplier 1",
+			supplier_group="All Supplier Groups",
+			supplier_type="Company",
+			default_currency="INR",
+		)
+		item_code = make_item("_Test Item225", {'item_name':"_Test Item225", "valuation_rate":500, "is_stock_item":1}).name
+		warehouse = frappe.get_all("Warehouse", filters={"company": company.name}, limit=1)[0].name
 		# Create PO
 		po = create_purchase_order(
-			supplier=supplier_name,
-			company="_Test Company",
+			supplier=supplier.name,
+			company=company.name,
+			item_code= item_code,
 			qty=10,
 			rate=100,
-			warehouse="_Test Warehouse - _TC"
+			warehouse=warehouse
 		)
 
 		po_item = po.items[0]
@@ -5308,10 +5312,14 @@ class TestPurchaseReceipt(FrappeTestCase):
 
 		# Create a new PR
 		pr = make_purchase_receipt(
-			supplier=supplier_name,
+			supplier=supplier,
+			item_code= item_code,
 			qty=1,
 			rate=100,
-			company="_Test Company",
+			company=company.name,
+			warehouse=warehouse,
+			uom="Nos",
+			stock_uom = 'Nos',
 			do_not_submit=True,
 			do_not_save=False,
 			do_not_load=False
@@ -5334,18 +5342,34 @@ class TestPurchaseReceipt(FrappeTestCase):
 		company = setup_test_company_defaults()
 
 		self.gl_entries = []
-		item = frappe.get_doc("Item", "_Test Item")
+		# Item Code create
+		item_code = make_item("_Test Item225", {'item_name':"_Test Item225", "valuation_rate":500, "is_stock_item":1}).name
+		# Supplier Create
+		supplier = create_supplier(
+			supplier_name="Test Supplier 1",
+			supplier_group="All Supplier Groups",
+			supplier_type="Company",
+			default_currency="INR",
+		)
+		
+		# Warehouse Create
 		warehouse = frappe.get_all("Warehouse", filters={"company": "_Test Company"}, limit=1)[0].name
+
+		# Setup Fiscal Year GL Account & Cost center
+		fiscal_year,expense_account,cost_center = setup_fy_gls_cost_center()
 
 		# === CASE 1: Full Stock Item ===
 		pi = make_purchase_invoice(
-				item=item.item_code,
+				item=item_code,
 				qty=5,
 				rate=100,
 				warehouse=warehouse,
 				company=company.name,
-				supplier="_Test Supplier",
-				do_not_submit=True
+				supplier=supplier.name,
+				do_not_submit=True,
+				uom="Nos",
+				expense_account=expense_account,
+				cost_center=cost_center,
 			)
 		pi.posting_date=today()
 		pi.due_date = today()
@@ -5355,9 +5379,11 @@ class TestPurchaseReceipt(FrappeTestCase):
 		pi.submit()
 
 		pr1 = make_purchase_receipt(
-			item_code=item.name,
+			supplier=supplier.name,
+			item_code=item_code,
 			qty=5,
 			rate=100,
+			stock_uom = 'Nos',
 			warehouse=warehouse,
 			do_not_submit=True
 		)
@@ -5386,13 +5412,15 @@ class TestPurchaseReceipt(FrappeTestCase):
 			}).insert()
 
 		pr2 = make_purchase_receipt(
+			supplier=supplier.name,
 			item_code="_Test Non Stock Item",
 			qty=1,
 			rate=100,
+			stock_uom = 'Nos',
 			warehouse=warehouse,
 			do_not_submit=True
 		)
-		pr2.items[0].provisional_expense_account = "Cost of Goods Sold - _TC"
+		pr2.items[0].provisional_expense_account = expense_account
 		pr2.save()
 		pr2.submit()
 
@@ -5407,9 +5435,11 @@ class TestPurchaseReceipt(FrappeTestCase):
 		}).insert()
 
 		pr3 = make_purchase_receipt(
-			item_code=item.name,
+			supplier=supplier.name,
+			item_code=item_code,
 			qty=2,
 			rate=50,
+			stock_uom = 'Nos',
 			warehouse=new_warehouse.name,
 			do_not_submit=True
 		)
@@ -5433,10 +5463,24 @@ class TestPurchaseReceipt(FrappeTestCase):
 		from erpnext.stock.doctype.purchase_receipt.test_purchase_receipt import make_purchase_receipt
 		from erpnext.accounts.doctype.purchase_invoice.test_purchase_invoice import make_purchase_invoice
 
+		#--- Setup ---
 		frappe.set_user("Administrator")
+		company = setup_test_company_defaults()
+		supplier = create_supplier(
+			supplier_name="Test Supplier 1",
+			supplier_group="All Supplier Groups",
+			supplier_type="Company",
+			default_currency="INR",
+		)
+		# Item Code create
+		item_code = make_item("_Test Item225", {'item_name':"_Test Item225", "valuation_rate":500, "is_stock_item":1}).name
+		warehouse = frappe.get_all("Warehouse", filters={"company": company.name}, limit=1)[0].name
+
+		# Setup Fiscal Year GL Account & Cost center
+		fiscal_year,expense_account,cost_center = setup_fy_gls_cost_center()
 
 		# Create Purchase Receipt
-		pr = make_purchase_receipt(qty=5, rate=100)
+		pr = make_purchase_receipt(item_code = item_code, qty=5, rate=100,uom="Nos",stock_uom = 'Nos',company=company.name,warehouse=warehouse,supplier=supplier.name)
 		pr_doc = frappe.get_doc("Purchase Receipt", pr.name)
 		pr_item = pr_doc.items[0]
 
@@ -5450,7 +5494,10 @@ class TestPurchaseReceipt(FrappeTestCase):
 		company=pr_doc.company,
 		supplier=pr_doc.supplier,
 		currency="INR",
-		conversion_rate=1
+		conversion_rate=1,
+		uom="Nos",
+		expense_account=expense_account,
+		cost_center=cost_center,
 		)
 		# Link invoice item to Purchase Receipt
 		pi.items[0].purchase_receipt = pr_doc.name
@@ -5470,7 +5517,16 @@ class TestPurchaseReceipt(FrappeTestCase):
 		from frappe.utils import flt
 
 		frappe.set_user("Administrator")
-		pr = make_purchase_receipt(qty=5, rate=120,do_not_submit=True)
+		company = setup_test_company_defaults()
+		supplier = create_supplier(
+			supplier_name="Test Supplier 1",
+			supplier_group="All Supplier Groups",
+			supplier_type="Company",
+			default_currency="INR",
+		)
+		item_code = make_item("_Test Item225", {'item_name':"_Test Item225", "valuation_rate":500, "is_stock_item":1}).name
+		warehouse = frappe.get_all("Warehouse", filters={"company": company.name}, limit=1)[0].name
+		pr = make_purchase_receipt(item_code = item_code, qty=5, rate=120,uom="Nos",stock_uom = 'Nos',company=company.name,warehouse=warehouse,supplier=supplier.name,do_not_submit=True)
 		pr.reload()
 		original_valuation_rate = pr.items[0].valuation_rate
 		pr.items[0].rate = 120
@@ -5557,6 +5613,68 @@ def setup_test_company_defaults(company_name="_Test Company", abbreviation="_TC"
 	set_default("company", company_name, "__default")
 
 	return company
+
+def setup_fy_gls_cost_center():
+	company = setup_test_company_defaults()
+	company_abbr ="_TC"
+	# Setup GL Account COGS & Cost Center
+	if not frappe.db.exists("Account", f"T Cost of Goods Sold - {company_abbr}"):
+		frappe.get_doc({
+			"doctype": "Account",
+			"account_name": "T Cost of Goods Sold",
+			"parent_account": f"Expenses - {company_abbr}",
+			"company": company,
+			"is_group": 0
+		}).insert()
+	if not frappe.db.exists("Cost Center", f"T Main - {company_abbr}"):
+		frappe.get_doc({
+			"doctype": "Cost Center",
+			"cost_center_name": "T Main",
+			"parent_cost_center": f"{company.name} - {company_abbr}",
+			"company": company,
+			"is_group": 1
+		}).insert()
+	if not frappe.db.exists("Cost Center", f"_Test Cost Center - {company_abbr}"):
+		frappe.get_doc({
+			"doctype": "Cost Center",
+			"cost_center_name": "_Test Cost Center",
+			"parent_cost_center": f"T Main - {company_abbr}",
+			"company": company.name,
+			"is_group": 0
+		}).insert()
+	
+	# Setup Fiscal Year
+	fiscal_year = frappe.get_all("Fiscal Year", filters={
+			"year_start_date": ["<=", today()],
+			"year_end_date": [">=", today()],
+			"disabled": 0
+		}, fields=["name"], limit=1)
+
+	if fiscal_year:
+		fy_doc = frappe.get_doc("Fiscal Year", fiscal_year[0]["name"])
+		linked_companies = [d.company for d in fy_doc.companies]
+
+		if company.name not in linked_companies:
+			fy_doc.append("companies", {
+				"company": company.name
+			})
+			fy_doc.save()
+	else:
+		# If not exists create new FY
+		fy_doc = frappe.get_doc({
+			"doctype": "Fiscal Year",
+			"year": f"FY {today()[:4]}",
+			"year_start_date": today(),
+			"year_end_date": add_days(today(), 364),
+			"disabled": 0
+		})
+		fy_doc.append("fiscal_year_company", {
+			"company": company.name
+		})
+		fy_doc.insert()
+	expense_account = f"T Cost of Goods Sold - {company_abbr}"
+	cost_center = f"_Test Cost Center - {company_abbr}"
+	return fiscal_year,expense_account,cost_center
 
 def prepare_data_for_internal_transfer():
 	from erpnext.accounts.doctype.sales_invoice.test_sales_invoice import create_internal_supplier
