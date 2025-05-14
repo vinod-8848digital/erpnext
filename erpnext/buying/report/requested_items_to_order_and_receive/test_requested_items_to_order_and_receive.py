@@ -46,6 +46,11 @@ class TestRequestedItemsToOrderAndReceive(FrappeTestCase):
 		self.assertEqual(data[1].ordered_qty, 57.0)
 
 	def test_requested_items_TC_B_214(self):
+		self.filters.update(
+			{
+				"group_by_mr": 1
+			}
+		)
 		data = execute(self.filters)
 
 		self.assertEqual(len(data[1]), 2)
