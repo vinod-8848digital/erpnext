@@ -124,13 +124,17 @@ class TestSerialandBatchBundle(FrappeTestCase):
 		else:
 			item = frappe.get_doc("Item", "Test Item")
 
-		serial_no = frappe.get_doc({
-			"doctype": "Serial No",
-			"serial_no": "MDC001",
-			"item_code": item.name,
-			"company": company,
-			"item_group": "Raw Material"
-		}).insert(ignore_permissions=True)
+		if not frappe.db.exists("Serial No", "MDC001"):
+			serial_no = frappe.get_doc({
+				"doctype": "Serial No",
+				"serial_no": "MDC001",
+				"item_code": item.name,
+				"company": company,
+				"item_group": "Raw Material"
+			}).insert(ignore_permissions=True)
+		else:
+			serial_no = frappe.get_doc("Serial No", "MDC001")
+
 		assert serial_no.name == "MDC001"
 
 		# Create Batch for the item
@@ -279,13 +283,19 @@ class TestSerialandBatchBundle(FrappeTestCase):
 		assert item.has_batch_no == 1
 
 		# Create serial number
-		serial_no = frappe.get_doc({
-			"doctype": "Serial No",
-			"serial_no": "MDC001",
-			"item_code": item.name,
-			"company": company,
-			"item_group": "Raw Material"
-		}).insert(ignore_permissions=True)
+		if not frappe.db.exists("Serial No", "MDC001"):
+			serial_no = frappe.get_doc({
+				"doctype": "Serial No",
+				"serial_no": "MDC001",
+				"item_code": item.name,
+				"company": company,
+				"item_group": "Raw Material"
+			}).insert(ignore_permissions=True)
+		else:
+			serial_no = frappe.get_doc("Serial No", "MDC001")
+
+		assert serial_no.name == "MDC001"
+
 		assert serial_no.serial_no == "MDC001"
 		assert serial_no.item_code == item.name
 
@@ -460,13 +470,16 @@ class TestSerialandBatchBundle(FrappeTestCase):
 		else:
 			item = frappe.get_doc("Item", "Test Item")
 
-		serial_no = frappe.get_doc({
-			"doctype": "Serial No",
-			"serial_no": "MDC001",
-			"item_code": item.name,
-			"company": company,
-			"item_group": "Raw Material"
-		}).insert(ignore_permissions=True)
+		if not frappe.db.exists("Serial No", "MDC001"):
+			serial_no = frappe.get_doc({
+				"doctype": "Serial No",
+				"serial_no": "MDC001",
+				"item_code": item.name,
+				"company": company,
+				"item_group": "Raw Material"
+			}).insert(ignore_permissions=True)
+		else:
+			serial_no = frappe.get_doc("Serial No", "MDC001")
 
 		batch = frappe.get_doc({
 			"doctype": "Batch",
@@ -698,13 +711,16 @@ class TestSerialandBatchBundle(FrappeTestCase):
 			item = frappe.get_doc("Item", "Test Item")
 
 		# Create Serial No
-		serial_no = frappe.get_doc({
-			"doctype": "Serial No",
-			"serial_no": "MDC001",
-			"item_code": item.name,
-			"company": company,
-			"item_group": "Raw Material"
-		}).insert(ignore_permissions=True)
+		if not frappe.db.exists("Serial No", "MDC001"):
+			serial_no = frappe.get_doc({
+				"doctype": "Serial No",
+				"serial_no": "MDC001",
+				"item_code": item.name,
+				"company": company,
+				"item_group": "Raw Material"
+			}).insert(ignore_permissions=True)
+		else:
+			serial_no = frappe.get_doc("Serial No", "MDC001")
 
 		# Create Batch
 		batch = frappe.get_doc({
@@ -832,13 +848,16 @@ class TestSerialandBatchBundle(FrappeTestCase):
 			item = frappe.get_doc("Item", "Test Item")
 
 		# Create Serial No for the item
-		serial_no = frappe.get_doc({
-			"doctype": "Serial No",
-			"serial_no": "MDC001",
-			"item_code": item.name,
-			"company": company,
-			"item_group": "Raw Material"
-		}).insert(ignore_permissions=True)
+		if not frappe.db.exists("Serial No", "MDC001"):
+			serial_no = frappe.get_doc({
+				"doctype": "Serial No",
+				"serial_no": "MDC001",
+				"item_code": item.name,
+				"company": company,
+				"item_group": "Raw Material"
+			}).insert(ignore_permissions=True)
+		else:
+			serial_no = frappe.get_doc("Serial No", "MDC001")
 
 		# Create Batch for the item
 		batch = frappe.get_doc({
@@ -975,13 +994,16 @@ class TestSerialandBatchBundle(FrappeTestCase):
 		assert frappe.db.exists("Item", "Test Item")
 
 		# Create Serial No for the item
-		serial_no = frappe.get_doc({
-			"doctype": "Serial No",
-			"serial_no": "MDC001",
-			"item_code": item.name,
-			"company": company,
-			"item_group": "Raw Material"
-		}).insert(ignore_permissions=True)
+		if not frappe.db.exists("Serial No", "MDC001"):
+			serial_no = frappe.get_doc({
+				"doctype": "Serial No",
+				"serial_no": "MDC001",
+				"item_code": item.name,
+				"company": company,
+				"item_group": "Raw Material"
+			}).insert(ignore_permissions=True)
+		else:
+			serial_no = frappe.get_doc("Serial No", "MDC001")
 		assert frappe.db.exists("Serial No", "MDC001")
 
 		# Create Batch for the item
