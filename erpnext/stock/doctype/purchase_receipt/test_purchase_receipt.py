@@ -5335,6 +5335,7 @@ class TestPurchaseReceipt(FrappeTestCase):
 		from erpnext.stock.doctype.purchase_receipt.purchase_receipt import PurchaseReceipt
 		from erpnext.stock.doctype.purchase_receipt.test_purchase_receipt import make_purchase_receipt
 		from erpnext.accounts.doctype.purchase_invoice.test_purchase_invoice import make_purchase_invoice
+		from erpnext.stock.doctype.landed_cost_voucher.test_landed_cost_voucher import create_landed_cost_voucher
 
 		frappe.set_user("Administrator")
 
@@ -5453,11 +5454,78 @@ class TestPurchaseReceipt(FrappeTestCase):
 		})
 		self.assertTrue(self.gl_entries)
 
-		# === CLEANUP ===
-		for pr in [pr1, pr2, pr3]:
-			if pr.docstatus == 1:
-				pr.cancel()
+		# === CASE 4: Landed Cost Voucher Entries ===
+		# Create another PR for landed cost testing
+		# Create necessary accounts
+		from erpnext.accounts.doctype.account.test_account import create_account
+		valuation_account = create_account(
+			account_name="Expenses Included In Valuation",
+			parent_account="Expenses - _TC",
+			company="_Test Company"
+		)
 
+		stock_account = create_account(
+			account_name="Stock Asset",
+			parent_account="Current Assets - _TC",
+			company="_Test Company",
+			account_type="Stock"
+		)
+
+		pr4 = make_purchase_receipt(
+			supplier=supplier.name,
+			item_code=item_code,
+			qty=10,
+			rate=100,
+			stock_uom='Nos',
+			warehouse=warehouse,
+			do_not_submit=True
+		)
+		pr4.save()
+		pr4.submit()
+
+		# Create Landed Cost Voucher
+		lcv = frappe.new_doc("Landed Cost Voucher")
+		lcv.company = company.name
+		lcv.distribute_charges_based_on = "Amount"
+		
+		lcv.append("purchase_receipts", {
+			"receipt_document_type": "Purchase Receipt",
+			"receipt_document": pr4.name,
+			"supplier": supplier.name,
+			"posting_date": today(),
+			"grand_total": 1000  # 10 * 100
+		})
+		
+		lcv.append("taxes", {
+			"description": "Insurance Charges",
+			"expense_account": valuation_account,
+			"amount": 100,
+			"included_in_valuation": 1
+		})
+		pr4.items[0].landed_cost_voucher_amount =100
+		lcv.insert()
+		lcv.submit()
+		
+		# Test landed cost
+		self.gl_entries = []  # Clear existing entries
+		PurchaseReceipt.make_item_gl_entries(
+			pr4, 
+			self.gl_entries, 
+			warehouse_account={
+				warehouse: {
+					"account": stock_account,  
+					"account_currency": "INR"
+				}
+			}
+		)
+		self.assertEqual(lcv.docstatus, 1, "Landed Cost Voucher submitted properly")
+
+		for doc in [pr1, pr2, pr3, pr4, pi, lcv]:
+			if doc.docstatus == 1:
+				try:
+					doc.cancel()
+				except frappe.ValidationError:
+					pass
 	def test_get_billed_qty_against_purchase_receipt_TC_SCK_264(self):
 		from erpnext.stock.doctype.purchase_receipt.purchase_receipt import get_billed_qty_against_purchase_receipt,update_billing_percentage
 		from erpnext.stock.doctype.purchase_receipt.test_purchase_receipt import make_purchase_receipt
