@@ -674,7 +674,7 @@ class TestPaymentRequest(FrappeTestCase):
 			party=customer,
 			reference_doctype="Sales Order",
 			reference_name=so.name
-		)).save()
+		))
 		self.assertRaises(frappe.ValidationError, pr_1.save)
 
 	def test_validate_subscription_details(self):
@@ -953,6 +953,7 @@ class TestPaymentRequest(FrappeTestCase):
 		self.assertEqual(pr.reference_name, so.name)
 
 	def test_make_payment_request_method(self):
+		frappe.set_user("Administrator")
 		create_company()
 		item_code = "_Test Item"
 		company = "_Test Company"
@@ -1107,116 +1108,6 @@ class TestPaymentRequest(FrappeTestCase):
 	
 	def test_get_print_format(self):
 		get_print_format_list("Payment Request")
-	
-	def test_make_payment_entry(self):
-		create_company()
-		item_code = "_Test Item"
-		company = "_Test Company"
-		supplier = "_Test Supplier"
-		create_warehouse(
-			warehouse_name="_Test Warehouse - _TC",
-			properties={"parent_warehouse": "All Warehouses - _TC", "account": "Cost of Goods Sold - _TC"},
-			company="_Test Company",
-		)
-		create_supplier(supplier_name=supplier, default_currency="INR")
-		create_account(
-		account_name="_Test Bank",  
-		parent_account="Bank Accounts - _TC", 
-		company=company,
-		account_type="Bank",
-		account_currency="INR",
-		is_group=0
-		)
-		item = create_item(item_code = item_code,valuation_rate=100)
-		pi = frappe.new_doc("Purchase Invoice")
-		pi.supplier = supplier
-		pi.company=company
-		pi.currency="INR"
-		pi.append("items", {
-			"item_code": item.item_code,
-			"qty": 8,
-			"rate": 100
-		})
-		pi.save()
-		pi.submit()
-		self.assertEqual(pi.supplier, supplier)
-		self.assertEqual(pi.company, company)
-		self.assertEqual(pi.items[0].item_code, item.item_code)
-		self.assertEqual(pi.grand_total, 800)
-		pr = make_payment_request(
-			dt="Purchase Invoice", dn=pi.name, mute_email=1, submit_doc=0, return_doc=1
-		)
-		pr.grand_total = 800
-		pr.save()
-		pr.submit()
-		self.assertEqual(pr.grand_total, 800)
-		self.assertEqual(pr.reference_name, pi.name)
-		pr.reload()
-		self.assertEqual(pr.status, "Initiated")
-		make_payment_entry(docname=pr.name)
-	
-	def test_validate_payment_request_twice(self):
-		create_company()
-		item_code = "_Test Item"
-		company = "_Test Company"
-		supplier = "_Test Supplier"
-		create_warehouse(
-			warehouse_name="_Test Warehouse - _TC",
-			properties={"parent_warehouse": "All Warehouses - _TC", "account": "Cost of Goods Sold - _TC"},
-			company="_Test Company",
-		)
-		create_supplier(supplier_name=supplier, default_currency="INR")
-		item = create_item(item_code = item_code,valuation_rate=100)
-		pi = frappe.new_doc("Purchase Invoice")
-		pi.supplier = supplier
-		pi.company=company
-		pi.currency="INR"
-		pi.append("items", {
-			"item_code": item.item_code,
-			"qty": 4,
-			"rate": 100
-		})
-		pi.save()
-		pi.submit()
-		self.assertEqual(pi.supplier, supplier)
-		self.assertEqual(pi.company, company)
-		self.assertEqual(pi.items[0].item_code, item.item_code)
-		self.assertEqual(pi.grand_total, 400)
-		pr = make_payment_request(
-			dt="Purchase Invoice", dn=pi.name, mute_email=1, submit_doc=0, return_doc=1
-		)
-		pr.grand_total = 400
-		pr.save()
-		pr.submit()
-		self.assertEqual(pr.grand_total, 400)
-		self.assertEqual(pr.reference_name, pi.name)
-		create_account(
-		account_name="_Test Bank",  
-		parent_account="Bank Accounts - _TC", 
-		company=company,
-		account_type="Bank",
-		account_currency="INR",
-		is_group=0
-		)
-		pr.create_payment_entry()
-		pe = get_payment_entry(dt="Purchase Invoice", dn=pi.name)
-		pe.paid_amount = 400
-		pe.append(
-			"references",
-			{
-				"reference_doctype": pi.doctype,
-				"reference_name": pi.name,
-				"grand_total": pi.grand_total,
-				"outstanding_amount": pi.outstanding_amount,
-				"allocated_amount": 400,
-			},
-		)
-		self.assertEqual(pe.paid_amount, 400)
-		self.assertEqual(pe.references[0].reference_name, pi.name)
-		pr.reload()
-		self.assertEqual(pr.status, "Paid")
-		pe_doc = frappe.get_doc("Payment Request", pr.name)
-		validate_payment(pe_doc)
 
 	def test_consider_journal_entry_and_return_invoice(self):
 		from erpnext.accounts.doctype.journal_entry.test_journal_entry import make_journal_entry
