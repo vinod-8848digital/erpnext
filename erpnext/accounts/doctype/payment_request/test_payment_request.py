@@ -713,6 +713,7 @@ class TestPaymentRequest(FrappeTestCase):
 		sp_name = "_TestGooglePay"
 		sp = create_subscription_plan(
 					sp_name,
+					plan_name="_TestSp",
 					subscription_based_on="Fixed Rate",
 					cost=100,
 					item_code=item.item_code,
@@ -1216,7 +1217,15 @@ class TestPaymentRequest(FrappeTestCase):
 		self.assertEqual(pi.company, company)
 		self.assertEqual(pi.items[0].item_code, item.item_code)
 		self.assertEqual(pi.grand_total, 800)
-		bank_account = create_bank_account("_Test Bank Account 1", is_company_account=True)
+		create_account(
+		account_name="_Test Account 12",  
+		parent_account="Bank Accounts - _TC", 
+		company="_Test Company",
+		account_type="Bank",
+		account_currency="INR",
+		is_group=0
+		)
+		bank_account = create_bank_account("_Test Bank Account 1", company_account="_Test Account 12 - _TC", is_company_account=True)
 
 		pr = make_payment_request(
 			dt="Purchase Invoice", dn=pi.name, mute_email=1, submit_doc=0, return_doc=1
@@ -1261,8 +1270,15 @@ class TestPaymentRequest(FrappeTestCase):
 		self.assertEqual(pi.company, company)
 		self.assertEqual(pi.items[0].item_code, item.item_code)
 		self.assertEqual(pi.grand_total, 800)
-		bank_account = create_bank_account("_Test Bank Account", is_company_account=True)
-
+		create_account(
+		account_name="_Test Account 123",  
+		parent_account="Bank Accounts - _TC", 
+		company="_Test Company",
+		account_type="Bank",
+		account_currency="INR",
+		is_group=0
+		)
+		bank_account = create_bank_account("_Test Bank Account",company_account="_Test Account 123 - _TC", is_company_account=True)
 		pr = make_payment_request(
 			dt="Purchase Invoice", dn=pi.name, mute_email=1, submit_doc=0, return_doc=1
 		)
@@ -1309,6 +1325,7 @@ class TestPaymentRequest(FrappeTestCase):
 		sp_name = "_Test Plan Name"
 		sp = create_subscription_plan(
 					sp_name,
+					plan_name="_TestPhonePay",
 					subscription_based_on="Fixed Rate",
 					cost=100,
 					item_code=item.item_code,
@@ -1522,6 +1539,7 @@ class TestPaymentRequest(FrappeTestCase):
 		sp_name = "_Test Plan Name"
 		sp = create_subscription_plan(
 					sp_name,
+					plan_name="_TestGoogle",
 					subscription_based_on="Fixed Rate",
 					cost=100,
 					item_code=item.item_code,
@@ -1635,7 +1653,7 @@ def create_subscription_plan(sp_name, **kwargs):
 	if not frappe.db.exists("Subscription Plan", sp_name):
 		sp = frappe.get_doc(dict(
 			doctype= "Subscription Plan",
-			plan_name=kwargs.get("plan_name") or "_TestGooglePay",
+			plan_name=kwargs.get("plan_name"),
 			currency=kwargs.get("currency") or "INR",
 			item=kwargs.get("item_code"),
 			price_determination=kwargs.get("subscription_based_on"),
@@ -1718,17 +1736,9 @@ def create_price_list():
 	
 	return item_price
 
-def create_bank_account(account_name, is_company_account=False):
+def create_bank_account(account_name, company_account, is_company_account=False):
 	create_company()
 	bank_account = frappe._dict()
-	create_account(
-		account_name="_Test Account",  
-		parent_account="Bank Accounts - _TC", 
-		company="_Test Company",
-		account_type="Bank",
-		account_currency="INR",
-		is_group=0
-		)
 	if not frappe.db.exists("Bank", "_Test Bank"):
 		bank = frappe.get_doc(dict(
 			doctype="Bank",
@@ -1745,7 +1755,7 @@ def create_bank_account(account_name, is_company_account=False):
 			is_company_account=is_company_account
 		))
 		if is_company_account == True:
-			bank_account.account = "_Test Account - _TC"
+			bank_account.account = company_account
 		bank_account.insert(ignore_permissions=True)
 	else:
 		bank_account = frappe.get_doc("Bank Account", full_name)
