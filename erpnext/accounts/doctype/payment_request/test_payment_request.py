@@ -28,11 +28,14 @@ from erpnext.accounts.doctype.pos_invoice.test_pos_invoice import create_pos_inv
 from erpnext.accounts.doctype.pos_closing_entry.pos_closing_entry import make_closing_entry_from_opening
 from frappe.core.doctype.user_permission.test_user_permission import create_user
 from erpnext.accounts.doctype.payment_request.payment_request import get_print_format_list
-from erpnext.accounts.doctype.payment_request.payment_request import validate_payment
 from erpnext.accounts.doctype.payment_request.payment_request import get_amount
 from erpnext.accounts.doctype.pos_closing_entry.test_pos_closing_entry import init_user_and_profile	
 from erpnext.accounts.doctype.cost_center.test_cost_center import create_cost_center
 from erpnext.accounts.doctype.payment_request.payment_request import make_payment_entry
+from erpnext.accounts.doctype.payment_request.payment_request import get_subscription_details
+from erpnext.accounts.doctype.subscription.test_subscription import create_subscription
+from erpnext.accounts.doctype.payment_request.payment_request import get_open_payment_requests_query
+from erpnext.accounts.doctype.payment_request.payment_request import make_payment_order
 
 
 test_dependencies = ["Currency Exchange", "Journal Entry", "Contact", "Address"]
@@ -1109,6 +1112,200 @@ class TestPaymentRequest(FrappeTestCase):
 	def test_get_print_format(self):
 		get_print_format_list("Payment Request")
 
+	def test_make_payment_entry(self):
+		create_company()
+		item_code = "_Test Item"
+		company = "_Test Company"
+		supplier = "_Test Supplier"
+		create_warehouse(
+			warehouse_name="_Test Warehouse - _TC",
+			properties={"parent_warehouse": "All Warehouses - _TC", "account": "Cost of Goods Sold - _TC"},
+			company="_Test Company",
+		)
+		create_supplier(supplier_name=supplier, default_currency="INR")
+		item = create_item(item_code = item_code,valuation_rate=100)
+		pi = frappe.new_doc("Purchase Invoice")
+		pi.supplier = supplier
+		pi.company=company
+		pi.currency="INR"
+		pi.append("items", {
+			"item_code": item.item_code,
+			"qty": 8,
+			"rate": 100
+		})
+		pi.save()
+		pi.submit()
+		self.assertEqual(pi.supplier, supplier)
+		self.assertEqual(pi.company, company)
+		self.assertEqual(pi.items[0].item_code, item.item_code)
+		self.assertEqual(pi.grand_total, 800)
+		pr = make_payment_request(
+			dt="Purchase Invoice", dn=pi.name, mute_email=1, submit_doc=0, return_doc=1
+		)
+		pr.grand_total = 800
+		pr.save()
+		pr.submit()
+		self.assertEqual(pr.grand_total, 800)
+		self.assertEqual(pr.reference_name, pi.name)
+		pr.reload()
+		create_account(
+		account_name="_Test Bank",  
+		parent_account="Bank Accounts - _TC", 
+		company=company,
+		account_type="Bank",
+		account_currency="INR",
+		is_group=0
+		)
+		make_payment_entry(docname=pr.name)
+		self.assertEqual(pr.status, "Initiated")
+	
+	def test_make_payment_order(self):
+		create_company()
+		item_code = "_Test Item"
+		company = "_Test Company"
+		supplier = "_Test Supplier"
+		
+		create_warehouse(
+			warehouse_name="_Test Warehouse - _TC",
+			properties={"parent_warehouse": "All Warehouses - _TC", "account": "Cost of Goods Sold - _TC"},
+			company="_Test Company",
+		)
+		create_supplier(supplier_name=supplier, default_currency="INR")
+		item = create_item(item_code = item_code,valuation_rate=100)
+		pi = frappe.new_doc("Purchase Invoice")
+		pi.supplier = supplier
+		pi.company=company
+		pi.currency="INR"
+		pi.append("items", {
+			"item_code": item.item_code,
+			"qty": 8,
+			"rate": 100
+		})
+		pi.save()
+		pi.submit()
+		self.assertEqual(pi.supplier, supplier)
+		self.assertEqual(pi.company, company)
+		self.assertEqual(pi.items[0].item_code, item.item_code)
+		self.assertEqual(pi.grand_total, 800)
+		bank_account = create_bank_account("_Test Bank Account", is_company_account=True)
+
+		pr = make_payment_request(
+			dt="Purchase Invoice", dn=pi.name, mute_email=1, submit_doc=0, return_doc=1
+		)
+		pr.grand_total = 800
+		pr.bank_account =bank_account.name
+		pr.save()
+		pr.submit()
+		self.assertEqual(pr.grand_total, 800)
+		self.assertEqual(pr.reference_name, pi.name)
+		pr.reload()
+		payment_order = make_payment_order(pr.name)	
+		payment_order.company_bank_account= bank_account.name
+		payment_order.save()
+	
+	def test_get_open_payment_request_query(self):
+		create_company()
+		item_code = "_Test Item"
+		company = "_Test Company"
+		supplier = "_Test Supplier"
+		
+		create_warehouse(
+			warehouse_name="_Test Warehouse - _TC",
+			properties={"parent_warehouse": "All Warehouses - _TC", "account": "Cost of Goods Sold - _TC"},
+			company="_Test Company",
+		)
+		create_supplier(supplier_name=supplier, default_currency="INR")
+		item = create_item(item_code = item_code,valuation_rate=100)
+		pi = frappe.new_doc("Purchase Invoice")
+		pi.supplier = supplier
+		pi.company=company
+		pi.currency="INR"
+		pi.append("items", {
+			"item_code": item.item_code,
+			"qty": 8,
+			"rate": 100
+		})
+		pi.save()
+		pi.submit()
+		self.assertEqual(pi.supplier, supplier)
+		self.assertEqual(pi.company, company)
+		self.assertEqual(pi.items[0].item_code, item.item_code)
+		self.assertEqual(pi.grand_total, 800)
+		bank_account = create_bank_account("_Test Bank Account", is_company_account=True)
+
+		pr = make_payment_request(
+			dt="Purchase Invoice", dn=pi.name, mute_email=1, submit_doc=0, return_doc=1
+		)
+		pr.grand_total = 800
+		pr.bank_account =bank_account.name
+		pr.save()
+		pr.submit()
+		self.assertEqual(pr.grand_total, 800)
+		self.assertEqual(pr.reference_name, pi.name)
+		pr.reload()
+		filters = {
+			"reference_doctype": pr.reference_doctype,
+			"reference_name": pr.reference_name,
+			"company": company,
+			"status": ("!=", "Paid"),
+			"outstanding_amount": (">", 0),
+			"docstatus": 1
+		}
+		get_open_payment_requests_query(doctype="Payment Request", txt="", searchfield="name", start=0, page_len=20, filters=filters)
+
+	def test_get_subscription_details(self):
+		create_company()
+		item_code = "_Test Item"
+		company = "_Test Company"
+		customer = create_customer()
+		create_warehouse(
+			warehouse_name="_Test Warehouse - _TC",
+			properties={"parent_warehouse": "All Warehouses - _TC", "account": "Cost of Goods Sold - _TC"},
+			company="_Test Company",
+		)
+		item = create_item(item_code=item_code, valuation_rate=100)
+		sp_name = "_Test Plan Name"
+		sp = create_subscription_plan(
+					sp_name,
+					subscription_based_on="Fixed Rate",
+					cost=100,
+					item_code=item.item_code,
+			)
+		subscription = create_subscription(
+			trial_period_start=today(),
+			trial_period_end = add_days(today(), 3),
+			plans=[
+        		{"plan": sp.name, "qty": 1}
+    			]
+		)
+		si = frappe.get_doc(dict(
+			doctype="Sales Invoice",
+			customer=customer,
+			set_warehouse="_Test Warehouse - _TC",
+			company=company,
+			currency="INR",
+			due_date=add_days(today(), 2),
+			order_type="Shopping Cart",
+			subscription=subscription.name	
+		))
+		si.append("items", {
+			"item_code": item.item_code,
+			"qty": 1,
+			"rate": 200
+		})
+		si.save()
+		si.submit()
+		si.reload()	
+		self.assertEqual(si.customer, customer)
+		self.assertEqual(si.grand_total, 200)
+		subscription_invoice = frappe.new_doc("Subscription Invoice")
+		subscription_invoice.document_type = "Sales Invoice"
+		subscription_invoice.invoice = si.name
+		subscription_invoice.parent = subscription.name 
+		subscription_invoice.parenttype = "Subscription"
+		subscription_invoice.save()
+		get_subscription_details(reference_doctype="Sales Invoice", reference_name=si.name)
+		
 	def test_consider_journal_entry_and_return_invoice(self):
 		from erpnext.accounts.doctype.journal_entry.test_journal_entry import make_journal_entry
  
@@ -1159,6 +1356,7 @@ def test_partial_paid_invoice_with_submitted_payment_entry(self):
 	pi.load_from_db()
 	pr = make_payment_request(dt="Purchase Invoice", dn=pi.name, mute_email=1)
 	self.assertEqual(pr.grand_total, pi.outstanding_amount)
+
 
 def create_payment_gateway_account(pg_name):
 	if not frappe.db.exists("Payment Gateway", pg_name):
@@ -1262,3 +1460,35 @@ def create_price_list():
 		item_price = frappe.get_doc("Item Price", {"item_code": "_Test Item", "price_list": price_list.name})
 	
 	return item_price
+
+def create_bank_account(account_name, is_company_account=False):
+	create_company()
+	bank_account = frappe._dict()
+	create_account(
+		account_name="_Test Account",  
+		parent_account="Bank Accounts - _TC", 
+		company="_Test Company",
+		account_type="Bank",
+		account_currency="INR",
+		is_group=0
+		)
+	if not frappe.db.exists("Bank", "_Test Bank"):
+		bank = frappe.get_doc(dict(
+			doctype="Bank",
+			bank_name="_Test Bank"
+		)).insert(ignore_permissions=True)
+	else:
+		bank = frappe.get_doc("Bank", "_Test Bank")
+	if not frappe.db.exists("Bank Account", account_name):
+		bank_account = frappe.get_doc(dict(
+			doctype="Bank Account",
+			account_name=account_name,
+			bank=bank.name,
+			is_company_account=is_company_account
+		))
+		if is_company_account == True:
+			bank_account.account = "_Test Account - _TC"
+		bank_account.insert(ignore_permissions=True)
+	else:
+		bank_account = frappe.get_doc("Bank Account", account_name)
+	return bank_account
