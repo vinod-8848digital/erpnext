@@ -2275,6 +2275,7 @@ def create_records(supplier):
  
 	create_account()
 	today = frappe.utils.getdate()
+	fiscal_year = get_fiscal_year(today, company="_Test Company", as_dict=True)
 
 	create_tax_withholding_category(
 			category_name="Test - TDS - 194C - Company",
