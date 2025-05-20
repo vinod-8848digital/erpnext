@@ -1795,6 +1795,32 @@ class TestSerialandBatchBundle(FrappeTestCase):
 				}
 		get_serial_and_batch_ledger=get_serial_and_batch_ledger(**args)
 
+	# codecov
+	def test_item_query_filters_TC_SCK_289(self):
+		from erpnext.stock.doctype.serial_and_batch_bundle.serial_and_batch_bundle import item_query
+		from erpnext.accounts.doctype.payment_entry.test_payment_entry import make_test_item
+		if not frappe.db.exists("Item", "Test Item"):
+			item = make_test_item("Test Item")
+			item.item_group = "Products"
+			item.has_serial_no = 1
+			item.serial_no_series = item.item_code+".#####"
+			item.has_batch_no = 1
+			item.is_stock_item = 1
+			item.is_fixed_asset = 0
+			item.auto_create_assets = 0
+			item.asset_naming_series = "ACC-ASS-.YYYY.-"
+			item.save()
+			assert frappe.db.exists("Item", "Test Item")
+		else:
+			item = frappe.get_doc("Item", "Test Item")
+
+		# Run the item query with a partial match
+		results = item_query("Item", "Test Item", "name", 0, 10, {}, as_dict=False)
+
+		# Extract item codes from the result
+		item_codes = [row[0] for row in results]
+		self.assertIn("_Test Item With Batch FOR POS Merge Test", item_codes)
+
 	def test_inward_outward_serial_valuation(self):
 		from erpnext.stock.doctype.delivery_note.test_delivery_note import create_delivery_note
 		from erpnext.stock.doctype.purchase_receipt.test_purchase_receipt import make_purchase_receipt
