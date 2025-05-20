@@ -12,7 +12,7 @@ from erpnext.stock.doctype.warehouse.test_warehouse import create_warehouse
 from erpnext.stock.doctype.serial_and_batch_bundle.serial_and_batch_bundle import (
 	add_serial_batch_ledgers,
 	make_batch_nos,
-	make_serial_nos
+	make_serial_nos,
 	)
 from erpnext.stock.doctype.stock_entry.stock_entry_utils import make_stock_entry
 
@@ -1414,8 +1414,7 @@ class TestSerialandBatchBundle(FrappeTestCase):
 					"qty": 5,
 					"based_on": "FIFO",
 					"posting_date": frappe.utils.now(),
- 					"posting_time": frappe.utils.now(),
-					"is_pick_list":1,
+ 					"posting_time": frappe.utils.now()
 				}
 		result= get_auto_data(**args)
 		self.assertIsInstance(result, list)
@@ -1695,7 +1694,106 @@ class TestSerialandBatchBundle(FrappeTestCase):
 		serial_batch_bundle.submit()
 		create_serial_nos(item_code = item.name , serial_nos=serial_no.name)
 
+	# codecov
+	def test_get_serial_and_batch_ledger_TC_SCK_288(self):
+		company = "_Test Indian Registered Company"
+		warehouse = "Stores - _TIRC"
+
+		from erpnext.accounts.doctype.payment_entry.test_payment_entry import make_test_item
+		from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_customer
+		from erpnext.stock.doctype.serial_and_batch_bundle.serial_and_batch_bundle import get_serial_and_batch_ledger
+		if not frappe.db.exists("Warehouse", warehouse):
+			warehouse = create_warehouse(warehouse, company=company)
+
+		customer = "_Test Customer"
+		if not frappe.db.exists("Customer", "_Test Customer"):
+			create_customer("_Test Customer",currency="INR")
+
+		if not frappe.db.exists("Company", company):
+			create_child_company()
+
+		fiscal_year = frappe.get_doc("Fiscal Year", "2025")
 		
+		if not any(c.company == company for c in fiscal_year.companies):
+			fiscal_year.append("companies", {"company": company})
+			fiscal_year.save()
+		
+		if not frappe.db.exists("Warehouse", "_Test Warehouse - _TC"):
+			warehouse = frappe.get_doc({
+				"doctype": "Warehouse",
+				"warehouse_name": "_Test Warehouse - _TC",
+				"company": company
+			}).insert()
+
+		if not frappe.db.exists("Item", "Test Item"):
+			item = frappe.get_doc({
+				"doctype": "Item",
+				"item_code": "Test Item",
+				"item_name": "Test Item",
+				"item_group": "Products",
+				"gst_hsn_code": "01011010",
+				"has_serial_no": 1,
+				"has_batch_no": 1,
+				"is_stock_item": 1,
+				"stock_uom": "Nos"
+			}).insert()
+		else:
+			item = frappe.get_doc("Item", "Test Item")
+			item.has_batch_no=1
+			item.save()
+
+		if not frappe.db.exists("Serial No", "MDC001"):
+			serial_no = frappe.get_doc({
+				"doctype": "Serial No",
+				"serial_no": "MDC001",
+				"item_code": item.name,
+				"company": company,
+				"item_group": "Raw Material"
+			}).insert(ignore_permissions=True)
+		else:
+			serial_no = frappe.get_doc("Serial No", "MDC001")
+
+		if not frappe.db.exists("Batch", "Batch_001"):
+			batch = frappe.get_doc({
+				"doctype": "Batch",
+				"batch_id": "Batch_001",
+				"stock_uom": "Nos",
+				"item": item.name,
+				"manufacturing_date": frappe.utils.now(),
+			}).insert(ignore_permissions=True)
+		else:
+			batch = frappe.get_doc("Batch", "Batch_001")
+
+		if not frappe.db.exists("Stock Entry", item.name):
+			stock_entry = frappe.get_doc({
+				"doctype": "Stock Entry",
+				"stock_entry_type": "Material Receipt",
+				"company": company,
+				"items": [{
+					"item_code": item.name,
+					"qty": 1,
+					"s_warehouse": None,
+					"t_warehouse": warehouse,
+					"serial_no": "MDC001",
+					"batch_no": batch.name
+				}]
+			})
+			stock_entry.submit()
+		else:
+			stock_entry = frappe.get_doc("Stock ENtry", item.name)
+		
+		args = {
+					"item_code": item.item_code,
+					"warehouse": warehouse,
+					"has_serial_no":item.has_serial_no,
+					"has_batch_no": item.has_batch_no,
+					"serial_nos":serial_no,
+					"qty": 5,
+					"based_on": "FIFO",
+					"posting_date": frappe.utils.now(),
+ 					"posting_time": frappe.utils.now()
+				}
+		get_serial_and_batch_ledger=get_serial_and_batch_ledger(**args)
 
 	def test_inward_outward_serial_valuation(self):
 		from erpnext.stock.doctype.delivery_note.test_delivery_note import create_delivery_note
