@@ -1415,6 +1415,7 @@ class TestSerialandBatchBundle(FrappeTestCase):
 					"based_on": "FIFO",
 					"posting_date": frappe.utils.now(),
  					"posting_time": frappe.utils.now(),
+					"is_pick_list":1,
 				}
 		result= get_auto_data(**args)
 		self.assertIsInstance(result, list)
