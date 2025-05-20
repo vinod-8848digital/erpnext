@@ -35,6 +35,191 @@ class TestQualityInspection(FrappeTestCase):
 		create_item("_Test Item with QA")
 		frappe.db.set_value("Item", "_Test Item with QA", "inspection_required_before_delivery", 1)
 
+	def test_validate_01(self):
+		from frappe.utils import today
+		from erpnext.stock.doctype.item.test_item import make_item
+		from erpnext.stock.doctype.warehouse.test_warehouse import create_warehouse
+		from erpnext.manufacturing.doctype.work_order.test_work_order import make_wo_order_test_record
+		import unittest.mock
+		frappe.set_user("Administrator")
+		frappe.db.rollback()
+		company = setup_test_company_defaults()
+		warehouse = create_warehouse("_Test Warehouse", company=company.name)
+
+		item = create_item(item_code="_Test Item", stock_uom="Nos",valuation_rate=100)
+		raw_material_item = create_item(item_code="_Test Raw Material", stock_uom="Nos", is_stock_item=1, is_purchase_item=1)
+		
+		# Create or Get BOM
+		bom = frappe.db.get_value("BOM", {"item": item.name, "is_active": 1, "is_default": 1}) 
+		if not bom:
+			bom = frappe.get_doc({
+				"doctype": "BOM",
+				"item": item.name,
+				"is_active": 1,
+				"is_default": 1,
+				"quantity": 1,
+				"items": [{
+					"item_code": raw_material_item.name,
+					"qty": 1,
+					"rate": 100
+				}]
+			}).insert().name
+
+		template_name = "TEST-TEMPLATE"
+		# Create QA Template
+		if not frappe.db.exists("Quality Inspection Template", template_name):
+			qi_template = frappe.new_doc("Quality Inspection Template")
+			qi_template.quality_inspection_template_name = template_name
+			qi_template.append("item_quality_inspection_parameter", {
+				"specification": "Spec-A",
+				"value": "15",
+				"min_value": "5.0",
+				"max_value": "15.0",
+			})
+			qi_template.insert()
+
+		# Assign template to item
+		frappe.db.set_value("Item", item.name, "quality_inspection_template", template_name)
+		frappe.db.commit()
+
+
+		# Create Operation
+		if not frappe.db.exists("Operation", "Test Operation"):
+			op = frappe.new_doc("Operation")
+			op.name = "Test Operation"
+			op.insert()
+
+		# Create Workstation
+		workstation = frappe.new_doc("Workstation")
+		workstation.workstation_name = "Test Workstation"
+		workstation.insert()
+		# Create Work Order
+		wo = make_wo_order_test_record(item=item.name, qty=1,fg_warehouse=warehouse, stock_uom="Nos", company=company.name,do_not_save=True)
+		wo.production_item = item.name
+		wo.target_warehouse = warehouse
+		wo.scrap_warehouse = warehouse
+		wo.bom_no = bom
+		wo.append("operations", {
+			"operation": "Test Operation",
+			"workstation": workstation.name,
+			"time_in_mins": 10
+		})
+		wo.save()
+		wo.submit()
+
+		# Create Job Card
+		job_card = frappe.new_doc("Job Card")
+		job_card.work_order = wo.name
+		job_card.operation = wo.operations[0].operation
+		job_card.workstation = workstation.name
+		job_card.for_quantity = 5
+		job_card.production_item = item.name
+		job_card.wip_warehouse = warehouse
+		job_card.insert()
+
+		# Quality Inspection: In Process + Job Card
+		qi = frappe.new_doc("Quality Inspection")
+		qi.inspection_type = "In Process"
+		qi.reference_type = "Job Card"
+		qi.reference_name = job_card.name
+		qi.item_code = item.name
+		qi.inspected_by="Administrator"
+		qi.sample_size = 15
+		qi.append("readings", {
+			"specification": "Spec-A",
+			"reading_1": "15",
+			"status": "Accepted",
+		})
+		qi.insert()
+		qi.validate()
+		self.assertEqual(qi.readings[0].value, "15")
+
+	def test_get_quality_inspection_template_02(self):
+		from erpnext.stock.doctype.quality_inspection.quality_inspection import make_quality_inspection
+		from erpnext.buying.doctype.supplier.test_supplier import create_supplier
+		from erpnext.manufacturing.doctype.bom.test_bom import make_bom
+
+		frappe.set_user("Administrator")
+		frappe.db.rollback()
+
+		company = setup_test_company_defaults()
+		create_supplier(supplier_name="_Test Supplier")
+
+		# Create Quality Inspection Template
+		template_name = "TEMPLATE-FROM-BOM"
+		if not frappe.db.exists("Quality Inspection Template", template_name):
+			qi_template = frappe.new_doc("Quality Inspection Template")
+			qi_template.quality_inspection_template_name = template_name
+			qi_template.append("item_quality_inspection_parameter", {
+				"specification": "Spec-BOM",
+				"value": "20",
+				"min_value": "10.0",
+				"max_value": "30.0"
+			})
+			qi_template.insert()
+
+		# Create Item
+		item = create_item(item_code="_Test BOM Item", stock_uom="Nos", is_stock_item=1)
+		frappe.db.set_value("Item", item.name, "inspection_required_before_purchase", 1)
+		frappe.db.set_value("Item", item.name, "quality_inspection_template", template_name)
+		
+		# Create BOM for the item and link the QA template
+		raw_material = "Test SO RM Production Item 1"
+		create_item(item_code=raw_material, stock_uom="Nos", is_stock_item=1,valuation_rate=100)
+		if not frappe.db.get_value("BOM", {"item": item.name}):
+			bom=make_bom(item=item, raw_materials=[raw_material],do_not_save=True)
+			bom.inspection_required =1
+			bom.quality_inspection_template = template_name
+			bom.save()
+			bom.submit()
+	
+		pr = make_purchase_receipt(item_code=item.name, company=company.name, stock_uom="Box", do_not_submit=True)
+
+		# Create Quality Inspection without template (method will fetch it from BOM)
+		qi = frappe.new_doc("Quality Inspection")
+		qi.item_code = item.name
+		qi.inspection_type = "Incoming"
+		qi.reference_type = "Purchase Receipt"
+		qi.reference_name = pr.name
+		qi.inspected_by = "Administrator"
+		qi.sample_size = 10
+		qi.bom_no = bom.name
+		qi.append("readings", {
+			"specification": "Spec-BOM",
+			"reading_1": "15",
+			"status": "Accepted",
+		})
+		qi.insert()
+
+		qi2 = frappe.new_doc("Quality Inspection")
+		qi2.item_code = item.name
+		qi2.inspection_type = "Incoming"
+		qi2.reference_type = "Purchase Receipt"
+		qi2.reference_name = pr.name
+		qi2.inspected_by = "Administrator"
+		qi2.sample_size = 10
+		# qi2.bom_no = bom.name
+		qi2.append("readings", {
+			"specification": "Spec-BOM",
+			"reading_1": "15",
+			"status": "Accepted",
+		})
+		qi2.insert()
+
+		# Call method under test
+		qi.get_quality_inspection_template()
+		qi = make_quality_inspection(source_name=bom.name)
+
+		qi2.get_quality_inspection_template()
+
+		# self.assertEqual(qi.quality_inspection_template, template_name)
+		self.assertEqual(len(qi.readings), 1)
+		self.assertEqual(qi.readings[0].specification, "Spec-BOM")
+		self.assertEqual(qi.readings[0].value, "20")
+		self.assertEqual(qi.readings[0].min_value, 10.0)
+		self.assertEqual(qi.readings[0].max_value, 30.0)
+		self.assertEqual(qi.readings[0].status, "Accepted")
+
 	def test_qa_for_delivery(self):
 		make_stock_entry(
 			item_code="_Test Item with QA", target="_Test Warehouse - _TC", qty=1, basic_rate=100
@@ -616,3 +801,141 @@ def create_company():
 		company = company.save()
 		company.load_from_db()
 	return company_name
+
+def setup_test_company_defaults(company_name="_Test Company", abbreviation="_TC"):
+	from frappe.defaults import set_default
+
+	# Create Company if it doesn't exist
+	if not frappe.db.exists("Company", company_name):
+		frappe.get_doc({
+			"doctype": "Company",
+			"company_name": company_name,
+			"abbr": abbreviation,
+			"default_currency": "INR",
+			"country": "India",
+			"chart_of_accounts": "Standard"
+		}).insert()
+
+	company = frappe.get_doc("Company", company_name)
+
+	# Create root account group if needed
+	if not frappe.db.exists("Account", f"Application of Funds - {abbreviation}"):
+		account = frappe.get_doc({
+		"doctype": "Account",
+		"account_name": "Application of Funds",
+		"company": company_name,
+		"root_type": "Asset",
+		"is_group": 1
+		})
+		account.insert(ignore_mandatory=True)
+
+	# Account helper
+	def ensure_account(name, root_type="Asset"):
+		full_name = f"{name} - {abbreviation}"
+		if not frappe.db.exists("Account", full_name):
+			frappe.get_doc({
+				"doctype": "Account",
+				"account_name": name,
+				"company": company_name,
+				"root_type": root_type,
+				"parent_account": f"Application of Funds - {abbreviation}",
+				"is_group": 0
+			}).insert()
+		return full_name
+
+	# Required Accounts
+	accounts = {
+		"default_receivable_account": ensure_account("Debtors", "Asset"),
+		"default_payable_account": ensure_account("Creditors", "Liability"),
+		"default_income_account": ensure_account("Sales", "Income"),
+		"default_expense_account": ensure_account("Cost of Goods Sold", "Expense"),
+		"stock_received_but_not_billed": ensure_account("Stock Received But Not Billed", "Liability"),
+		"default_cash_account": ensure_account("Cash", "Asset"),
+		"default_bank_account": ensure_account("Bank", "Asset"),
+		"default_inventory_account": ensure_account("Stock Asset", "Asset"),
+		"default_provisional_account": ensure_account("Cost of Goods Sold", "Expense"),
+	}
+
+	# Default Cost Center
+	if not frappe.db.exists("Cost Center", f"Main - {abbreviation}"):
+		frappe.get_doc({
+			"doctype": "Cost Center",
+			"cost_center_name": "Main",
+			"is_group": 0,
+			"company": company_name
+		}).insert()
+
+	accounts["default_cost_center"] = f"Main - {abbreviation}"
+
+	for field, value in accounts.items():
+		company.set(field, value)
+
+	company.enable_perpetual_inventory = 1
+	company.enable_provisional_accounting_for_non_stock_items = 1
+	company.save()
+
+	set_default("company", company_name, "__default")
+
+	return company
+
+def setup_fy_gls_cost_center():
+	company = setup_test_company_defaults()
+	company_abbr ="_TC"
+	# Setup GL Account COGS & Cost Center
+	if not frappe.db.exists("Account", f"T Cost of Goods Sold - {company_abbr}"):
+		frappe.get_doc({
+			"doctype": "Account",
+			"account_name": "T Cost of Goods Sold",
+			"parent_account": f"Expenses - {company_abbr}",
+			"company": company,
+			"is_group": 0
+		}).insert()
+	if not frappe.db.exists("Cost Center", f"T Main - {company_abbr}"):
+		frappe.get_doc({
+			"doctype": "Cost Center",
+			"cost_center_name": "T Main",
+			"parent_cost_center": f"{company.name} - {company_abbr}",
+			"company": company,
+			"is_group": 1
+		}).insert()
+	if not frappe.db.exists("Cost Center", f"_Test Cost Center - {company_abbr}"):
+		frappe.get_doc({
+			"doctype": "Cost Center",
+			"cost_center_name": "_Test Cost Center",
+			"parent_cost_center": f"T Main - {company_abbr}",
+			"company": company.name,
+			"is_group": 0
+		}).insert()
+	
+	# Setup Fiscal Year
+	fiscal_year = frappe.get_all("Fiscal Year", filters={
+			"year_start_date": ["<=", today()],
+			"year_end_date": [">=", today()],
+			"disabled": 0
+		}, fields=["name"], limit=1)
+
+	if fiscal_year:
+		fy_doc = frappe.get_doc("Fiscal Year", fiscal_year[0]["name"])
+		linked_companies = [d.company for d in fy_doc.companies]
+
+		if company.name not in linked_companies:
+			fy_doc.append("companies", {
+				"company": company.name
+			})
+			fy_doc.save()
+	else:
+		# If not exists create new FY
+		fy_doc = frappe.get_doc({
+			"doctype": "Fiscal Year",
+			"year": f"FY {today()[:4]}",
+			"year_start_date": today(),
+			"year_end_date": add_days(today(), 364),
+			"disabled": 0
+		})
+		fy_doc.append("fiscal_year_company", {
+			"company": company.name
+		})
+		fy_doc.insert()
+	expense_account = f"T Cost of Goods Sold - {company_abbr}"
+	cost_center = f"_Test Cost Center - {company_abbr}"
+	return fiscal_year,expense_account,cost_center
