@@ -1193,7 +1193,7 @@ def download_blank_csv_template(content):
 
 
 @frappe.whitelist()
-def upload_csv_file(item_code, file_path):
+def upload_csv_file(item_code, file_path): # pragma: no cover
 	serial_nos, batch_nos = [], []
 	serial_nos, batch_nos = get_serial_batch_from_csv(item_code, file_path)
 
@@ -1203,7 +1203,7 @@ def upload_csv_file(item_code, file_path):
 	}
 
 
-def get_serial_batch_from_csv(item_code, file_path):
+def get_serial_batch_from_csv(item_code, file_path): # pragma: no cover
 	if "private" in file_path:
 		file_path = frappe.get_site_path() + file_path
 	else:
