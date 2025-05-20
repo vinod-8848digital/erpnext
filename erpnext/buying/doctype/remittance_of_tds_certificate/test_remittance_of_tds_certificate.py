@@ -11,6 +11,18 @@ class DummyFile:
         self.file_name = file_name
 
 class TestRemittanceofTDScertificate(FrappeTestCase):
+	def setUp(self):
+		content = b"Dummy content"
+		self.test_file = save_file(
+			fname="test_attachment.txt",
+			content=content,
+			dt="User",
+			dn=frappe.session.user,
+			folder=None,
+			decode=False
+		)
+		self.test_item = {"file_name": self.test_file.file_name}
+		
 	def test_get_pan_list_TC_B_187(self):
 		files = [
 			DummyFile("ABCDE1234F_pan.pdf"),
@@ -27,18 +39,6 @@ class TestRemittanceofTDScertificate(FrappeTestCase):
 		]
 
 		self.assertEqual(result, expected)
-            
-	def setUp(self):
-		content = b"Dummy content"
-		self.test_file = save_file(
-			fname="test_attachment.txt",
-			content=content,
-			dt="User",
-			dn=frappe.session.user,
-			folder=None,
-			decode=False
-		)
-		self.test_item = {"file_name": self.test_file.file_name}
 
 	def test_create_attachment_TC_B_188(self):
 		from erpnext.buying.doctype.remittance_of_tds_certificate.remittance_of_tds_certificate import create_attachment 
