@@ -4926,6 +4926,7 @@ class TestMaterialRequest(FrappeTestCase):
 		po1.supplier = "_Test Supplier"
 		po1.items[0].qty = 5
 		po1.items[0].rate = rate
+		po1.currency = "INR"
 		po1.insert()
 		po1.submit()
 		self.assertEqual(po1.docstatus, 1)
@@ -4934,6 +4935,7 @@ class TestMaterialRequest(FrappeTestCase):
 		po2.supplier = "_Test Supplier"
 		po2.items[0].qty = 5
 		po2.items[0].rate = rate
+		po2.currency = "INR"
 		po2.insert()
 		po2.submit()
 		self.assertEqual(po2.docstatus, 1)
@@ -4941,6 +4943,7 @@ class TestMaterialRequest(FrappeTestCase):
 		pi = create_purchase_invoice(po1.name)
 		pi = create_purchase_invoice(po2.name, target_doc=pi)
 		pi.set_warehouse = warehouse
+		pi.currency = "INR"
 		pi.update_stock = 1
 		serial_numbers1 = ["SN001", "SN002","SN003", "SN004","SN005"]
 		serial_numbers2 = ["SN006", "SN007","SN008", "SN009","SN010"]
