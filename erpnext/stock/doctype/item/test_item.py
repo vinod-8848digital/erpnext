@@ -1191,7 +1191,6 @@ class TestItem(FrappeTestCase):
 		self.assertGreater(len(bom), 0, "BOM not found for the item")
 
 		wo = make_wo_order_test_record(company= company,production_item=item.name,bom_no=bom[0].name ,qty=10)
-		print("wo_name", wo)
 
 		wo_items = frappe.get_doc("Work Order", wo.name).required_items
 		alt_item_found = any(item.item_code == alt_item.name for item in wo_items)
