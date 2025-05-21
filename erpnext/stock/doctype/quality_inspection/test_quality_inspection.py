@@ -3,8 +3,10 @@
 
 import frappe
 from frappe.tests.utils import FrappeTestCase, change_settings
-from frappe.utils import nowdate
+from frappe.utils import add_days, nowdate, today
 
+from erpnext.accounts.doctype.purchase_invoice.test_purchase_invoice import make_purchase_invoice
+from erpnext.accounts.doctype.sales_invoice.test_sales_invoice import create_sales_invoice
 from erpnext.controllers.stock_controller import (
 	QualityInspectionNotSubmittedError,
 	QualityInspectionRejectedError,
@@ -13,10 +15,8 @@ from erpnext.controllers.stock_controller import (
 )
 from erpnext.stock.doctype.delivery_note.test_delivery_note import create_delivery_note
 from erpnext.stock.doctype.item.test_item import create_item
-from erpnext.stock.doctype.stock_entry.stock_entry_utils import make_stock_entry
 from erpnext.stock.doctype.purchase_receipt.test_purchase_receipt import make_purchase_receipt
-from erpnext.accounts.doctype.purchase_invoice.test_purchase_invoice import make_purchase_invoice
-from erpnext.accounts.doctype.sales_invoice.test_sales_invoice import create_sales_invoice
+from erpnext.stock.doctype.stock_entry.stock_entry_utils import make_stock_entry
 from erpnext.stock.doctype.warehouse.test_warehouse import create_warehouse
 
 # test_records = frappe.get_test_records('Quality Inspection')
@@ -25,6 +25,7 @@ from erpnext.stock.doctype.warehouse.test_warehouse import create_warehouse
 class TestQualityInspection(FrappeTestCase):
 	def setUp(self):
 		from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_company
+
 		create_company()
 		create_warehouse(
 			warehouse_name="_Test Warehouse - _TC",
@@ -36,52 +37,59 @@ class TestQualityInspection(FrappeTestCase):
 		frappe.db.set_value("Item", "_Test Item with QA", "inspection_required_before_delivery", 1)
 
 	def test_validate_01(self):
-		from frappe.utils import today
+		import unittest.mock
+
+		from erpnext.manufacturing.doctype.work_order.test_work_order import make_wo_order_test_record
 		from erpnext.stock.doctype.item.test_item import make_item
 		from erpnext.stock.doctype.warehouse.test_warehouse import create_warehouse
-		from erpnext.manufacturing.doctype.work_order.test_work_order import make_wo_order_test_record
-		import unittest.mock
+
 		frappe.set_user("Administrator")
 		frappe.db.rollback()
 		company = setup_test_company_defaults()
 		warehouse = create_warehouse("_Test Warehouse", company=company.name)
 
-		item = create_item(item_code="_Test Item", stock_uom="Nos",valuation_rate=100)
-		raw_material_item = create_item(item_code="_Test Raw Material", stock_uom="Nos", is_stock_item=1, is_purchase_item=1)
-		
+		item = create_item(item_code="_Test Item", stock_uom="Nos", valuation_rate=100)
+		raw_material_item = create_item(
+			item_code="_Test Raw Material", stock_uom="Nos", is_stock_item=1, is_purchase_item=1
+		)
+
 		# Create or Get BOM
-		bom = frappe.db.get_value("BOM", {"item": item.name, "is_active": 1, "is_default": 1}) 
+		bom = frappe.db.get_value("BOM", {"item": item.name, "is_active": 1, "is_default": 1})
 		if not bom:
-			bom = frappe.get_doc({
-				"doctype": "BOM",
-				"item": item.name,
-				"is_active": 1,
-				"is_default": 1,
-				"quantity": 1,
-				"items": [{
-					"item_code": raw_material_item.name,
-					"qty": 1,
-					"rate": 100
-				}]
-			}).insert().name
+			bom = (
+				frappe.get_doc(
+					{
+						"doctype": "BOM",
+						"item": item.name,
+						"is_active": 1,
+						"is_default": 1,
+						"quantity": 1,
+						"items": [{"item_code": raw_material_item.name, "qty": 1, "rate": 100}],
+					}
+				)
+				.insert()
+				.name
+			)
 
 		template_name = "TEST-TEMPLATE"
 		# Create QA Template
 		if not frappe.db.exists("Quality Inspection Template", template_name):
 			qi_template = frappe.new_doc("Quality Inspection Template")
 			qi_template.quality_inspection_template_name = template_name
-			qi_template.append("item_quality_inspection_parameter", {
-				"specification": "Spec-A",
-				"value": "15",
-				"min_value": "5.0",
-				"max_value": "15.0",
-			})
+			qi_template.append(
+				"item_quality_inspection_parameter",
+				{
+					"specification": "Spec-A",
+					"value": "15",
+					"min_value": "5.0",
+					"max_value": "15.0",
+				},
+			)
 			qi_template.insert()
 
 		# Assign template to item
 		frappe.db.set_value("Item", item.name, "quality_inspection_template", template_name)
 		frappe.db.commit()
-
 
 		# Create Operation
 		if not frappe.db.exists("Operation", "Test Operation"):
@@ -94,16 +102,21 @@ class TestQualityInspection(FrappeTestCase):
 		workstation.workstation_name = "Test Workstation"
 		workstation.insert()
 		# Create Work Order
-		wo = make_wo_order_test_record(item=item.name, qty=1,fg_warehouse=warehouse, stock_uom="Nos", company=company.name,do_not_save=True)
+		wo = make_wo_order_test_record(
+			item=item.name,
+			qty=1,
+			fg_warehouse=warehouse,
+			stock_uom="Nos",
+			company=company.name,
+			do_not_save=True,
+		)
 		wo.production_item = item.name
 		wo.target_warehouse = warehouse
 		wo.scrap_warehouse = warehouse
 		wo.bom_no = bom
-		wo.append("operations", {
-			"operation": "Test Operation",
-			"workstation": workstation.name,
-			"time_in_mins": 10
-		})
+		wo.append(
+			"operations", {"operation": "Test Operation", "workstation": workstation.name, "time_in_mins": 10}
+		)
 		wo.save()
 		wo.submit()
 
@@ -123,21 +136,24 @@ class TestQualityInspection(FrappeTestCase):
 		qi.reference_type = "Job Card"
 		qi.reference_name = job_card.name
 		qi.item_code = item.name
-		qi.inspected_by="Administrator"
+		qi.inspected_by = "Administrator"
 		qi.sample_size = 15
-		qi.append("readings", {
-			"specification": "Spec-A",
-			"reading_1": "15",
-			"status": "Accepted",
-		})
+		qi.append(
+			"readings",
+			{
+				"specification": "Spec-A",
+				"reading_1": "15",
+				"status": "Accepted",
+			},
+		)
 		qi.insert()
 		qi.validate()
 		self.assertEqual(qi.readings[0].value, "15")
 
 	def test_get_quality_inspection_template_02(self):
-		from erpnext.stock.doctype.quality_inspection.quality_inspection import make_quality_inspection
 		from erpnext.buying.doctype.supplier.test_supplier import create_supplier
 		from erpnext.manufacturing.doctype.bom.test_bom import make_bom
+		from erpnext.stock.doctype.quality_inspection.quality_inspection import make_quality_inspection
 
 		frappe.set_user("Administrator")
 		frappe.db.rollback()
@@ -150,30 +166,30 @@ class TestQualityInspection(FrappeTestCase):
 		if not frappe.db.exists("Quality Inspection Template", template_name):
 			qi_template = frappe.new_doc("Quality Inspection Template")
 			qi_template.quality_inspection_template_name = template_name
-			qi_template.append("item_quality_inspection_parameter", {
-				"specification": "Spec-BOM",
-				"value": "20",
-				"min_value": "10.0",
-				"max_value": "30.0"
-			})
+			qi_template.append(
+				"item_quality_inspection_parameter",
+				{"specification": "Spec-BOM", "value": "20", "min_value": "10.0", "max_value": "30.0"},
+			)
 			qi_template.insert()
 
 		# Create Item
 		item = create_item(item_code="_Test BOM Item", stock_uom="Nos", is_stock_item=1)
 		frappe.db.set_value("Item", item.name, "inspection_required_before_purchase", 1)
 		frappe.db.set_value("Item", item.name, "quality_inspection_template", template_name)
-		
+
 		# Create BOM for the item and link the QA template
 		raw_material = "Test SO RM Production Item 1"
-		create_item(item_code=raw_material, stock_uom="Nos", is_stock_item=1,valuation_rate=100)
+		create_item(item_code=raw_material, stock_uom="Nos", is_stock_item=1, valuation_rate=100)
 		if not frappe.db.get_value("BOM", {"item": item.name}):
-			bom=make_bom(item=item, raw_materials=[raw_material],do_not_save=True)
-			bom.inspection_required =1
+			bom = make_bom(item=item, raw_materials=[raw_material], do_not_save=True)
+			bom.inspection_required = 1
 			bom.quality_inspection_template = template_name
 			bom.save()
 			bom.submit()
-	
-		pr = make_purchase_receipt(item_code=item.name, company=company.name, stock_uom="Box", do_not_submit=True)
+
+		pr = make_purchase_receipt(
+			item_code=item.name, company=company.name, stock_uom="Box", do_not_submit=True
+		)
 
 		# Create Quality Inspection without template (method will fetch it from BOM)
 		qi = frappe.new_doc("Quality Inspection")
@@ -184,11 +200,14 @@ class TestQualityInspection(FrappeTestCase):
 		qi.inspected_by = "Administrator"
 		qi.sample_size = 10
 		qi.bom_no = bom.name
-		qi.append("readings", {
-			"specification": "Spec-BOM",
-			"reading_1": "15",
-			"status": "Accepted",
-		})
+		qi.append(
+			"readings",
+			{
+				"specification": "Spec-BOM",
+				"reading_1": "15",
+				"status": "Accepted",
+			},
+		)
 		qi.insert()
 
 		qi2 = frappe.new_doc("Quality Inspection")
@@ -199,11 +218,14 @@ class TestQualityInspection(FrappeTestCase):
 		qi2.inspected_by = "Administrator"
 		qi2.sample_size = 10
 		# qi2.bom_no = bom.name
-		qi2.append("readings", {
-			"specification": "Spec-BOM",
-			"reading_1": "15",
-			"status": "Accepted",
-		})
+		qi2.append(
+			"readings",
+			{
+				"specification": "Spec-BOM",
+				"reading_1": "15",
+				"status": "Accepted",
+			},
+		)
 		qi2.insert()
 
 		# Call method under test
@@ -472,14 +494,15 @@ class TestQualityInspection(FrappeTestCase):
 		se.delete()
 
 	def test_qa_for_pr_TC_SCK_159(self):
-		from erpnext.buying.doctype.supplier.test_supplier import create_supplier
-		from erpnext.buying.doctype.purchase_order.test_purchase_order import get_or_create_fiscal_year
 		from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_company
+		from erpnext.buying.doctype.purchase_order.test_purchase_order import get_or_create_fiscal_year
+		from erpnext.buying.doctype.supplier.test_supplier import create_supplier
+
 		create_company()
 		company = "_Test Company"
-		frappe.db.set_value("Company", company, "stock_received_but_not_billed", 'Cost of Goods Sold - _TC')
+		frappe.db.set_value("Company", company, "stock_received_but_not_billed", "Cost of Goods Sold - _TC")
 
-		create_supplier(supplier_name = "_Test Supplier")
+		create_supplier(supplier_name="_Test Supplier")
 		create_warehouse(
 			warehouse_name="_Test Warehouse - _TC",
 			properties={"parent_warehouse": "All Warehouses - _TC"},
@@ -492,11 +515,17 @@ class TestQualityInspection(FrappeTestCase):
 			company="_Test Company",
 		)
 		item_code = create_item("_Test Item with QA", valuation_rate=200).name
-		pr = make_purchase_receipt(item_code = item_code, company = "_Test Company", stock_uom = "Box" , do_not_submit=True)
+		pr = make_purchase_receipt(
+			item_code=item_code, company="_Test Company", stock_uom="Box", do_not_submit=True
+		)
 
 		frappe.db.set_value("Item", "_Test Item with QA", "inspection_required_before_purchase", 1)
 		qa = create_quality_inspection(
-			reference_type="Purchase Receipt", reference_name=pr.name, status="Accepted", inspection_type="Incoming", do_not_submit=True
+			reference_type="Purchase Receipt",
+			reference_name=pr.name,
+			status="Accepted",
+			inspection_type="Incoming",
+			do_not_submit=True,
 		)
 		pr.reload()
 		qa.reload()
@@ -513,14 +542,16 @@ class TestQualityInspection(FrappeTestCase):
 		pr.cancel()
 
 	def test_qa_for_pi_TC_SCK_160(self):
+		from datetime import date
+
+		from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_company
 		from erpnext.buying.doctype.supplier.test_supplier import create_supplier
 		from erpnext.selling.doctype.sales_order.test_sales_order import get_or_create_fiscal_year
-		from datetime import date
-		from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_company
+
 		create_company()
 		company = "_Test Company"
-		frappe.db.set_value("Company", company, "stock_received_but_not_billed", 'Cost of Goods Sold - _TC')
-		
+		frappe.db.set_value("Company", company, "stock_received_but_not_billed", "Cost of Goods Sold - _TC")
+
 		create_warehouse(
 			warehouse_name="_Test Warehouse 1 - _TC",
 			properties={"parent_warehouse": "All Warehouses - _TC"},
@@ -529,13 +560,17 @@ class TestQualityInspection(FrappeTestCase):
 		get_or_create_fiscal_year("_Test Company")
 		create_supplier(supplier_name="_Test Supplier")
 
-		pr = make_purchase_invoice(item_code="_Test Item with QA",uom = "Box",do_not_save =True)
+		pr = make_purchase_invoice(item_code="_Test Item with QA", uom="Box", do_not_save=True)
 		pr.due_date = date.today()
 		pr.save()
 		pr.submit()
 		frappe.db.set_value("Item", "_Test Item with QA", "inspection_required_before_purchase", 1)
 		qa = create_quality_inspection(
-			reference_type="Purchase Invoice", reference_name=pr.name, status="Accepted", inspection_type="Incoming", do_not_submit=True
+			reference_type="Purchase Invoice",
+			reference_name=pr.name,
+			status="Accepted",
+			inspection_type="Incoming",
+			do_not_submit=True,
 		)
 		pr.reload()
 		qa.reload()
@@ -549,7 +584,7 @@ class TestQualityInspection(FrappeTestCase):
 		pr.reload()
 		pr.cancel()
 
-	@change_settings("Stock Settings",{"allow_negative_stock": 1})
+	@change_settings("Stock Settings", {"allow_negative_stock": 1})
 	def test_qa_for_dn_TC_SCK_161(self):
 		dn = create_delivery_note(item_code="_Test Item with QA", do_not_submit=True)
 
@@ -574,7 +609,11 @@ class TestQualityInspection(FrappeTestCase):
 		si = create_sales_invoice(item_code="_Test Item with QA")
 
 		qa = create_quality_inspection(
-			reference_type="Sales Invoice", reference_name=si.name, status="Accepted", inspection_type="Incoming", do_not_submit=True
+			reference_type="Sales Invoice",
+			reference_name=si.name,
+			status="Accepted",
+			inspection_type="Incoming",
+			do_not_submit=True,
 		)
 		si.reload()
 		qa.reload()
@@ -589,14 +628,15 @@ class TestQualityInspection(FrappeTestCase):
 		si.cancel()
 
 	def test_qa_for_pr_out_TC_SCK_162(self):
-		from erpnext.buying.doctype.supplier.test_supplier import create_supplier
-		from erpnext.buying.doctype.purchase_order.test_purchase_order import get_or_create_fiscal_year
 		from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_company
+		from erpnext.buying.doctype.purchase_order.test_purchase_order import get_or_create_fiscal_year
+		from erpnext.buying.doctype.supplier.test_supplier import create_supplier
+
 		create_company()
 		company = "_Test Company"
-		frappe.db.set_value("Company", company, "stock_received_but_not_billed", 'Cost of Goods Sold - _TC')
+		frappe.db.set_value("Company", company, "stock_received_but_not_billed", "Cost of Goods Sold - _TC")
 
-		create_supplier(supplier_name = "_Test Supplier")
+		create_supplier(supplier_name="_Test Supplier")
 		create_warehouse(
 			warehouse_name="_Test Warehouse - _TC",
 			properties={"parent_warehouse": "All Warehouses - _TC"},
@@ -610,11 +650,17 @@ class TestQualityInspection(FrappeTestCase):
 		)
 		item_code = create_item("_Test Item with QA", valuation_rate=200).name
 
-		pr = make_purchase_receipt(item_code = item_code, company = "_Test Company",stock_uom= "Box", do_not_submit=True)
+		pr = make_purchase_receipt(
+			item_code=item_code, company="_Test Company", stock_uom="Box", do_not_submit=True
+		)
 
 		frappe.db.set_value("Item", "_Test Item with QA", "inspection_required_before_purchase", 1)
 		qa = create_quality_inspection(
-			reference_type="Purchase Receipt", reference_name=pr.name, status="Accepted", inspection_type="Outgoing", do_not_submit=True
+			reference_type="Purchase Receipt",
+			reference_name=pr.name,
+			status="Accepted",
+			inspection_type="Outgoing",
+			do_not_submit=True,
 		)
 		pr.reload()
 		qa.reload()
@@ -642,7 +688,11 @@ class TestQualityInspection(FrappeTestCase):
 		se.save()
 
 		qa = create_quality_inspection(
-			item_code=item_code, reference_type="Stock Entry", reference_name=se.name, inspection_type="Incoming", do_not_submit=True
+			item_code=item_code,
+			reference_type="Stock Entry",
+			reference_name=se.name,
+			inspection_type="Incoming",
+			do_not_submit=True,
 		)
 
 		se.reload()
@@ -668,7 +718,11 @@ class TestQualityInspection(FrappeTestCase):
 		se.save()
 
 		qa = create_quality_inspection(
-			item_code=item_code, reference_type="Stock Entry", reference_name=se.name, inspection_type="Outgoing", do_not_submit=True
+			item_code=item_code,
+			reference_type="Stock Entry",
+			reference_name=se.name,
+			inspection_type="Outgoing",
+			do_not_submit=True,
 		)
 
 		se.reload()
@@ -682,14 +736,15 @@ class TestQualityInspection(FrappeTestCase):
 		qa.cancel()
 
 	def test_qa_for_pr_proc_TC_SCK_166(self):
-		from erpnext.buying.doctype.supplier.test_supplier import create_supplier
-		from erpnext.buying.doctype.purchase_order.test_purchase_order import get_or_create_fiscal_year
 		from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_company
+		from erpnext.buying.doctype.purchase_order.test_purchase_order import get_or_create_fiscal_year
+		from erpnext.buying.doctype.supplier.test_supplier import create_supplier
+
 		create_company()
 		company = "_Test Company"
-		frappe.db.set_value("Company", company, "stock_received_but_not_billed", 'Cost of Goods Sold - _TC')
-		
-		create_supplier(supplier_name = "_Test Supplier")
+		frappe.db.set_value("Company", company, "stock_received_but_not_billed", "Cost of Goods Sold - _TC")
+
+		create_supplier(supplier_name="_Test Supplier")
 		create_warehouse(
 			warehouse_name="_Test Warehouse - _TC",
 			properties={"parent_warehouse": "All Warehouses - _TC"},
@@ -702,11 +757,15 @@ class TestQualityInspection(FrappeTestCase):
 		)
 		get_or_create_fiscal_year("_Test Company")
 		item_code = create_item("_Test Item with QA", valuation_rate=200).name
-		pr = make_purchase_receipt(item_code = item_code, uom ="Box" ,stock_uom = "Box" ,do_not_submit=True)
+		pr = make_purchase_receipt(item_code=item_code, uom="Box", stock_uom="Box", do_not_submit=True)
 		frappe.db.set_value("Item", "_Test Item with QA", "inspection_required_before_purchase", 1)
 
 		qa = create_quality_inspection(
-			reference_type="Purchase Receipt", reference_name=pr.name, status="Accepted", inspection_type="In Process", do_not_submit=True
+			reference_type="Purchase Receipt",
+			reference_name=pr.name,
+			status="Accepted",
+			inspection_type="In Process",
+			do_not_submit=True,
 		)
 		pr.reload()
 		qa.reload()
@@ -727,7 +786,10 @@ class TestQualityInspection(FrappeTestCase):
 		self.assertRaises(QualityInspectionRequiredError, dn.submit)
 
 		qa = create_quality_inspection(
-			reference_type="Delivery Note", reference_name=dn.name, status="Rejected", inspection_type="In Process"
+			reference_type="Delivery Note",
+			reference_name=dn.name,
+			status="Rejected",
+			inspection_type="In Process",
 		)
 		dn.reload()
 		self.assertRaises(QualityInspectionRejectedError, dn.submit)
@@ -740,13 +802,17 @@ class TestQualityInspection(FrappeTestCase):
 		self.assertRaises(QualityInspectionRequiredError, dn.submit)
 
 		qa = create_quality_inspection(
-			reference_type="Delivery Note", reference_name=dn.name, status="Rejected", inspection_type="Outgoing"
+			reference_type="Delivery Note",
+			reference_name=dn.name,
+			status="Rejected",
+			inspection_type="Outgoing",
 		)
 		dn.reload()
 		self.assertRaises(QualityInspectionRejectedError, dn.submit)
 		frappe.db.set_value("Quality Inspection", qa.name, "status", "Accepted")
 		qa.reload()
 		qa.cancel()
+
 
 def create_quality_inspection(**args):
 	args = frappe._dict(args)
@@ -789,58 +855,66 @@ def create_quality_inspection_parameter(parameter):
 			{"doctype": "Quality Inspection Parameter", "parameter": parameter, "description": parameter}
 		).insert()
 
+
 def create_company():
 	company_name = "_Test Company QA"
 	if not frappe.db.exists("Company", company_name):
 		company = frappe.new_doc("Company")
 		company.company_name = company_name
-		company.country="India",
-		company.default_currency= "INR",
-		company.create_chart_of_accounts_based_on= "Standard Template",
-		company.chart_of_accounts= "Standard",
+		company.country = ("India",)
+		company.default_currency = ("INR",)
+		company.create_chart_of_accounts_based_on = ("Standard Template",)
+		company.chart_of_accounts = ("Standard",)
 		company = company.save()
 		company.load_from_db()
 	return company_name
+
 
 def setup_test_company_defaults(company_name="_Test Company", abbreviation="_TC"):
 	from frappe.defaults import set_default
 
 	# Create Company if it doesn't exist
 	if not frappe.db.exists("Company", company_name):
-		frappe.get_doc({
-			"doctype": "Company",
-			"company_name": company_name,
-			"abbr": abbreviation,
-			"default_currency": "INR",
-			"country": "India",
-			"chart_of_accounts": "Standard"
-		}).insert()
+		frappe.get_doc(
+			{
+				"doctype": "Company",
+				"company_name": company_name,
+				"abbr": abbreviation,
+				"default_currency": "INR",
+				"country": "India",
+				"chart_of_accounts": "Standard",
+			}
+		).insert()
 
 	company = frappe.get_doc("Company", company_name)
 
 	# Create root account group if needed
 	if not frappe.db.exists("Account", f"Application of Funds - {abbreviation}"):
-		account = frappe.get_doc({
-		"doctype": "Account",
-		"account_name": "Application of Funds",
-		"company": company_name,
-		"root_type": "Asset",
-		"is_group": 1
-		})
+		account = frappe.get_doc(
+			{
+				"doctype": "Account",
+				"account_name": "Application of Funds",
+				"company": company_name,
+				"root_type": "Asset",
+				"is_group": 1,
+			}
+		)
 		account.insert(ignore_mandatory=True)
 
 	# Account helper
 	def ensure_account(name, root_type="Asset"):
 		full_name = f"{name} - {abbreviation}"
 		if not frappe.db.exists("Account", full_name):
-			frappe.get_doc({
-				"doctype": "Account",
-				"account_name": name,
-				"company": company_name,
-				"root_type": root_type,
-				"parent_account": f"Application of Funds - {abbreviation}",
-				"is_group": 0
-			}).insert()
+			frappe.get_doc(
+				{
+					"doctype": "Account",
+					"account_name": name,
+					"company": company_name,
+					"root_type": root_type,
+					"parent_account": f"Application of Funds - {abbreviation}",
+					"is_group": 0,
+				}
+			).insert()
 		return full_name
 
 	# Required Accounts
@@ -858,12 +932,9 @@ def setup_test_company_defaults(company_name="_Test Company", abbreviation="_TC"
 
 	# Default Cost Center
 	if not frappe.db.exists("Cost Center", f"Main - {abbreviation}"):
-		frappe.get_doc({
-			"doctype": "Cost Center",
-			"cost_center_name": "Main",
-			"is_group": 0,
-			"company": company_name
-		}).insert()
+		frappe.get_doc(
+			{"doctype": "Cost Center", "cost_center_name": "Main", "is_group": 0, "company": company_name}
+		).insert()
 
 	accounts["default_cost_center"] = f"Main - {abbreviation}"
 
@@ -878,64 +949,70 @@ def setup_test_company_defaults(company_name="_Test Company", abbreviation="_TC"
 
 	return company
 
+
 def setup_fy_gls_cost_center():
 	company = setup_test_company_defaults()
-	company_abbr ="_TC"
+	company_abbr = "_TC"
 	# Setup GL Account COGS & Cost Center
 	if not frappe.db.exists("Account", f"T Cost of Goods Sold - {company_abbr}"):
-		frappe.get_doc({
-			"doctype": "Account",
-			"account_name": "T Cost of Goods Sold",
-			"parent_account": f"Expenses - {company_abbr}",
-			"company": company,
-			"is_group": 0
-		}).insert()
+		frappe.get_doc(
+			{
+				"doctype": "Account",
+				"account_name": "T Cost of Goods Sold",
+				"parent_account": f"Expenses - {company_abbr}",
+				"company": company,
+				"is_group": 0,
+			}
+		).insert()
 	if not frappe.db.exists("Cost Center", f"T Main - {company_abbr}"):
-		frappe.get_doc({
-			"doctype": "Cost Center",
-			"cost_center_name": "T Main",
-			"parent_cost_center": f"{company.name} - {company_abbr}",
-			"company": company,
-			"is_group": 1
-		}).insert()
+		frappe.get_doc(
+			{
+				"doctype": "Cost Center",
+				"cost_center_name": "T Main",
+				"parent_cost_center": f"{company.name} - {company_abbr}",
+				"company": company,
+				"is_group": 1,
+			}
+		).insert()
 	if not frappe.db.exists("Cost Center", f"_Test Cost Center - {company_abbr}"):
-		frappe.get_doc({
-			"doctype": "Cost Center",
-			"cost_center_name": "_Test Cost Center",
-			"parent_cost_center": f"T Main - {company_abbr}",
-			"company": company.name,
-			"is_group": 0
-		}).insert()
-	
+		frappe.get_doc(
+			{
+				"doctype": "Cost Center",
+				"cost_center_name": "_Test Cost Center",
+				"parent_cost_center": f"T Main - {company_abbr}",
+				"company": company.name,
+				"is_group": 0,
+			}
+		).insert()
+
 	# Setup Fiscal Year
-	fiscal_year = frappe.get_all("Fiscal Year", filters={
-			"year_start_date": ["<=", today()],
-			"year_end_date": [">=", today()],
-			"disabled": 0
-		}, fields=["name"], limit=1)
+	fiscal_year = frappe.get_all(
+		"Fiscal Year",
+		filters={"year_start_date": ["<=", today()], "year_end_date": [">=", today()], "disabled": 0},
+		fields=["name"],
+		limit=1,
+	)
 
 	if fiscal_year:
 		fy_doc = frappe.get_doc("Fiscal Year", fiscal_year[0]["name"])
 		linked_companies = [d.company for d in fy_doc.companies]
 
 		if company.name not in linked_companies:
-			fy_doc.append("companies", {
-				"company": company.name
-			})
+			fy_doc.append("companies", {"company": company.name})
 			fy_doc.save()
 	else:
 		# If not exists create new FY
-		fy_doc = frappe.get_doc({
-			"doctype": "Fiscal Year",
-			"year": f"FY {today()[:4]}",
-			"year_start_date": today(),
-			"year_end_date": add_days(today(), 364),
-			"disabled": 0
-		})
-		fy_doc.append("fiscal_year_company", {
-			"company": company.name
-		})
+		fy_doc = frappe.get_doc(
+			{
+				"doctype": "Fiscal Year",
+				"year": f"FY {today()[:4]}",
+				"year_start_date": today(),
+				"year_end_date": add_days(today(), 364),
+				"disabled": 0,
+			}
+		)
+		fy_doc.append("fiscal_year_company", {"company": company.name})
 		fy_doc.insert()
 	expense_account = f"T Cost of Goods Sold - {company_abbr}"
 	cost_center = f"_Test Cost Center - {company_abbr}"
-	return fiscal_year,expense_account,cost_center
+	return fiscal_year, expense_account, cost_center
