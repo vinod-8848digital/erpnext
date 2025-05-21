@@ -259,6 +259,7 @@ class TestQualityInspection(FrappeTestCase):
 		stock_entry.stock_entry_type = "Material Receipt"
 		stock_entry.company = company.name
 		stock_entry.to_warehouse = warehouse
+
 		stock_entry.append(
 			"items",
 			{
@@ -371,12 +372,41 @@ class TestQualityInspection(FrappeTestCase):
 		wh = create_warehouse("_Test Warehouse - _TC", company=company.name)
 		se = make_stock_entry(
 			item_code=item.name,
+			company=company.name,
 			target=wh,
 			qty=1,
 			basic_rate=100,
 			inspection_required=True,
 			do_not_submit=True,
 		)
+		# Create Quality Inspection for the SE
+		qi = frappe.new_doc("Quality Inspection")
+		qi.inspection_type = "Incoming"
+		qi.reference_type = "Stock Entry"
+		qi.reference_name = se.name
+		qi.item_code = item.name
+		qi.sample_size = 1
+		qi.inspected_by = "Administrator"
+		qi.append(
+			"readings",
+			{
+				"specification": "Spec-A",
+				"reading_1": "12",
+				"value": "12",
+				"min_value": "10",
+				"max_value": "15",
+				"status": "Accepted",
+			},
+		)
+		qi.insert()
+		qi.submit()
+
+		# Link to SE item
+		for d in se.items:
+			d.quality_inspection = qi.name
+		se.reload()
+		se.save()
+		se.submit()
 
 		from frappe.utils import add_days, add_months, flt, getdate, nowdate, today
 
@@ -389,6 +419,7 @@ class TestQualityInspection(FrappeTestCase):
 			pl.buying = 1
 			pl.enabled = 1
 			pl.insert()
+
 		test_records = frappe.get_test_records("Supplier Quotation")
 		sq = frappe.copy_doc(test_records[0])
 		sq.price_list = "_Test Price List"
@@ -1135,6 +1166,7 @@ def setup_test_company_defaults(company_name="_Test Company", abbreviation="_TC"
 		"default_bank_account": ensure_account("Bank", "Asset"),
 		"default_inventory_account": ensure_account("Stock Asset", "Asset"),
 		"default_provisional_account": ensure_account("Cost of Goods Sold", "Expense"),
+		"stock_adjustment_account": ensure_account("Stock Adjustment", "Expense"),
 	}
 
 	# Default Cost Center
@@ -1151,6 +1183,7 @@ def setup_test_company_defaults(company_name="_Test Company", abbreviation="_TC"
 	company.enable_perpetual_inventory = 1
 	company.enable_provisional_accounting_for_non_stock_items = 1
 	company.save()
+	frappe.db.commit()
 
 	set_default("company", company_name, "__default")
 
