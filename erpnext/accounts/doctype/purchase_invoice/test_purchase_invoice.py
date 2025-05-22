@@ -2777,7 +2777,7 @@ class TestPurchaseInvoice(FrappeTestCase, StockTestMixin):
 
 		records_for_pi('_Test Supplier USD')
 		supplier = frappe.get_doc('Supplier', '_Test Supplier USD')
-		tds_account = frappe.get_doc("Account", "Test TDS Payable - _TC")
+		tds_account = frappe.get_doc("Account", "_Test TDS Payable - _TC")
 		if tds_account.account_currency != "INR":
 			tds_account.account_currency = "INR"
 			tds_account.save()
@@ -4279,7 +4279,7 @@ class TestPurchaseInvoice(FrappeTestCase, StockTestMixin):
 					"doctype":"Item Tax Template",
 					"title": gst.get("template"),
 					"company":"_Test Company",
-					"gst_rate":gst.get("rate"),
+					"gst_rate": gst.get("rate"),
 					"taxes":[
 						{
 							"tax_type":"Marketing Expenses - _TC",
@@ -4287,7 +4287,7 @@ class TestPurchaseInvoice(FrappeTestCase, StockTestMixin):
 						}
 					]}
 					
-					).insert(ignore_permissions=True)
+					).insert(ignore_permissions=True, ignore_if_duplicate=True)
 		purchase_taxes_template = create_or_get_purchase_taxes_template("_Test Company")
 
 		gst_rates = [
