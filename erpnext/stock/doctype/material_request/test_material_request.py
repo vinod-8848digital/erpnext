@@ -6153,6 +6153,10 @@ class TestMaterialRequest(FrappeTestCase):
 
 	def test_mr_to_pi_with_PE_TC_B_076(self):
 		# MR =>  PO => PE => PR => PI
+		from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_payment_term
+		create_payment_term("Basic Amount Receivable for Selling")
+		item = make_test_item("Testing-31")
+
 		mr_dict_list = {
 				"company" : "_Test Company",
 				"item_code" : "Testing-31",
