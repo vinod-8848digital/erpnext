@@ -22,7 +22,10 @@ from erpnext.stock.doctype.serial_and_batch_bundle.test_serial_and_batch_bundle 
 from erpnext.stock.doctype.stock_entry.stock_entry_utils import make_stock_entry
 from erpnext.stock.get_item_details import get_item_details
 from erpnext.stock.serial_batch_bundle import SerialBatchCreation
-
+from erpnext.stock.doctype.warehouse.test_warehouse import create_warehouse
+from erpnext.stock.doctype.item.test_item import make_item
+from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_company
+from erpnext.accounts.doctype.payment_entry.test_payment_entry import make_test_item
 
 class TestBatch(FrappeTestCase):
 	def test_item_has_batch_enabled(self):
@@ -37,6 +40,72 @@ class TestBatch(FrappeTestCase):
 
 		if not frappe.db.exists(item_name):
 			return make_item(item_name, dict(has_batch_no=1, create_new_batch=1, is_stock_item=1))
+
+	def test_get_batches_by_oldest_TC_SCK_293(self):
+		from erpnext.stock.doctype.batch.batch import get_batches_by_oldest
+		item = "Test Item"
+		warehouse = "Stores - TC-5"
+		company="_Test Company"
+		if not frappe.db.exists("Company", company):
+			create_company()
+
+		warehouse = create_warehouse(warehouse, company=company)
+		item = make_item(item_code=item)
+		get_batches_by_oldest = get_batches_by_oldest(item.name,warehouse)
+		# Assert that the result is a list
+		self.assertIsInstance(get_batches_by_oldest, list)
+	
+	def test_get_pos_reserved_batch_qty_TC_SCK_294(self):
+		from erpnext.stock.doctype.batch.batch import get_pos_reserved_batch_qty
+
+		item_code = "Test Item"
+		warehouse_name = "Stores - TC-5"
+		company = "_Test Company"
+
+		if not frappe.db.exists("Company", company):
+			create_company()
+
+		warehouse = create_warehouse(warehouse_name, company=company)
+		assert frappe.db.exists("Warehouse", warehouse), "Warehouse was not created"
+
+		if not frappe.db.exists("Item", item_code):
+			item = make_test_item(item_code)
+			item.item_group = "Products"
+			item.has_serial_no = 1
+			item.serial_no_series = item.item_code + ".#####"
+			item.has_batch_no = 1
+			item.is_stock_item = 1
+			item.save()
+			assert frappe.db.exists("Item", item_code), "Item was not created"
+		else:
+			item = frappe.get_doc("Item", item_code)
+
+		if not frappe.db.exists("Batch", "Batch_001"):
+			batch = frappe.get_doc({
+				"doctype": "Batch",
+				"batch_id": "Batch_001",
+				"stock_uom": "Nos",
+				"item": item.name,
+				"manufacturing_date": frappe.utils.now(),
+			}).insert(ignore_permissions=True)
+			assert frappe.db.exists("Batch", "Batch_001"), "Batch was not created"
+		else:
+			batch = frappe.get_doc("Batch", "Batch_001")
+
+		# Prepare filters
+		filters = {
+			"item_code": item.name,
+			"warehouse": warehouse,
+			"batch_no": batch.name
+		}
+
+		# Run the method
+		reserved_qty = get_pos_reserved_batch_qty(filters)
+
+		# Assert the response is a float or int (expected default 0 unless setup includes reservations)
+		assert isinstance(reserved_qty, (int, float)), "Reserved quantity is not a number"
+		assert reserved_qty >= 0, "Reserved quantity should not be negative"
+
 
 	def test_purchase_receipt(self, batch_qty=100):
 		"""Test automated batch creation from Purchase Receipt"""
