@@ -47,6 +47,8 @@ class TestSalesInvoice(FrappeTestCase):
 		create_internal_parties()
 		setup_accounts()
 		frappe.db.set_single_value("Accounts Settings", "acc_frozen_upto", None)
+		if frappe.db.get_single_value("Selling Settings", "validate_selling_price"):
+			frappe.db.set_single_value("Selling Settings", "validate_selling_price", 0)
 
 	def tearDown(self):
 		frappe.db.rollback()

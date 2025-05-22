@@ -14,6 +14,10 @@ test_dependencies = ["Product Bundle"]
 
 
 class TestQuotation(FrappeTestCase):
+	def setUp(self):
+		if frappe.db.get_single_value("Selling Settings", "validate_selling_price"):
+			frappe.db.set_single_value("Selling Settings", "validate_selling_price", 0)
+
 	def test_make_quotation_without_terms(self):
 		quotation = make_quotation(do_not_save=1)
 		self.assertFalse(quotation.get("payment_schedule"))

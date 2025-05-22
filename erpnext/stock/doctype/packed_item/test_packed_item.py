@@ -53,6 +53,10 @@ class TestPackedItem(FrappeTestCase):
 
 		cls.normal_item = make_item().name
 
+	def setUp(self):
+		if frappe.db.get_single_value("Selling Settings", "validate_selling_price"):
+			frappe.db.set_single_value("Selling Settings", "validate_selling_price", 0)
+
 	def test_adding_bundle_item(self):
 		"Test impact on packed items if bundle item row is added."
 		so = make_sales_order(item_code=self.bundle, qty=1, do_not_submit=True)
