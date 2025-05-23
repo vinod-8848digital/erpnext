@@ -474,7 +474,6 @@ def get_batch_no(bundle_id):
 	from erpnext.stock.serial_batch_bundle import get_batch_nos
 
 	batches = defaultdict(float)
-
 	for batch_id, d in get_batch_nos(bundle_id).items():
 		batches[batch_id] += abs(d.get("qty"))
 
