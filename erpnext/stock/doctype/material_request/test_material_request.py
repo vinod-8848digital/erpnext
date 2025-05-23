@@ -6053,11 +6053,13 @@ class TestMaterialRequest(FrappeTestCase):
 
 	@if_app_installed("india_compliance")
 	def test_mr_to_po_pi_with_serial_nos_TC_B_158(self):
+		from erpnext.buying.doctype.purchase_order.test_purchase_order import get_or_create_fiscal_year
 		company = create_company()
+		get_or_create_fiscal_year(company)
 		warehouse = "Stores - _CM"
 		supplier = create_supplier(supplier_name="_Test Supplier MR")
 		item_code = "_Test Item With Serial No"
-		create_fiscal_year(company)
+		get_or_create_fiscal_year(company)
 		quantity = 3
 		gst_hsn_code = "11112222"
 
@@ -6153,6 +6155,10 @@ class TestMaterialRequest(FrappeTestCase):
 
 	def test_mr_to_pi_with_PE_TC_B_076(self):
 		# MR =>  PO => PE => PR => PI
+		from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_payment_term
+		create_payment_term("Basic Amount Receivable for Selling")
+		item = make_test_item("Testing-31")
+
 		mr_dict_list = {
 				"company" : "_Test Company",
 				"item_code" : "Testing-31",

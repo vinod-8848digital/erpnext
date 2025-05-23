@@ -182,17 +182,19 @@ class TestSupplier(FrappeTestCase):
 		self.assertIn(self.contact.name, results[0])
 
 	def test_create_primary_contact_TC_B_182(self):
-		supplier = frappe.get_doc({
-            "doctype": "Supplier",
-            "supplier_name": "Test Supplier",
-            "supplier_group": "All Supplier Groups",
-            "mobile_no": "1234567890",
-            "email_id": "test@example.com"
-        })
-		supplier.insert(ignore_permissions=True)
+		if not frappe.db.exists("Supplier", "Test Supplier"):
+			supplier = frappe.get_doc({
+				"doctype": "Supplier",
+				"supplier_name": "Test Supplier",
+				"supplier_group": "All Supplier Groups",
+				"mobile_no": "1234567890",
+				"email_id": "test@example.com"
+			})
+			supplier.insert(ignore_permissions=True)
+		else:
+			supplier = frappe.get_doc("Supplier", "Test Supplier")  # ✅ fetch doc properly
 
 		supplier.create_primary_contact()
-
 		supplier.reload()
 
 		self.assertIsNotNone(supplier.supplier_primary_contact)

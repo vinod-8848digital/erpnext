@@ -4822,7 +4822,7 @@ class TestPurchaseOrder(FrappeTestCase):
 			tax_category.title = tax_category_1
 			tax_category.save()
 
-		frappe.db.set_value('Company', company, 'stock_received_but_not_billed', "Stock Received But Not Billed - _TC")
+		frappe.db.set_value("Company", company, {"enable_perpetual_inventory":1, "stock_received_but_not_billed": "Stock Received But Not Billed - _TC"})
 		item_tax_template = frappe.db.get_value("Purchase Taxes and Charges Template",{"company": company,"tax_category":tax_category_1}, "name")
 		if frappe.db.exists("DocType", "GST HSN Code") and not frappe.db.exists("GST HSN Code", gst_hsn_code):
 			frappe.get_doc({

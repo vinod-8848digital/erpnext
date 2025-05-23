@@ -7140,24 +7140,27 @@ def make_item_price():
         return ip_doc
 
 def make_pricing_rule():
-    if not frappe.db.exists('Pricing Rule', {'title': 'Test Offer'}):
-        pricing_rule_doc = frappe.new_doc('Pricing Rule')
-        pricing_rule_data = {
-            "title": 'Test Offer',
-            "apply_on": 'Item Code',
-            "price_or_product_discount": 'Price',
-            "selling": 1,
-            "min_qty": 10,
-            "company": '_Test Company',
-            "margin_type": 'Percentage',
-            "discount_percentage": 10,
-            "for_price_list": 'Standard Selling',
+	if not frappe.db.exists('Pricing Rule', {'title': 'Test Offer'}):
+		pricing_rule_doc = frappe.new_doc('Pricing Rule')
+		pricing_rule_data = {
+			"title": 'Test Offer',
+			"apply_on": 'Item Code',
+			"price_or_product_discount": 'Price',
+			"selling": 1,
+			"min_qty": 10,
+			"company": '_Test Company',
+			"margin_type": 'Percentage',
+			"discount_percentage": 10,
+			"for_price_list": 'Standard Selling',
 			"items":[ {"item_code": "_Test Item", "uom": '_Test UOM'}]
-        }
-        
-        pricing_rule_doc.update(pricing_rule_data)
-        pricing_rule_doc.save()
-        return pricing_rule_doc
+		}
+		
+		pricing_rule_doc.update(pricing_rule_data)
+		pricing_rule_doc.save()
+		return pricing_rule_doc
+	else:
+		pricing_rule_doc = frappe.get_doc('Pricing Rule', {'title': 'Test Offer'})
+		return pricing_rule_doc
 
 
 
@@ -7331,6 +7334,6 @@ def set_credit_limit_for_customer(customer_name):
 	customer.credit_limits.clear()
 	customer.append(
 				"credit_limits",
-				{"company": "_Test Company", "credit_limit": 1000000.00},
+				{"company": "_Test Company", "credit_limit": 100000000000.00},
 			)
 	customer.save()

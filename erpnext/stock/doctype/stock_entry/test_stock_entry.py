@@ -3325,7 +3325,7 @@ class TestStockEntry(FrappeTestCase):
 		company = "_Test Company"
 		get_or_create_fiscal_year('_Test Company')
 		create_customer(name = '_Test Customer')
-		frappe.db.set_value("Company", company, "stock_adjustment_account", 'Stock Adjustment - _TC')
+		frappe.db.set_value("Company", company, {"enable_perpetual_inventory":1, "stock_adjustment_account": "Stock Adjustment - _TC"})
 		fields = {
 			"shelf_life_in_days": 365,
 			"end_of_life": "2099-12-31",
@@ -3413,7 +3413,7 @@ class TestStockEntry(FrappeTestCase):
 		company = "_Test Company"
 		get_or_create_fiscal_year('_Test Company')
 		create_customer(name = '_Test Customer' )
-		frappe.db.set_value("Company", company, "stock_adjustment_account", 'Stock Adjustment - _TC')
+		frappe.db.set_value("Company", company, {"enable_perpetual_inventory":1, "stock_adjustment_account": "Stock Adjustment - _TC"})
 		fields = {
 			"shelf_life_in_days": 365,
 			"end_of_life": "2099-12-31",
@@ -3693,7 +3693,7 @@ class TestStockEntry(FrappeTestCase):
 		company = "_Test Company"
 		get_or_create_fiscal_year('_Test Company')
 		create_customer(name = '_Test Customer' )
-		frappe.db.set_value("Company", company, "stock_adjustment_account", 'Stock Adjustment - _TC')
+		frappe.db.set_value("Company", company, {"enable_perpetual_inventory":1, "stock_adjustment_account": "Stock Adjustment - _TC"})
 		fields = {
 			"shelf_life_in_days": 365,
 			"end_of_life": "2099-12-31",
