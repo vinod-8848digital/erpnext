@@ -362,84 +362,86 @@ class TestAccount(unittest.TestCase):
 		self.assertEqual(balance, 0)
 
 	def test_allow_unverified_chart_TC_ACC_167(self):
-		company = make_company(company_name="_Test Company")
+		company = make_company(company_name="Test Company")
 		frappe.local.flags.allow_unverified_charts = True
-		if frappe.db.exists("Account", "Test Account - _TC"):
-			frappe.delete_doc("Account", "Test Account - _TC", force=1)
+		if frappe.db.exists("Account", "Test Account - TC"):
+			frappe.delete_doc("Account", "Test Account - TC", force=1)
 		account = frappe.new_doc("Account")
 		account.account_name = "Test Account"
 		account.company = company.name
-		account.parent_account = "Cash In Hand - _TC"
+		account.parent_account = "Cash In Hand - TC"
 		account.insert(ignore_permissions=True)
-		self.assertEqual(account.parent_account, "Cash In Hand - _TC")
+		self.assertEqual(account.parent_account, "Cash In Hand - TC")
 
 	def test_validate_parent_child_account_type_TC_ACC_168(self):
-		company = make_company(company_name="_Test Company")
-		account_type = "Direct Income"
-		create_account(
+		company = make_company(company_name="Test Company")
+		account = create_account(
 		account_name="Test Parent Account 470",  
-		parent_account="Cash In Hand - _TC", 
+		parent_account="Cash In Hand - TC", 
 		company=company.name,
-		account_type=account_type,
+		account_type="Direct Income",
 		account_currency="INR",
 		is_group=1
 		)
 		child_account = frappe.get_doc(dict(
 			doctype = "Account",
 			account_name = "Test Child Account",
-			parent_account = "Test Parent Account 470 - _TC",
+			parent_account = account,
 			company = company.name,
-			account_type = account_type,
+			account_type = "Direct Income",
 			account_currency = "INR",
 			is_group = 0
 		))
-		with self.assertRaises(frappe.ValidationError, msg=f"Only Parent can be of type {account_type}"):
+		with self.assertRaises(frappe.ValidationError, msg="Only Parent can be of type Direct Income"):
 			child_account.save()
 
+	def tearDown(self):
+		frappe.db.rollback()
+	
 	def test_validate_parent_account_not_assign_TC_ACC_169(self):
-		company = make_company(company_name="_Test Company")
+		company = make_company(company_name="Test Company")
 		create_account(
 		account_name="Test Parent Account 013",  
-		parent_account="Cash In Hand - _TC", 
+		parent_account="Cash In Hand - TC", 
 		company=company.name,
 		account_type="Direct Income",
 		account_currency="INR",
 		is_group=1
 		)
-		if frappe.db.exists("Account", "Test Account 123 - _TC"):
-			frappe.delete_doc("Account", "Test Account 123 - _TC", force=1)
+		if frappe.db.exists("Account", "Test Account 123 - TC"):
+			frappe.delete_doc("Account", "Test Account 123 - TC", force=1)
 		account = frappe.new_doc("Account")
 		account.account_name = "Test Account 123"
 		account.is_group = 0
-		account.parent_account = "Test Parent Account 013 - _TC"
+		account.parent_account = "Test Parent Account 013 - TC"
 		account.company = company.name
 		account.save()
 		account.parent_account = account.name
-		with self.assertRaises(frappe.ValidationError, msg=f"Account {account.name}: You can not assign itself as parent account"):
+		with self.assertRaises(frappe.ValidationError, msg="Account Test Account 123 - TC: You can not assign itself as parent account"):
 			account.save()
 	
 	def test_validate_parent_account_is_group_TC_ACC_170(self):
-		company = make_company(company_name="_Test Company")
+		company = make_company(company_name="Test Company")
 		create_account(
 		account_name="Test Parent Account 01",  
-		parent_account="Cash In Hand - _TC", 
+		parent_account="Cash In Hand - TC", 
 		company=company.name,
 		account_type="Direct Income",
 		account_currency="INR",
 		is_group=0
 		)
-		if frappe.db.exists("Account", "Test Account 123 - _TC"):
-			frappe.delete_doc("Account", "Test Account 123 - _TC", force=1)
+		if frappe.db.exists("Account", "Test Account 123 - TC"):
+			frappe.delete_doc("Account", "Test Account 123 - TC", force=1)
 		account = frappe.new_doc("Account")
 		account.account_name = "Test Account 123"
 		account.is_group = 0
-		account.parent_account = "Test Parent Account 01 - _TC"
+		account.parent_account = "Test Parent Account 01 - TC"
 		account.company = company.name
-		with self.assertRaises(frappe.ValidationError, msg="Account Test Account 123 - _TC: Parent account Test Parent Account 01 - _TC can not be a ledger"):
+		with self.assertRaises(frappe.ValidationError, msg="Account Test Account 123 - TC: Parent account Test Parent Account 01 - _TC can not be a ledger"):
 			account.save()
 	
 	def test_validate_parent_account_for_company_TC_ACC_171(self):
-		company = make_company(company_name="_Test Company")
+		company = make_company(company_name="Test Company")
 		company_2 = make_company(company_name="Test Company New")
 		create_account(
 		account_name="Test Parent Account 012",  
@@ -449,25 +451,25 @@ class TestAccount(unittest.TestCase):
 		account_currency="INR",
 		is_group=1
 		)
-		if frappe.db.exists("Account", "Test Account 123 - _TC"):
-			frappe.delete_doc("Account", "Test Account 123 - _TC", force=1)
+		if frappe.db.exists("Account", "Test Account 123 - TC"):
+			frappe.delete_doc("Account", "Test Account 123 - TC", force=1)
 		account = frappe.new_doc("Account")
 		account.account_name = "Test Account 123"
 		account.is_group = 0
 		account.parent_account = "Test Parent Account 012 - TCN"
 		account.company = company.name
-		with self.assertRaises(frappe.ValidationError, msg="Account Test Account 123 - _TC: Parent account Test Parent Account 012 - TCN does not belong to company: _Test Company"):
+		with self.assertRaises(frappe.ValidationError, msg="Account Test Account 123 - TC: Parent account Test Parent Account 012 - TCN does not belong to company: Test Company"):
 			account.save()
 	
 	def test_set_root_and_report_type_TC_ACC_172(self):
-		company = make_company(company_name="_Test Company")
-		if frappe.db.exists("Account", "Parent Account 4 - _TC"):
-			frappe.delete_doc("Account", "Parent Account 4 - _TC", force=1)
+		company = make_company(company_name="Test Company")
+		if frappe.db.exists("Account", "Parent Account 4 - TC"):
+			frappe.delete_doc("Account", "Parent Account 4 - TC", force=1)
 		account = frappe.new_doc("Account")
 		account.account_name = "Parent Account 4"
 		account.company = company.name
 		account.account_type = "Cash"
-		account.parent_account = "Cash In Hand - _TC"
+		account.parent_account = "Cash In Hand - TC"
 		account.is_group = 1
 		account.save()
 		account.db_set("root_type", "Liability")
@@ -481,17 +483,17 @@ class TestAccount(unittest.TestCase):
 		from erpnext.stock.doctype.warehouse.test_warehouse import create_warehouse
 		from erpnext.buying.doctype.supplier.test_supplier import create_supplier
 		from erpnext.stock.doctype.item.test_item import create_item
-		company = make_company(company_name="_Test Company")
-		item_code = "_Test Item"
-		supplier = "_Test Supplier"
+		company = make_company(company_name="Test Company")
+		item_code = "Test Item"
+		supplier = "Test Supplier"
 		
 		create_warehouse(
-			warehouse_name="_Test Warehouse - _TC",
-			properties={"parent_warehouse": "All Warehouses - _TC", "account": "Cost of Goods Sold - _TC"},
-			company="_Test Company",
+			warehouse_name="_Test Warehouse - TC",
+			properties={"parent_warehouse": "All Warehouses - TC", "account": "Cost of Goods Sold - TC"},
+			company="Test Company",
 		)
 		create_supplier(supplier_name=supplier, default_currency="INR")
-		item = create_item(item_code = item_code,valuation_rate=100)
+		item = create_item(item_code = item_code,valuation_rate=100, warehouse="Stores - TC", company=company.name)
 		pi = frappe.new_doc("Purchase Invoice")
 		pi.supplier = supplier
 		pi.company=company.name
@@ -503,16 +505,16 @@ class TestAccount(unittest.TestCase):
 		})
 		pi.save()
 		pi.submit()
-		account = frappe.get_doc("Account", "Creditors - _TC")
+		account = frappe.get_doc("Account", "Creditors - TC")
 		account.account_type = "Cash"
 		account.save()
 		account.db_set("account_type", "Payable")
 		self.assertEqual(account.account_type, "Payable")
 	
 	def test_validate_root_details_TC_ACC_174(self):
-		company = make_company(company_name="_Test Company")
-		if frappe.db.exists("Account", "Root Account - _TC"):
-			frappe.delete_doc("Account", "Root Account - _TC", force=1)
+		company = make_company(company_name="Test Company")
+		if frappe.db.exists("Account", "Root Account - TC"):
+			frappe.delete_doc("Account", "Root Account - TC", force=1)
 		account = frappe.get_doc(
 					{
 					"doctype": "Account",
@@ -526,18 +528,18 @@ class TestAccount(unittest.TestCase):
 			account.save()
 	
 	def test_validate_root_account_must_be_group_TC_ACC_175(self):
-		if frappe.db.exists("Account", "Testing Root - _TC"):
-			frappe.delete_doc("Account", "Testing Root - _TC", force=1)
-		company = make_company(company_name="_Test Company")
+		company = make_company(company_name="Test Company")
+		if frappe.db.exists("Account", "Testing Root - TC"):
+			frappe.delete_doc("Account", "Testing Root - TC", force=1)
 		account = frappe.new_doc("Account")
 		account.account_name = "Testing Root"
 		account.company = company.name
 		account.account_type = "Cash"
-		account.parent_account = "Cash In Hand - _TC"
+		account.parent_account = "Cash In Hand - TC"
 		account.is_group = 0
 		account.save()
 		account.parent_account = ""
-		with self.assertRaises(frappe.ValidationError, msg="The root account Testing Root - _TC must be a group"):
+		with self.assertRaises(frappe.ValidationError, msg="The root account Testing Root - TC must be a group"):
 			account.save()
 
 	def test_with_child_node_convert_group_to_ledger_TC_ACC_176(self):
@@ -567,17 +569,17 @@ class TestAccount(unittest.TestCase):
 		from erpnext.stock.doctype.warehouse.test_warehouse import create_warehouse
 		from erpnext.buying.doctype.supplier.test_supplier import create_supplier
 		from erpnext.stock.doctype.item.test_item import create_item
-		company = make_company(company_name="_Test Company")
-		item_code = "_Test Item"
-		supplier = "_Test Supplier"
+		company = make_company(company_name="Test Company")
+		item_code = "Test Item"
+		supplier = "Test Supplier"
 		
 		create_warehouse(
-			warehouse_name="_Test Warehouse - _TC",
-			properties={"parent_warehouse": "All Warehouses - _TC", "account": "Cost of Goods Sold - _TC"},
-			company="_Test Company",
+			warehouse_name="Test Warehouse - TC",
+			properties={"parent_warehouse": "All Warehouses - TC", "account": "Cost of Goods Sold - TC"},
+			company="Test Company",
 		)
 		create_supplier(supplier_name=supplier, default_currency="INR")
-		item = create_item(item_code = item_code,valuation_rate=100)
+		item = create_item(item_code = item_code,valuation_rate=100, warehouse="Stores - TC", company=company.name)
 		pi = frappe.new_doc("Purchase Invoice")
 		pi.supplier = supplier
 		pi.company=company.name
@@ -589,7 +591,7 @@ class TestAccount(unittest.TestCase):
 		})
 		pi.save()
 		pi.submit()
-		account = frappe.get_doc("Account", "Creditors - _TC")
+		account = frappe.get_doc("Account", "Creditors - TC")
 		with self.assertRaises(frappe.ValidationError, msg="Account with existing transaction cannot be converted to ledger"):
 			account.convert_group_to_ledger()
 
