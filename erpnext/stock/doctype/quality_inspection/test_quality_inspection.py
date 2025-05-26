@@ -656,8 +656,8 @@ class TestQualityInspection(FrappeTestCase):
 			qi_template.insert()
 
 		# Assign template to item
-		frappe.db.set_value("Item", item.name, "quality_inspection_template", template_name)
-		frappe.db.commit()
+		item.quality_inspection_template = template_name
+		item.save()
 
 		# Create Operation
 		if not frappe.db.exists("Operation", "Test Operation"):
@@ -727,6 +727,8 @@ class TestQualityInspection(FrappeTestCase):
 		frappe.db.rollback()
 
 		company = setup_test_company_defaults()
+		fiscal_year, expense_account, cost_center = setup_fy_gls_cost_center()
+		warehouse = create_warehouse("_Test Warehouse", company=company.name)
 		create_supplier(supplier_name="_Test Supplier")
 
 		# Create Quality Inspection Template
@@ -742,8 +744,9 @@ class TestQualityInspection(FrappeTestCase):
 
 		# Create Item
 		item = create_item(item_code="_Test BOM Item", stock_uom="Nos", is_stock_item=1)
-		frappe.db.set_value("Item", item.name, "inspection_required_before_purchase", 1)
-		frappe.db.set_value("Item", item.name, "quality_inspection_template", template_name)
+		item.quality_inspection_template = template_name
+		item.inspection_required_before_purchase =1
+		item.save()
 
 		# Create BOM for the item and link the QA template
 		raw_material = "Test SO RM Production Item 1"
@@ -756,7 +759,7 @@ class TestQualityInspection(FrappeTestCase):
 			bom.submit()
 
 		pr = make_purchase_receipt(
-			item_code=item.name, company=company.name, stock_uom="Box", do_not_submit=True
+			item_code=item.name, supplier_warehouse=warehouse, company=company.name, stock_uom="Box", do_not_submit=True
 		)
 
 		# Create Quality Inspection without template (method will fetch it from BOM)
@@ -816,6 +819,7 @@ class TestQualityInspection(FrappeTestCase):
 
 		# Setup common test data
 		company = setup_test_company_defaults()
+		fiscal_year, expense_account, cost_center = setup_fy_gls_cost_center()
 		item = create_item(item_code="_Test Item Dist", stock_uom="Nos", is_stock_item=1)
 		warehouse = create_warehouse("_Test Warehouse", company=company.name)
 		reference_name = "Test-Ref-Dist"
@@ -907,27 +911,32 @@ class TestQualityInspection(FrappeTestCase):
 
 	def test_item_query_TC_SCK_290(self):
 		from erpnext.stock.doctype.quality_inspection.quality_inspection import item_query
+		from erpnext.buying.doctype.supplier.test_supplier import create_supplier
 
 		frappe.set_user("Administrator")
 		frappe.db.rollback()
 		company = setup_test_company_defaults()
+		fiscal_year, expense_account, cost_center = setup_fy_gls_cost_center()
+		create_supplier(supplier_name="_Test Supplier")
+		warehouse = create_warehouse("_Test Warehouse", company=company.name)
 
 		# Create item that requires inspection before purchase
 		item = create_item(
 			item_code="_Test Item for PR Query", stock_uom="Nos", valuation_rate=200, is_stock_item=1
 		)
-		frappe.db.set_value("Item", item.name, "inspection_required_before_purchase", 1)
-		frappe.db.set_value("Item", item.name, "inspection_required_before_delivery", 1)
+		item.inspection_required_before_purchase = 1
+		item.inspection_required_before_delivery = 1
+		item.save()
 
 		# Create purchase receipt with the item
 		pr = make_purchase_receipt(
-			item_code=item.name, company="_Test Company", stock_uom="Box", do_not_submit=True
+			item_code=item.name, company="_Test Company",supplier_warehouse=warehouse, stock_uom="Box", do_not_submit=True
 		)
 
 		from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_customer
 
 		create_customer(name="_Test Customer")
-		dn = create_delivery_note(item_code=item.name, do_not_submit=True)
+		dn = create_delivery_note(item_code=item.name,cost_center=cost_center, do_not_submit=True)
 		wh = create_warehouse("_Test Warehouse - _TC", company=company.name)
 		se = make_stock_entry(
 			item_code=item.name,
@@ -1174,7 +1183,6 @@ def setup_test_company_defaults(company_name="_Test Company", abbreviation="_TC"
 	set_default("company", company_name, "__default")
 
 	return company
-
 
 def setup_fy_gls_cost_center():
 	company = setup_test_company_defaults()
