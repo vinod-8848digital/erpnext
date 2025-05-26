@@ -2,6 +2,7 @@
 # License: GNU General Public License v3. See license.txt
 
 import json
+import re
 
 from erpnext.selling.doctype.customer.customer import get_customer_outstanding
 import frappe
@@ -6160,33 +6161,30 @@ class TestSalesOrder(AccountsTestMixin, FrappeTestCase):
   
 		return delivery_note
 	
+	@change_settings("Accounts Settings", {"credit_controller": "Administrator"})
 	def test_unlink_advance_payment_on_order_cancellation_TC_ACC_127(self):
 		from erpnext.accounts.doctype.payment_entry.test_payment_entry import (
-			make_test_item,
 			get_payment_entry
 		)
-		sales_oreder_name = None
+
 		account_setting = frappe.get_doc("Accounts Settings")
 		account_setting.unlink_advance_payment_on_cancelation_of_order = 0
 		account_setting.save()
 
-		item = make_test_item("_Test Item")
-		try:
-			so = make_sales_order(
-				customer="_Test Customer",
-				company="_Test Company",	
-				item_code=item.name,
-				qty=1,
-				rate=1000,
-			)
-			sales_oreder_name = so.name
-			pe = get_payment_entry("Sales Order", so.name, bank_account="Cash - _TC")
-			pe.submit()
+		item = make_item("_Test Item")
+		so = make_sales_order(
+			customer="_Test Customer",
+			company="_Test Company",
+			item_code=item.name,
+			qty=1,
+			rate=1000,
+		)
+		pe = get_payment_entry("Sales Order", so.name, bank_account="Cash - _TC")
+		pe.submit()
+
+		with self.assertRaises(frappe.LinkExistsError) as cm:
 			so.load_from_db()
 			so.cancel()
-		except Exception as e:
-			error_message = str(e)
-			self.assertEqual(error_message, f"Cannot delete or cancel because Sales Order {sales_oreder_name} is linked with Payment Entry {pe.name} at Row: 1")
 		
 	def test_customer_credit_limit_bypass_TC_ACC_139(self):
 		
@@ -7140,24 +7138,27 @@ def make_item_price():
         return ip_doc
 
 def make_pricing_rule():
-    if not frappe.db.exists('Pricing Rule', {'title': 'Test Offer'}):
-        pricing_rule_doc = frappe.new_doc('Pricing Rule')
-        pricing_rule_data = {
-            "title": 'Test Offer',
-            "apply_on": 'Item Code',
-            "price_or_product_discount": 'Price',
-            "selling": 1,
-            "min_qty": 10,
-            "company": '_Test Company',
-            "margin_type": 'Percentage',
-            "discount_percentage": 10,
-            "for_price_list": 'Standard Selling',
+	if not frappe.db.exists('Pricing Rule', {'title': 'Test Offer'}):
+		pricing_rule_doc = frappe.new_doc('Pricing Rule')
+		pricing_rule_data = {
+			"title": 'Test Offer',
+			"apply_on": 'Item Code',
+			"price_or_product_discount": 'Price',
+			"selling": 1,
+			"min_qty": 10,
+			"company": '_Test Company',
+			"margin_type": 'Percentage',
+			"discount_percentage": 10,
+			"for_price_list": 'Standard Selling',
 			"items":[ {"item_code": "_Test Item", "uom": '_Test UOM'}]
-        }
-        
-        pricing_rule_doc.update(pricing_rule_data)
-        pricing_rule_doc.save()
-        return pricing_rule_doc
+		}
+		
+		pricing_rule_doc.update(pricing_rule_data)
+		pricing_rule_doc.save()
+		return pricing_rule_doc
+	else:
+		pricing_rule_doc = frappe.get_doc('Pricing Rule', {'title': 'Test Offer'})
+		return pricing_rule_doc
 
 
 
@@ -7331,6 +7332,6 @@ def set_credit_limit_for_customer(customer_name):
 	customer.credit_limits.clear()
 	customer.append(
 				"credit_limits",
-				{"company": "_Test Company", "credit_limit": 1000000.00},
+				{"company": "_Test Company", "credit_limit": 100000000000.00},
 			)
 	customer.save()

@@ -1195,6 +1195,8 @@ class TestItem(FrappeTestCase):
 		wo_items = frappe.get_doc("Work Order", wo.name).required_items
 		alt_item_found = any(item.item_code == alt_item.name for item in wo_items)
 		self.assertTrue(alt_item_found, "Alternative item not found in Work Order")
+		wo.reload()
+ 
 		from frappe.utils import flt
 
 		# Round amounts to avoid float precision issues before submission
@@ -1203,6 +1205,7 @@ class TestItem(FrappeTestCase):
 			item.rate = flt(item.rate, 9)
 
 		wo.save()  # Save the changes
+
 		wo.submit()
 		
 		self.assertTrue(frappe.db.exists("Work Order", wo.name))

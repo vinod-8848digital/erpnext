@@ -1574,11 +1574,9 @@ class TestPricingRule(FrappeTestCase):
 
 		frappe.set_user("Administrator")
 		item = make_test_item("_Test Item")
-		item.is_stock_item = True
 		item.save()
 
 		item1 = make_test_item("_Test Item 1")
-		item1.is_stock_item = True
 		item1.save()
 
 		make_stock_entry(item_code="_Test Item 1", qty=5, rate=500, target="Stores - _TC")
@@ -1606,11 +1604,9 @@ class TestPricingRule(FrappeTestCase):
 		
 		frappe.set_user("Administrator")
 		item = make_test_item("_Test Item")
-		item.is_stock_item = True
 		item.save()
 
 		item1 = make_test_item("_Test Item 1")
-		item1.is_stock_item = True
 		item1.save()
 
 		make_stock_entry(item_code="_Test Item 1", qty=5, rate=500, target="Stores - _TC")
@@ -1643,12 +1639,10 @@ class TestPricingRule(FrappeTestCase):
 		create_item_group("_Test Item Group")
 
 		item = make_test_item("_Test Item")
-		item.is_stock_item = True
 		item.item_group = "_Test Item Group"
 		item.save()
 
 		item1 = make_test_item("_Test Item 1")
-		item1.is_stock_item = True
 		item1.item_group = "_Test Item Group"
 		item1.save()
 
@@ -1692,12 +1686,10 @@ class TestPricingRule(FrappeTestCase):
 
 		item = make_test_item("_Test Item")
 		item.brand = "_Test Brand"
-		item.is_stock_item = True
 		item.save()
 
 		item1 = make_test_item("_Test Item 1")
 		item1.brand = "_Test Brand 1"
-		item1.is_stock_item = True
 		item1.save()
 		
 		make_stock_entry(item_code="_Test Item 1", qty=5, rate=500, target="Stores - _TC")
