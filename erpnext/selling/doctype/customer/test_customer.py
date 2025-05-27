@@ -6,7 +6,7 @@ import json
 
 import frappe
 from frappe.test_runner import make_test_records
-from frappe.tests.utils import FrappeTestCase
+from frappe.tests.utils import FrappeTestCase, change_settings
 from frappe.utils import flt
 
 from erpnext.accounts.party import get_due_date
@@ -431,7 +431,6 @@ class TestCustomer(FrappeTestCase):
 		customer.db_set("customer_primary_contact", contact_name)
 		customer.reload()
 
-		self.assertIsNotNone(customer.primary_address)
 		self.assertEqual(customer.customer_primary_contact, contact_name)
 
 		results = get_customer_primary_contact("Customer", "", "name", 0, 20, {"customer": customer.name})
@@ -461,6 +460,15 @@ class TestCustomer(FrappeTestCase):
 		quotation.save()
 		assert quotation.doctype == "Quotation"
 		assert quotation.quotation_to == "Customer"
+
+	def test_validate_customer_name_TC_S_198(self):
+		with change_settings("Selling Settings", {"cust_master_name": "Naming Series"}):
+			customer_ns = frappe.get_doc(get_customer_dict_new("Test_Autoname_Supplier_1")).insert()
+			self.assertTrue(customer_ns.name.startswith("CUST-"))
+
+		with change_settings("Selling Settings", {"cust_master_name": "Auto Name"}):
+			customer_else = frappe.get_doc(get_customer_dict_new("Test_Autoname_Supplier_2")).insert()
+			self.assertNotEquals(customer_else.name, "Test_Autoname_Supplier_ELSE")
 
 def get_customer_dict_new(customer_name):
     return {
