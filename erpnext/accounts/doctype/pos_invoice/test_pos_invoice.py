@@ -6,6 +6,7 @@ import unittest
 
 import frappe
 from frappe import _
+from frappe.tests.utils import change_settings
 from frappe.utils import cint, flt, getdate, today
 from erpnext.accounts.doctype.pos_invoice.pos_invoice import PartialPaymentValidationError, make_sales_return
 from erpnext.accounts.doctype.pos_profile.test_pos_profile import make_pos_profile
@@ -743,6 +744,7 @@ class TestPOSInvoice(unittest.TestCase):
 		rounded_total = frappe.db.get_value("Sales Invoice", pos_inv.consolidated_invoice, "rounded_total")
 		self.assertEqual(rounded_total, 840)
 
+	@change_settings("Selling Settings",{"validate_selling_price":1})
 	def test_merging_with_validate_selling_price(self):
 		from erpnext.accounts.doctype.pos_closing_entry.test_pos_closing_entry import (
 			init_user_and_profile,
@@ -750,9 +752,6 @@ class TestPOSInvoice(unittest.TestCase):
 		from erpnext.accounts.doctype.pos_invoice_merge_log.pos_invoice_merge_log import (
 			consolidate_pos_invoices,
 		)
-
-		if not frappe.db.get_single_value("Selling Settings", "validate_selling_price"):
-			frappe.db.set_single_value("Selling Settings", "validate_selling_price", 1)
 
 		item = "Test Selling Price Validation"
 		make_item(item, {"is_stock_item": 1})
@@ -795,7 +794,9 @@ class TestPOSInvoice(unittest.TestCase):
 		pos_inv2.load_from_db()
 		rounded_total = frappe.db.get_value("Sales Invoice", pos_inv2.consolidated_invoice, "rounded_total")
 		self.assertEqual(rounded_total, 400)
+		frappe.clear_cache(doctype="Selling Settings")
 
+	@change_settings("Selling Settings",{"validate_selling_price":0})
 	def test_pos_batch_reservation(self):
 		from erpnext.stock.doctype.serial_and_batch_bundle.serial_and_batch_bundle import (
 			get_auto_batch_nos,
@@ -855,6 +856,7 @@ class TestPOSInvoice(unittest.TestCase):
 		for batch in batches:
 			if batch.batch_no == batch_no and batch.warehouse == "_Test Warehouse - _TC":
 				self.assertEqual(batch.qty, 5)
+		frappe.clear_cache(doctype="Selling Settings")
 
 	def test_pos_batch_item_qty_validation(self):
 		from erpnext.stock.doctype.serial_and_batch_bundle.serial_and_batch_bundle import (

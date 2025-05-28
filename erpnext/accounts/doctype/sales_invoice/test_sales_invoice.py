@@ -50,6 +50,8 @@ class TestSalesInvoice(FrappeTestCase):
 
 	def tearDown(self):
 		frappe.db.rollback()
+		if frappe.db.get_single_value("Selling Settings", "validate_selling_price"):
+			frappe.db.set_single_value("Selling Settings", "validate_selling_price", 0)
 
 	def make(self):
 		w = frappe.copy_doc(test_records[0])
@@ -5726,6 +5728,7 @@ class TestSalesInvoice(FrappeTestCase):
 		]
 		check_gl_entries(self, jv_doc.name, expected_gl_entries, jv_doc.posting_date, "Journal Entry")
 	
+	@change_settings("Selling Settings",{"validate_selling_price":1})
 	def test_prevent_sale_below_purchase_rate_TC_ACC_125(self):
 		from erpnext.accounts.doctype.payment_entry.test_payment_entry import (
 			create_purchase_invoice,
@@ -5733,15 +5736,17 @@ class TestSalesInvoice(FrappeTestCase):
 			create_supplier,
 		)
 		from erpnext.buying.doctype.purchase_order.test_purchase_order import get_or_create_fiscal_year
+		from erpnext.accounts.doctype.sales_invoice.test_sales_invoice import create_sales_invoice
+		import frappe
+
 		get_or_create_fiscal_year("_Test Company")
-		selling_setting = frappe.get_doc("Selling Settings")
-		selling_setting.validate_selling_price = 1
-		selling_setting.save()
 
+		if not frappe.db.get_value("Company","_Test Company","stock_received_but_not_billed"):
+			frappe.db.set_value("Company","_Test Company","stock_received_but_not_billed","Stock Received But Not Billed - _TC")
 		supplier = create_supplier(supplier_name="_Test Supplier")
-
 		item = make_test_item("_Test Sell Item")
 
+		# Purchase at 100
 		pi = create_purchase_invoice(
 			supplier=supplier.name,
 			company="_Test Company",
@@ -5751,26 +5756,26 @@ class TestSalesInvoice(FrappeTestCase):
 		)
 		pi.save().submit()
 
-		try:
-			si = create_sales_invoice(
-				customer="_Test Customer",
-				company="_Test Company",
-				item_code=item.name,
-				qty=1,
-				rate=99
-			)
-		except Exception as e:
-			error_msg = str(e)
-		self.assertEqual(
-            error_msg,
-            (
-                "Row #1: Selling rate for item _Test Item is lower than its last purchase rate.\n"
-                "\t\t\t\t\tSelling net rate should be atleast 100.0.Alternatively,\n"
-                "\t\t\t\t\tyou can disable selling price validation in Selling Settings to bypass\n"
-                "\t\t\t\t\tthis validation."
-            )
-        )
+		expected_msg = (
+			"Row #1: Selling rate for item _Test Item is lower than its last purchase rate.\n"
+			"\t\t\t\t\tSelling net rate should be atleast 100.0.Alternatively,\n"
+			"\t\t\t\t\tyou can disable selling price validation in Selling Settings to bypass\n"
+			"\t\t\t\t\tthis validation."
+		)
+		si = create_sales_invoice(
+			customer="_Test Customer",
+			company="_Test Company",
+			item_code=item.name,
+			qty=1,
+			rate=99,
+			do_not_save=1
+		)
+		with self.assertRaises(frappe.ValidationError) as context:
+			si.save()
+		self.assertEqual(str(context.exception), expected_msg)
+		frappe.clear_cache(doctype="Selling Settings")
 	
+	@change_settings("Selling Settings",{"validate_selling_price":0})
 	def test_test_unlink_payment_on_invoice_cancellation_TC_ACC_126(self):
 		from erpnext.accounts.doctype.payment_entry.test_payment_entry import (
 			make_test_item
@@ -5801,6 +5806,8 @@ class TestSalesInvoice(FrappeTestCase):
 		except Exception as e:
 			error_msg = str(e)
 			self.assertEqual(error_msg,f'Cannot delete or cancel because Sales Invoice {si_name} is linked with Payment Entry {pe_name} at Row: 1')
+		finally:
+			frappe.clear_cache(doctype="Selling Settings")
 
 	def test_si_cancel_amend_with_item_details_change_TC_S_128(self):
 		from erpnext.accounts.doctype.payment_entry.test_payment_entry import (
