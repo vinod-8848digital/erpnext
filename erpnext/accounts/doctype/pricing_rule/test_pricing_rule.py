@@ -1601,7 +1601,6 @@ class TestPricingRule(FrappeTestCase):
 	
 	def test_pr_to_so_with_applied_on_item_code_TC_S_143(self):
 		from erpnext.accounts.doctype.payment_entry.test_payment_entry import make_test_item
-		from erpnext.selling.doctype.sales_order.test_sales_order import make_sales_order as make_so
 		
 		frappe.set_user("Administrator")
 		item = make_test_item("_Test Item")
@@ -1610,32 +1609,24 @@ class TestPricingRule(FrappeTestCase):
 		item1 = make_test_item("_Test Item 1")
 		item1.save()
 
-		sle = make_stock_entry(item_code="_Test Item 1", qty=5, rate=500, target="_Test Warehouse - _TC")
-		sle2 = make_stock_entry(item_code="_Test Item", qty=5, rate=500, target="_Test Warehouse - _TC")
-		sle.save()
-		sle2.save()
+		make_stock_entry(item_code="_Test Item 1", qty=5, rate=500, target="Stores - _TC")
+		make_stock_entry(item_code="_Test Item", qty=5, rate=500, target="Stores - _TC")
 		frappe.delete_doc_if_exists("Pricing Rule", "_Test Pricing Rule")
-
-		pricing_rule_doc = frappe.new_doc('Pricing Rule')
-		pricing_rule_data = {
-			"title": 'Free',
-			"apply_on": 'Item Code',
-			"price_or_product_discount": 'Product',
-			"selling": 1,
-			"min_qty": 0,
-			"max_qty": 5,
-			"company": '_Test Company',
-			"items":[ {"item_code": "_Test Item", "uom": '_Test UOM'}],
-			"free_item": "_Test Item 1",
-			"free_qty": 1,
-			"free_item_rate" : 10,
-		}
-		
-		pricing_rule_doc.update(pricing_rule_data)
-		pricing_rule_doc.save()
-
-		so = make_so(item_code="_Test Item", qty=5, warehouse="_Test Warehouse - _TC", customer="_Test Customer", company = "_Test Company", do_not_save=True)
-		so.set_warehouse = "_Test Warehouse - _TC"
+		make_pricing_rule(
+			selling=1,
+			min_qty=0,
+			price_or_product_discount="Product",
+			apply_on= "Item Code",
+			warehouse = "Stores - _TC",
+			items=[{"item_code": "_Test Item 1"}],
+			free_item="_Test Item 1",
+			free_qty=1,
+			free_item_rate=10,
+			condition="customer=='_Test Customer'",
+			company = "_Test Company"
+		)
+		so = make_sales_order(qty=5, warehouse="Stores - _TC",do_not_save=True)
+		so.set_warehouse = "Stores - _TC"
 		so.save()
 		so.submit()
 		self.assertEqual(len(so.items), 2)
