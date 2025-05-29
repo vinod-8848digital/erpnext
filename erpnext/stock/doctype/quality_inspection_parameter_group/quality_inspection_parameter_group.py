@@ -6,13 +6,13 @@
 from frappe.model.document import Document
 
 
-class QualityInspectionParameterGroup(Document):
+class QualityInspectionParameterGroup(Document): # pragma: no cover
 	# begin: auto-generated types
 	# This code is auto-generated. Do not modify anything in this block.
 
 	from typing import TYPE_CHECKING
 
-	if TYPE_CHECKING: # pragma: no cover
+	if TYPE_CHECKING:
 		from frappe.types import DF
 
 		group_name: DF.Data

@@ -6,7 +6,7 @@
 from frappe.model.document import Document
 
 
-class ShipmentParcelTemplate(Document):
+class ShipmentParcelTemplate(Document): # pragma: no cover
 	# begin: auto-generated types
 	# This code is auto-generated. Do not modify anything in this block.
 
