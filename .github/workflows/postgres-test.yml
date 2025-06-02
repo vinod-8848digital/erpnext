@@ -120,15 +120,10 @@ jobs:
           python <<EOF
           import xmltodict
           import pandas as pd
-          import os
           # Read XML File
           xml_file = "/home/runner/frappe-bench/test_results.xml"
-          if not os.path.exists(xml_file):
-              raise FileNotFoundError(f"{xml_file} does not exist.")
           with open(xml_file, 'r', encoding='utf-8') as file:
               xml_content = file.read()
-          if not xml_content.strip():
-              raise ValueError("XML file is empty. No test results were written.")
           data = xmltodict.parse(xml_content)
           # Ensure XML structure is valid
           if not isinstance(data, dict):
