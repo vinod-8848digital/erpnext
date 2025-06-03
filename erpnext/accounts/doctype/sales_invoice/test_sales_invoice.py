@@ -50,6 +50,8 @@ class TestSalesInvoice(FrappeTestCase):
 
 	def tearDown(self):
 		frappe.db.rollback()
+		if frappe.db.get_single_value("Selling Settings", "validate_selling_price"):
+			frappe.db.set_single_value("Selling Settings", "validate_selling_price", 0)
 
 	def make(self):
 		w = frappe.copy_doc(test_records[0])
@@ -5302,6 +5304,12 @@ class TestSalesInvoice(FrappeTestCase):
 			account_currency="INR",
 			account_type="Cash",
 		)
+		create_account(
+			account_name="Deferred Revenue",
+			parent_account="Current Liabilities - _TC",
+			company="_Test Company",
+			account_currency="INR",
+		)
 
 		create_customer(
 			customer_name="_Test Customer",
@@ -5310,6 +5318,12 @@ class TestSalesInvoice(FrappeTestCase):
 			account="_Test Receivable - _TC"
 		)
 
+		frappe.set_value("Company", "_Test Company", {
+			"default_receivable_account": "Debtors - _TC",
+			"default_expense_account": "Cost of Goods Sold - _TC",
+			"default_inventory_account": "Stock In Hand - _TC",
+			"enable_perpetual_inventory":1
+		})
 		item = make_test_item(item_name="_Test Item")
 		item.enable_deferred_revenue=1
 		item.no_of_months=12
@@ -5353,6 +5367,7 @@ class TestSalesInvoice(FrappeTestCase):
                 ['Deferred Revenue - _TC', 0.0, sales_invoice.grand_total, sales_invoice.posting_date]
         ]
 		check_gl_entries(self, sales_invoice.name, expected_gl_entries, sales_invoice.posting_date)
+		frappe.db.rollback()
     
 	def test_deferred_revenue_invoice_multiple_item_TC_ACC_040(self):
 		from erpnext.accounts.doctype.cost_center.test_cost_center import create_cost_center
@@ -5713,6 +5728,7 @@ class TestSalesInvoice(FrappeTestCase):
 		]
 		check_gl_entries(self, jv_doc.name, expected_gl_entries, jv_doc.posting_date, "Journal Entry")
 	
+
 	def test_prevent_sale_below_purchase_rate_TC_ACC_125(self):
 		from erpnext.accounts.doctype.payment_entry.test_payment_entry import (
 			create_purchase_invoice,
@@ -5720,15 +5736,20 @@ class TestSalesInvoice(FrappeTestCase):
 			create_supplier,
 		)
 		from erpnext.buying.doctype.purchase_order.test_purchase_order import get_or_create_fiscal_year
+		from erpnext.accounts.doctype.sales_invoice.test_sales_invoice import create_sales_invoice
+		import frappe
+
 		get_or_create_fiscal_year("_Test Company")
-		selling_setting = frappe.get_doc("Selling Settings")
-		selling_setting.validate_selling_price = 1
-		selling_setting.save()
 
+		if not frappe.db.get_single_value("Selling Settings", "validate_selling_price"):
+			frappe.db.set_single_value("Selling Settings", "validate_selling_price", 1)
+
+		if not frappe.db.get_value("Company","_Test Company","stock_received_but_not_billed"):
+			frappe.db.set_value("Company","_Test Company","stock_received_but_not_billed","Stock Received But Not Billed - _TC")
 		supplier = create_supplier(supplier_name="_Test Supplier")
-
 		item = make_test_item("_Test Sell Item")
 
+		# Purchase at 100
 		pi = create_purchase_invoice(
 			supplier=supplier.name,
 			company="_Test Company",
@@ -5738,26 +5759,27 @@ class TestSalesInvoice(FrappeTestCase):
 		)
 		pi.save().submit()
 
-		try:
-			si = create_sales_invoice(
-				customer="_Test Customer",
-				company="_Test Company",
-				item_code=item.name,
-				qty=1,
-				rate=99
-			)
-		except Exception as e:
-			error_msg = str(e)
-		self.assertEqual(
-            error_msg,
-            (
-                "Row #1: Selling rate for item _Test Item is lower than its last purchase rate.\n"
-                "\t\t\t\t\tSelling net rate should be atleast 100.0.Alternatively,\n"
-                "\t\t\t\t\tyou can disable selling price validation in Selling Settings to bypass\n"
-                "\t\t\t\t\tthis validation."
-            )
-        )
+		expected_msg = (
+			"Row #1: Selling rate for item _Test Item is lower than its last purchase rate.\n"
+			"\t\t\t\t\tSelling net rate should be atleast 100.0.Alternatively,\n"
+			"\t\t\t\t\tyou can disable selling price validation in Selling Settings to bypass\n"
+			"\t\t\t\t\tthis validation."
+		)
+		si = create_sales_invoice(
+			customer="_Test Customer",
+			company="_Test Company",
+			item_code=item.name,
+			qty=1,
+			rate=99,
+			do_not_save=1
+		)
+		with self.assertRaises(frappe.ValidationError) as context:
+			si.save()
+		self.assertEqual(str(context.exception), expected_msg)
+
+		frappe.db.set_single_value("Selling Settings", "validate_selling_price", 0)
 	
+
 	def test_test_unlink_payment_on_invoice_cancellation_TC_ACC_126(self):
 		from erpnext.accounts.doctype.payment_entry.test_payment_entry import (
 			make_test_item
@@ -5788,6 +5810,7 @@ class TestSalesInvoice(FrappeTestCase):
 		except Exception as e:
 			error_msg = str(e)
 			self.assertEqual(error_msg,f'Cannot delete or cancel because Sales Invoice {si_name} is linked with Payment Entry {pe_name} at Row: 1')
+
 
 	def test_si_cancel_amend_with_item_details_change_TC_S_128(self):
 		from erpnext.accounts.doctype.payment_entry.test_payment_entry import (
@@ -5957,40 +5980,28 @@ class TestSalesInvoice(FrappeTestCase):
 		self.assertEqual(si.status, "Unpaid")	
 
 	def test_si_with_sr_calculate_with_fixed_TC_S_139(self):
-		from erpnext.stock.doctype.stock_entry.test_stock_entry import make_stock_entry
-		from erpnext.buying.doctype.purchase_order.test_purchase_order import get_or_create_fiscal_year
 		from erpnext.accounts.doctype.shipping_rule.test_shipping_rule import create_shipping_rule
-		from erpnext.accounts.doctype.cost_center.test_cost_center import create_cost_center
-  
-		create_item(item_code = "_Test Item")
+		from erpnext.stock.doctype.stock_entry.test_stock_entry import make_stock_entry
+		from erpnext.stock.doctype.item.test_item import create_item
+		from erpnext.buying.doctype.purchase_order.test_purchase_order import get_or_create_fiscal_year
 		get_or_create_fiscal_year("_Test Company")
-		frappe.db.set_single_value("Selling Settings", "so_required", "No")
-		create_account(
-			account_name="_Test Account Shipping Charges",
-			parent_account="Cash In Hand - _TC",
-			company="_Test Company",
-			account_currency="INR",
-			account_type="Chargeable",
-		)
-		create_cost_center(cost_center_name="_Test Cost Center", company="_Test Company")
+		item = create_item("_Test Item 1")
 		create_customer(customer_name="_Test Customer",company="_Test Company")
-
-		shipping_charge = 100
-		shipping_rule = create_shipping_rule(shipping_rule_type="Selling", shipping_rule_name="_Test Shipping Rule")
-  
-		make_stock_entry(item_code="_Test Item", qty=10, rate=500, target="_Test Warehouse - _TC")
-  
-		si = create_sales_invoice(qty=5,rate=200, shipping_rule="_Test Shipping Rule", do_not_submit=True)
+		shipping_rule = create_shipping_rule(
+			shipping_rule_type="Selling", 
+			shipping_rule_name="Shipping Rule - Test Fixed",
+			args={"calculate_based_on": "Fixed", "shipping_amount": 100}
+    	)
+		self.assertEqual(shipping_rule.docstatus, 1)
+		make_stock_entry(item_code="_Test Item 1", qty=10, rate=500, target="_Test Warehouse - _TC")
+		si = create_sales_invoice(qty=5,rate=200, do_not_submit=True)
+		si.shipping_rule = shipping_rule.name
 		si.save()
 		si.submit()
-  
-		for ship in shipping_rule.conditions:
-			if ship.from_value <= si.items[0].qty <= ship.to_value:
-				shipping_charge = ship.shipping_amount
-
-		expected_grand_total = 1000 + shipping_charge
-
-		self.assertEqual(si.grand_total, expected_grand_total)
+		self.assertEqual(si.net_total, 1000)
+		self.assertEqual(si.total_taxes_and_charges, 100)
+		self.assertEqual(si.grand_total, 1100)
+		frappe.db.rollback()
 
 	def test_si_with_sr_calculate_with_net_total_TC_S_140(self):
 		from erpnext.accounts.doctype.shipping_rule.test_shipping_rule import create_shipping_rule
@@ -7023,7 +7034,7 @@ def check_gl_entries(doc, voucher_no, expected_gle, posting_date, voucher_type="
 def create_sales_invoice(**args):
 	si = frappe.new_doc("Sales Invoice")
 	args = frappe._dict(args)
-	a = frappe.get_doc("Shipping Rule", args.shipping_rule)
+	
 	if args.posting_date:
 		si.set_posting_time = 1
 	si.posting_date = args.posting_date or nowdate()
