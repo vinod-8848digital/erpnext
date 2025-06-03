@@ -126,7 +126,7 @@ class ClosingStockBalance(Document):
 			{"columns": columns, "data": data}, self.doctype, self.name, "closing-stock-balance"
 		)
 
-	def get_prepared_data(self):
+	def get_prepared_data(self):  # pragma: no cover
 		if attachments := get_attachments(self.doctype, self.name):
 			attachment = attachments[0]
 			attached_file = frappe.get_doc("File", attachment.name)

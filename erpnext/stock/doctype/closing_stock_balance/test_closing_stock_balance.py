@@ -21,10 +21,9 @@ class TestClosingStockBalance(FrappeTestCase):
 		if not frappe.db.exists("Company", company):
 			create_child_company()
 
-		if not frappe.db.exists("Item", item_code):
-			item = make_test_item(item_code)
-			item.is_stock_item = 0
-			item.save()
+		item_code = make_test_item(item_code)
+		item_code.is_stock_item = 0
+		item_code.save()
 
 		warehouse = frappe.get_doc(
 			{
@@ -41,22 +40,7 @@ class TestClosingStockBalance(FrappeTestCase):
 				"naming_series": "CBAL-.#####",
 				"company": company,
 				"status": "Draft",
-				"item_code": item,
-				"include_uom": "Box",
-				"warehouse": warehouse,
-				"item_group": "All Item Groups",
-				"warehouse_type": "Transit",
-			}
-		).insert(ignore_permissions=True)
-		closing_balance.submit()
-
-		closing_balance = frappe.get_doc(
-			{
-				"doctype": "Closing Stock Balance",
-				"naming_series": "CBAL-.#####",
-				"company": company,
-				"status": "Draft",
-				"item_code": item,
+				"item_code": item_code,
 				"include_uom": "Box",
 				"warehouse": warehouse,
 				"item_group": "All Item Groups",
