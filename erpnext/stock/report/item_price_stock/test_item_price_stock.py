@@ -175,3 +175,239 @@ class TestItemPriceStockReport(FrappeTestCase):
 		self.assertEqual(empty, {})
 
 
+	# Test 6: Item with no Bin entry should default stock to 0
+	def test_no_bin_entry_defaults_to_zero_stock(self):
+		item_code = "ITEM-NO-BIN"
+		frappe.get_doc({
+			"doctype": "Item",
+			"item_code": item_code,
+			"item_name": "Item Without Bin",
+			"stock_uom": "Nos",
+			"is_stock_item": 1,
+			"gst_hsn_code": self.hsn_code
+		}).insert()
+
+		frappe.get_doc({
+			"doctype": "Item Price",
+			"item_code": item_code,
+			"price_list": self.buying_price_list,
+			"price_list_rate": 100.0,
+			"buying": 1
+		}).insert()
+
+		data = item_price_stock.get_item_price_qty_data({"item_code": item_code})
+		self.assertEqual(data[0]["stock_available"], 0)
+
+	# # Test 7: Item with no Item Price should return 0 rates and empty price lists
+	# def test_item_with_no_item_price_has_zero_rates(self):
+	# 	item_code = "ITEM-NO-PRICE"
+
+	# 	# Ensure the standard price lists exist
+	# 	if not frappe.db.exists("Price List", "Standard Buying"):
+	# 		frappe.get_doc({
+	# 			"doctype": "Price List",
+	# 			"price_list_name": "Standard Buying",
+	# 			"buying": 1
+	# 		}).insert()
+
+	# 	if not frappe.db.exists("Price List", "Standard Selling"):
+	# 		frappe.get_doc({
+	# 			"doctype": "Price List",
+	# 			"price_list_name": "Standard Selling",
+	# 			"selling": 1
+	# 		}).insert()
+
+	# 	# Create the item
+	# 	frappe.get_doc({
+	# 		"doctype": "Item",
+	# 		"item_code": item_code,
+	# 		"item_name": "Item Without Price",
+	# 		"stock_uom": "Nos",
+	# 		"is_stock_item": 1,
+	# 		"gst_hsn_code": self.hsn_code
+	# 	}).insert()
+
+	# 	# Add stock
+	# 	frappe.get_doc({
+	# 		"doctype": "Bin",
+	# 		"item_code": item_code,
+	# 		"warehouse": self.warehouse,
+	# 		"actual_qty": 15
+	# 	}).insert(ignore_permissions=True)
+
+	# 	# Fetch item data with price list context
+	# 	data = item_price_stock.get_item_price_qty_data({
+	# 		"item_code": item_code,
+	# 		"buying_price_list": "Standard Buying",
+	# 		"selling_price_list": "Standard Selling"
+	# 	})
+	# 	print("data",data)
+
+	# 	self.assertEqual(len(data), 0)
+	# 	self.assertEqual(data[0]["buying_rate"], 0.0)
+	# 	self.assertEqual(data[0]["selling_rate"], 0.0)
+	# 	self.assertEqual(data[0]["buying_price_list"], "")
+	# 	self.assertEqual(data[0]["selling_price_list"], "")
+
+	# Test 8: Item with same price list for both buying and selling
+	def test_item_with_shared_buying_and_selling_price_list(self):
+		shared_price_list = "Shared Price List"
+		if not frappe.db.exists("Price List", shared_price_list):
+			frappe.get_doc({
+				"doctype": "Price List",
+				"price_list_name": shared_price_list,
+				"buying": 1,
+				"selling": 1
+			}).insert()
+
+		item_code = "ITEM-SHARED-PL"
+		frappe.get_doc({
+			"doctype": "Item",
+			"item_code": item_code,
+			"item_name": "Item Shared PL",
+			"stock_uom": "Nos",
+			"is_stock_item": 1,
+			"gst_hsn_code": self.hsn_code
+		}).insert()
+
+		frappe.get_doc({
+			"doctype": "Item Price",
+			"item_code": item_code,
+			"price_list": shared_price_list,
+			"price_list_rate": 200.0,
+			"buying": 1,
+			"selling": 1
+		}).insert()
+
+		frappe.get_doc({
+			"doctype": "Bin",
+			"item_code": item_code,
+			"warehouse": self.warehouse,
+			"actual_qty": 10
+		}).insert(ignore_permissions=True)
+
+		data = item_price_stock.get_item_price_qty_data({"item_code": item_code})
+		self.assertEqual(data[0]["buying_rate"], 200.0)
+		self.assertEqual(data[0]["selling_rate"], 200.0)
+
+	# Test 9: Multiple Item Price entries for same item with different price lists
+	def test_multiple_item_prices_for_same_item(self):
+		item_code = "ITEM-MULTI-PRICE"
+		frappe.get_doc({
+			"doctype": "Item",
+			"item_code": item_code,
+			"item_name": "Multi Price Item",
+			"stock_uom": "Nos",
+			"is_stock_item": 1,
+			"gst_hsn_code": self.hsn_code
+		}).insert()
+
+		pl1 = "Multi Price List 1"
+		pl2 = "Multi Price List 2"
+		for pl in [pl1, pl2]:
+			if not frappe.db.exists("Price List", pl):
+				frappe.get_doc({
+					"doctype": "Price List",
+					"price_list_name": pl,
+					"buying": 1 if pl == pl1 else 0,
+					"selling": 1 if pl == pl2 else 0
+				}).insert()
+
+		frappe.get_doc({
+			"doctype": "Item Price",
+			"item_code": item_code,
+			"price_list": pl1,
+			"price_list_rate": 50.0,
+			"buying": 1
+		}).insert()
+
+		frappe.get_doc({
+			"doctype": "Item Price",
+			"item_code": item_code,
+			"price_list": pl2,
+			"price_list_rate": 120.0,
+			"selling": 1
+		}).insert()
+
+		frappe.get_doc({
+			"doctype": "Bin",
+			"item_code": item_code,
+			"warehouse": self.warehouse,
+			"actual_qty": 25
+		}).insert(ignore_permissions=True)
+
+		data = item_price_stock.get_item_price_qty_data({"item_code": item_code})
+		self.assertGreaterEqual(len(data), 1)
+
+	# # Test 10: Use separate price lists for buying and selling to avoid duplicate item price conflict
+	# def test_separate_price_lists_for_buying_and_selling(self):
+	# 	buying_price_list = "Buying PL"
+	# 	selling_price_list = "Selling PL"
+
+	# 	# Create Buying Price List
+	# 	if not frappe.db.exists("Price List", buying_price_list):
+	# 		frappe.get_doc({
+	# 			"doctype": "Price List",
+	# 			"price_list_name": buying_price_list,
+	# 			"buying": 1
+	# 		}).insert()
+
+	# 	# Create Selling Price List
+	# 	if not frappe.db.exists("Price List", selling_price_list):
+	# 		frappe.get_doc({
+	# 			"doctype": "Price List",
+	# 			"price_list_name": selling_price_list,
+	# 			"selling": 1
+	# 		}).insert()
+
+	# 	item_code = "ITEM-SEPARATE-PL"
+	# 	if not frappe.db.exists("Item", item_code):
+	# 		frappe.get_doc({
+	# 			"doctype": "Item",
+	# 			"item_code": item_code,
+	# 			"item_name": "Separate Price List Item",
+	# 			"stock_uom": "Nos",
+	# 			"is_stock_item": 1,
+	# 			"gst_hsn_code": self.hsn_code
+	# 		}).insert()
+
+	# 	# Buying Price
+	# 	frappe.get_doc({
+	# 		"doctype": "Item Price",
+	# 		"item_code": item_code,
+	# 		"price_list": buying_price_list,
+	# 		"price_list_rate": 80.0,
+	# 		"buying": 1
+	# 	}).insert()
+
+	# 	# Selling Price
+	# 	frappe.get_doc({
+	# 		"doctype": "Item Price",
+	# 		"item_code": item_code,
+	# 		"price_list": selling_price_list,
+	# 		"price_list_rate": 130.0,
+	# 		"selling": 1
+	# 	}).insert()
+
+	# 	# Stock entry
+	# 	frappe.get_doc({
+	# 		"doctype": "Bin",
+	# 		"item_code": item_code,
+	# 		"warehouse": self.warehouse,
+	# 		"actual_qty": 12
+	# 	}).insert(ignore_permissions=True)
+
+	# 	# Fetch item price and stock data with explicit price list arguments
+	# 	data = item_price_stock.get_item_price_qty_data({
+	# 		"item_code": item_code,
+	# 		"buying_price_list": buying_price_list,
+	# 		"selling_price_list": selling_price_list
+	# 	})
+
+	# 	self.assertEqual(data[0]["buying_rate"], 80.0)
+	# 	self.assertEqual(data[0]["selling_rate"], 130.0)
+
+	# Test 11: Non-existent item_code should return empty data
+	def test_non_existent_item_code_returns_empty(self):
+		data = item_price_stock.get_item_price_qty_data({"item_code": "NON-EXISTENT-ITEM"})
+		self.assertEqual(data, [])
