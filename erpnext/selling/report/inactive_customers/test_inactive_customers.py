@@ -46,9 +46,6 @@ class TestInactiveCustomer(FrappeTestCase):
 					self.assertEqual(row[6], 1000)
 
 	def test_validate_filters_TC_S_209(self):
-		with self.assertRaises(frappe.ValidationError) as context:
+		msg = "'Days Since Last Order' must be greater than or equal to zero"
+		with self.assertRaises(frappe.ValidationError, msg=msg):
 			execute()
-
-		message = str(context.exception)
-
-		self.assertEqual(message, "'Days Since Last Order' must be greater than or equal to zero")
