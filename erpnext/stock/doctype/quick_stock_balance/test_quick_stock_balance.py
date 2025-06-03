@@ -12,6 +12,9 @@ from erpnext.stock.doctype.warehouse.test_warehouse import create_warehouse
 
 
 class TestQuickStockBalance(FrappeTestCase):
+	def tearDown(self):
+		frappe.db.rollback()
+
 	# codecov
 	def test_get_stock_item_details_TC_SCK_312(self):
 		from erpnext.stock.doctype.quick_stock_balance.quick_stock_balance import get_stock_item_details
@@ -23,11 +26,10 @@ class TestQuickStockBalance(FrappeTestCase):
 		if not frappe.db.exists("Company", company):
 			create_child_company()
 
-		if not frappe.db.exists("Item", item_code):
-			item = make_test_item(item_code)
-			item.is_stock_item = 0
-			item.append("barcodes", {"barcode": "123456789012", "barcode_type": "UPC", "uom": "Box"})
-			item.save()
+		item = make_test_item(item_code)
+		item.is_stock_item = 0
+		item.append("barcodes", {"barcode": "123456789012", "barcode_type": "UPC", "uom": "Box"})
+		item.save()
 
 		warehouse = frappe.get_doc(
 			{
