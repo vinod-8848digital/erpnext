@@ -24,7 +24,7 @@ class ItemAttribute(Document):
 
 	from typing import TYPE_CHECKING
 
-	if TYPE_CHECKING:
+	if TYPE_CHECKING: # pragma: no cover
 		from frappe.types import DF
 
 		from erpnext.stock.doctype.item_attribute_value.item_attribute_value import ItemAttributeValue
@@ -79,7 +79,6 @@ class ItemAttribute(Document):
 			{"attribute": self.name},
 			as_dict=1,
 		)
-
 		for item in items:
 			if self.numeric_values:
 				validate_is_incremental(self, self.name, item.value, item.name)
