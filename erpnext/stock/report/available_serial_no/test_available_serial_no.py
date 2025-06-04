@@ -173,3 +173,87 @@ class TestStockLedgerReport(FrappeTestCase):
 		self.assertGreaterEqual(last_row["qty_after_transaction"], 0)
 		self.assertIn("in_out_rate", last_row)
 		self.assertIn("valuation_rate", last_row)
+
+	def test_update_stock_ledger_entry_with_batch_no(self):
+		from erpnext.stock.report.available_serial_no.available_serial_no import update_stock_ledger_entry
+		from frappe.utils import flt
+
+		sle = frappe._dict(
+			item_code="_Test Item with Serial No",
+			company="_Test Company",
+			actual_qty=5,
+			stock_value_difference=500,
+			qty_after_transaction=0,
+			stock_value=0,
+			voucher_type="Purchase Receipt",
+			batch_no="BATCH-001",
+		)
+		item_details = {
+			"_Test Item with Serial No": {"item_name": "Test Item", "description": "Test"}
+		}
+		filters = {"batch_no": "BATCH-001"}
+		batch_balance_dict = {}
+		precision = 2
+
+		actual_qty = 0
+		stock_value = 0
+
+		update_stock_ledger_entry(sle, item_details, filters, actual_qty, stock_value, batch_balance_dict, precision)
+
+		self.assertEqual(sle.qty_after_transaction, 5)
+		self.assertEqual(sle.stock_value, 500)
+		self.assertEqual(sle.in_out_rate, flt(500 / 5, precision))
+		self.assertIn("BATCH-001", batch_balance_dict)
+		self.assertEqual(batch_balance_dict["BATCH-001"][0], 5)
+
+	def test_update_stock_ledger_entry_stock_reconciliation(self):
+		from erpnext.stock.report.available_serial_no.available_serial_no import update_stock_ledger_entry
+
+		sle = frappe._dict(
+			item_code="_Test Item with Serial No",
+			company="_Test Company",
+			actual_qty=0,
+			qty_after_transaction=8,
+			stock_value=800,
+			stock_value_difference=0,
+			voucher_type="Stock Reconciliation",
+		)
+		item_details = {
+			"_Test Item with Serial No": {"item_name": "Test Item", "description": "Test"}
+		}
+		filters = {"item_code": "_Test Item with Serial No"}
+		batch_balance_dict = {}
+		precision = 2
+
+		actual_qty = 0
+		stock_value = 0
+
+		update_stock_ledger_entry(sle, item_details, filters, actual_qty, stock_value, batch_balance_dict, precision)
+
+		self.assertEqual(sle.qty_after_transaction, 8)
+		self.assertEqual(sle.stock_value, 800)
+		self.assertIn("in_out_rate", sle)
+
+	def test_in_out_rate_divide_by_zero(self):
+		from erpnext.stock.report.available_serial_no.available_serial_no import update_stock_ledger_entry
+
+		sle = frappe._dict(
+			item_code="_Test Item with Serial No",
+			company="_Test Company",
+			actual_qty=0,
+			qty_after_transaction=5,
+			stock_value=100,
+			stock_value_difference=0,
+			voucher_type="Delivery Note",
+		)
+		item_details = {
+			"_Test Item with Serial No": {"item_name": "Test Item", "description": "Test"}
+		}
+		filters = {"item_code": "_Test Item with Serial No"}
+		batch_balance_dict = {}
+		precision = 2
+
+		update_stock_ledger_entry(sle, item_details, filters, 0, 0, batch_balance_dict, precision)
+
+		self.assertNotIn("in_out_rate", sle)
+
