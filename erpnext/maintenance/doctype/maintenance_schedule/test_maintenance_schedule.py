@@ -21,19 +21,25 @@ from erpnext.stock.doctype.item.test_item import create_item
 
 class TestMaintenanceSchedule(unittest.TestCase):
 	def setUp(self):
+		import random
+		import string
+
 		from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_company
 
 		create_company()
 		self.item = create_item("_Test Item10", {"has_serial_no": 1, "is_stock_item": 1})
+		suffix = "".join(random.choices(string.ascii_uppercase + string.digits, k=6))
+		self.item.has_serial_no = 1
+		self.item.is_stock_item = 1
+		self.item.save()
 		self.serial_no = frappe.get_doc(
 			{
 				"doctype": "Serial No",
-				"serial_no": f"TEST-SR-{frappe.utils.now_datetime().timestamp()}",
+				"serial_no": f"TEST-SR-{suffix}",
 				"item_code": self.item.name,
 				"company": "_Test Company",
 			}
 		).insert(ignore_if_duplicate=True)
-
 		self.bundle = frappe.get_doc(
 			{
 				"doctype": "Serial and Batch Bundle",
@@ -50,7 +56,6 @@ class TestMaintenanceSchedule(unittest.TestCase):
 		self.schedule.items[0].serial_and_batch_bundle = self.bundle.name
 		self.schedule.items[0].no_of_visits = 1
 		self.schedule.save()
-		self.schedule.submit()
 
 	def test_events_should_be_created_and_deleted(self):
 		ms = make_maintenance_schedule()
@@ -191,7 +196,8 @@ class TestMaintenanceSchedule(unittest.TestCase):
 	def test_update_amc_date_TC_M_001(self):
 		from frappe.utils import add_days, nowdate
 
-		ms = make_maintenance_schedule()
+		ms = self.schedule
+
 		amc_date = add_days(nowdate(), 180)
 		ms.update_amc_date([self.serial_no.name], amc_expiry_date=amc_date)
 
@@ -232,12 +238,12 @@ class TestMaintenanceSchedule(unittest.TestCase):
 		so = make_sales_order(rate=500)
 		so.submit()
 
-		ms_existing = make_maintenance_schedule(do_not_submit=True)
+		ms_existing = self.schedule
 		ms_existing.items[0].sales_order = so.name
 		ms_existing.items[0].no_of_visits = 1
 		ms_existing.submit()
 
-		ms_new = make_maintenance_schedule(do_not_submit=True)
+		ms_new = self.schedule
 		ms_new.items[0].sales_order = so.name
 		ms_new.items[0].no_of_visits = 1
 
@@ -284,7 +290,7 @@ class TestMaintenanceSchedule(unittest.TestCase):
 			ms.insert()
 
 	def test_on_trash_TC_M_005(self):
-		doc = make_maintenance_schedule()
+		doc = self.schedule
 
 		event = frappe.get_doc(
 			{
@@ -315,7 +321,7 @@ class TestMaintenanceSchedule(unittest.TestCase):
 			).insert()
 		)
 
-		ms = make_maintenance_schedule(do_not_submit=True)
+		ms = self.schedule
 		with self.assertRaises(frappe.ValidationError, msg="does not belong to Item"):
 			ms.validate_serial_no("_Another Item", [sr], nowdate())
 		# self.assertIn("does not belong to Item", str(context.exception))
@@ -347,7 +353,7 @@ class TestMaintenanceSchedule(unittest.TestCase):
 	def test_on_trash_calls_delete_events_TC_M_009(self):
 		from unittest.mock import patch
 
-		ms = make_maintenance_schedule()
+		ms = self.schedule
 
 		with patch(
 			"erpnext.maintenance.doctype.maintenance_schedule.maintenance_schedule.delete_events"
@@ -356,7 +362,7 @@ class TestMaintenanceSchedule(unittest.TestCase):
 			mock_delete.assert_called_once_with("Maintenance Schedule", ms.name)
 
 	def test_sets_no_of_visits_when_not_provided_TC_M_010(self):
-		ms = make_maintenance_schedule(do_not_submit=True)
+		ms = self.schedule
 
 		ms.periodicity = "Monthly"
 		item = ms.items[0]
@@ -373,7 +379,7 @@ class TestMaintenanceSchedule(unittest.TestCase):
 
 	def test_serial_auto_assign_on_make_maintenance_visit_TC_M_011(self):
 		item_name = self.schedule.items[0].item_name
-
+		self.schedule.submit()
 		visit = make_maintenance_visit(self.schedule.name, item_name=item_name)
 		visit.completion_status = "Partially Completed"
 		visit.maintenance_type = "Scheduled"
