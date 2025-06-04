@@ -52,15 +52,13 @@ class TestItemAlternative(FrappeTestCase):
 		item2 = "Test Item2"
 		from erpnext.accounts.doctype.payment_entry.test_payment_entry import make_test_item
 
-		if not frappe.db.exists("Item",item1):
-			item_create1 = make_test_item(item1)
-			item_create1.allow_alternative_item = 1
-			item_create1.save()
-		
-		if not frappe.db.exists("Item",item2):
-			item_create2 = make_test_item(item2)
-			item_create2.allow_alternative_item = 0
-			item_create2.save()
+		item_create1 = make_test_item(item1)
+		item_create1.allow_alternative_item = 1
+		item_create1.save()
+	
+		item_create2 = make_test_item(item2)
+		item_create2.allow_alternative_item = 0
+		item_create2.save()
 	
 
 		with self.assertRaises(frappe.exceptions.ValidationError) as context:frappe.get_doc({
@@ -87,7 +85,38 @@ class TestItemAlternative(FrappeTestCase):
 		"two_way": 1
 		}).insert()
 		self.assertIn("Alternative item must not be same as item code", str(context.exception))
-			
+	
+	# codecov		
+	def test_get_alternative_items_TC_SCK_323(self):
+		from erpnext.stock.doctype.item_alternative.item_alternative import get_alternative_items
+		from erpnext.accounts.doctype.payment_entry.test_payment_entry import make_test_item
+
+		main_item_code, alt_item_code = "Test Main Item SCK 323", "Test Alt Item SCK 323"
+
+		for code in (main_item_code, alt_item_code):
+			item = make_test_item(code)
+			item.allow_alternative_item = 1
+			item.save()
+
+		frappe.get_doc({
+			"doctype": "Item Alternative",
+			"item_code": main_item_code,
+			"alternative_item_code": alt_item_code,
+			"two_way": 1
+		}).insert()
+
+		results = get_alternative_items(
+			doctype="Item",
+			txt="Test Alt",
+			searchfield="item_code",
+			start=0,
+			page_len=10,
+			filters={"item_code": main_item_code}
+		)
+		self.assertTrue(any(alt_item_code in row for row in results))
+
+
+		
 		
 	def test_alternative_item_for_subcontract_rm(self):
 		set_backflush_based_on("BOM")
