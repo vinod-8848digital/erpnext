@@ -10,6 +10,12 @@ from frappe.utils import today, add_days, getdate
 class TestPurchaseReceiptTrendsReport(unittest.TestCase):
 	def setUp(self):
 		from erpnext.stock.doctype.item.test_item import create_item
+		company = frappe.get_doc("Company", "_Test Company")
+
+		# Set mandatory accounts for stock transactions
+		frappe.db.set_value("Company", company.name, "stock_received_but_not_billed", "_Test Stock Received But Not Billed - _TC")
+		frappe.db.set_value("Company", company.name, "default_expense_account", "Cost of Goods Sold - _TC")
+		frappe.db.set_value("Company", company.name, "default_inventory_account", "Stock In Hand - _TC")
 		self.supplier_names = []
 		for i in range(12):
 			supplier_name = f"Test Supplier {i}"
@@ -21,6 +27,7 @@ class TestPurchaseReceiptTrendsReport(unittest.TestCase):
                         })
 				supplier.insert()
 			self.supplier_names.append(supplier_name)
+			# frappe.db.set_value("Supplier", supplier_name, "default_payable_account", "Creditors - _TC")
 		self.purchase_receipts = []
 		for i, supplier_name in enumerate(self.supplier_names):
 			item = create_item(f"_Test Item Chart {i}", {
