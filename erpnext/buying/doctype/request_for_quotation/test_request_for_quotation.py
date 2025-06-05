@@ -5,7 +5,7 @@
 from urllib.parse import urlparse
 
 import frappe
-from frappe.tests.utils import FrappeTestCase,if_app_installed
+from frappe.tests.utils import FrappeTestCase,if_app_installed,change_settings
 from frappe.utils import nowdate
 
 from erpnext.buying.doctype.request_for_quotation.request_for_quotation import (
@@ -14,11 +14,22 @@ from erpnext.buying.doctype.request_for_quotation.request_for_quotation import (
 	get_pdf,
 	make_supplier_quotation_from_rfq,
 )
+from erpnext.controllers.accounts_controller import InvalidQtyError
 from erpnext.stock.doctype.item.test_item import make_item
 from erpnext.templates.pages.rfq import check_supplier_has_docname_access
 
 
 class TestRequestforQuotation(FrappeTestCase):
+	def test_rfq_qty(self):
+		rfq = make_request_for_quotation(qty=0, do_not_save=True)
+		with self.assertRaises(InvalidQtyError):
+			rfq.save()
+
+		# No error with qty=1
+		rfq.items[0].qty = 1
+		rfq.save()
+		self.assertEqual(rfq.items[0].qty, 1)
+
 	def test_quote_status(self):
 		rfq = make_request_for_quotation()
 
@@ -162,6 +173,14 @@ class TestRequestforQuotation(FrappeTestCase):
 		supplier_doc.reload()
 		self.assertTrue(supplier_doc.portal_users[0].user)
 
+	@change_settings("Buying Settings", {"allow_zero_qty_in_request_for_quotation": 1})
+	def test_supplier_quotation_from_zero_qty_rfq(self):
+		rfq = make_request_for_quotation(qty=0)
+		sq = make_supplier_quotation_from_rfq(rfq.name, for_supplier=rfq.get("suppliers")[0].supplier)
+
+		self.assertEqual(len(sq.items), 1)
+		self.assertEqual(sq.items[0].qty, 0)
+		self.assertEqual(sq.items[0].item_code, rfq.items[0].item_code)
 
 def make_request_for_quotation(**args) -> "RequestforQuotation":
 	"""

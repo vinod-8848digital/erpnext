@@ -2,7 +2,7 @@
 # License: GNU General Public License v3. See license.txt
 
 import frappe
-from frappe.tests.utils import FrappeTestCase, if_app_installed
+from frappe.tests.utils import FrappeTestCase, if_app_installed, change_settings
 from frappe.utils import add_days, add_months, flt, getdate, nowdate
 
 
@@ -749,6 +749,39 @@ class TestQuotation(FrappeTestCase):
 		self.assertEqual(quotation.grand_total, 73.8)
 		self.assertEqual(quotation.rounding_adjustment, 0)
 		self.assertEqual(quotation.rounded_total, 0)
+
+	@change_settings("Selling Settings", {"allow_zero_qty_in_quotation": 1})
+	def test_so_from_zero_qty_quotation(self):
+		from erpnext.selling.doctype.quotation.quotation import make_sales_order
+		from erpnext.stock.doctype.item.test_item import make_item
+
+		make_item("_Test Item 2", {"is_stock_item": 1})
+		quotation = make_quotation(qty=0, do_not_save=1)
+		quotation.append("items", {"item_code": "_Test Item 2", "qty": 10, "rate": 100})
+		quotation.submit()
+
+		sales_order = make_sales_order(quotation.name)
+		sales_order.delivery_date = nowdate()
+		self.assertEqual(sales_order.items[0].qty, 0)
+		self.assertEqual(sales_order.items[1].qty, 10)
+
+		sales_order.items[0].qty = 10
+		sales_order.items[1].qty = 5
+		sales_order.submit()
+
+		quotation.reload()
+		self.assertEqual(quotation.status, "Partially Ordered")
+
+		sales_order_2 = make_sales_order(quotation.name)
+		sales_order_2.delivery_date = nowdate()
+		self.assertEqual(sales_order_2.items[0].qty, 0)
+		self.assertEqual(sales_order_2.items[1].qty, 5)
+
+		del sales_order_2.items[0]
+		sales_order_2.submit()
+
+		quotation.reload()
+		self.assertEqual(quotation.status, "Ordered")
 
 	def test_quotation_to_sales_invoice_with_sr_TC_S_030(self):
 		from erpnext.selling.doctype.quotation.quotation import make_sales_order
