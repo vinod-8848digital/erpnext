@@ -14,7 +14,7 @@ class PriceList(Document):
 
 	from typing import TYPE_CHECKING
 
-	if TYPE_CHECKING:
+	if TYPE_CHECKING: # pragma: no cover
 		from frappe.types import DF
 
 		from erpnext.stock.doctype.price_list_country.price_list_country import PriceListCountry
@@ -74,8 +74,7 @@ class PriceList(Document):
 
 def get_price_list_details(price_list):
 	price_list_details = frappe.cache().hget("price_list_details", price_list)
-
-	if not price_list_details:
+	if not price_list_details:	
 		price_list_details = frappe.get_cached_value(
 			"Price List", price_list, ["currency", "price_not_uom_dependent", "enabled"], as_dict=1
 		)

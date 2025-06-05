@@ -6,18 +6,57 @@ import frappe
 import unittest
 import frappe
 from frappe.utils import random_string
+from frappe.tests.utils import FrappeTestCase
 
 # test_ignore = ["Item"]
 
 test_records = frappe.get_test_records("Price List")
 
-class TestPriceList(unittest.TestCase):
+class TestPriceList(FrappeTestCase):
     
     def setUp(self):
         # Generate unique names for price lists
         self.buying_price_list_name = f"Buying-{random_string(5)}"
         self.selling_price_list_name = f"Selling-{random_string(5)}"
-        
+    
+    def tearDown(self):
+        frappe.db.rollback()
+    
+    # codecov
+    def test_validate_price_list_TC_SCK_327(self):
+        price_list = frappe.get_doc({
+            "doctype": "Price List",
+            "price_list_name": "Test Price list",
+            "buying": 0,
+            "selling": 0
+        })
+
+        with self.assertRaises(frappe.ValidationError) as cm:
+            price_list.insert()
+
+        self.assertEqual(
+            str(cm.exception),
+            "Price List must be applicable for Buying or Selling"
+        )
+
+    # codecov
+    def test_get_price_list_details_TC_SCK_328(self):
+        from erpnext.stock.doctype.price_list.price_list import get_price_list_details
+
+        if not frappe.db.exists("Price List", "Test Price List1"):
+            price_list = frappe.get_doc({
+                "doctype": "Price List",
+                "price_list_name": "Test Price List1",
+                "buying": 1,
+                "selling": 1,
+                "enabled": 0,
+            }).insert()
+
+        with self.assertRaises(frappe.ValidationError) as cm:
+            get_price_list_details("Test Price List1")
+
+        self.assertIn("Price List Test Price List1 is disabled or does not exist", str(cm.exception))
+
     def test_buying_price_list(self):
         # Create Buying Price List
         buying_price_list = frappe.get_doc({
@@ -26,6 +65,9 @@ class TestPriceList(unittest.TestCase):
             "buying": 1,
             "selling": 0
         }).insert()
+        buying_price_list.reload()
+        buying_price_list.delete()
+
         
         # Verify in Purchase Order
         price_lists = [pl.name for pl in frappe.get_all("Price List", fields=["name"], filters={"buying": 1})]
