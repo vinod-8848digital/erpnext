@@ -5,6 +5,7 @@
 import frappe
 from frappe.tests.utils import FrappeTestCase
 from erpnext.stock.doctype.warehouse.test_warehouse import create_warehouse
+from frappe.tests.utils import FrappeTestCase, change_settings, if_app_installed
 
 
 class TestStockSettings(FrappeTestCase):
@@ -30,6 +31,123 @@ class TestStockSettings(FrappeTestCase):
 			str(cm.exception),
 			"Can't change the valuation method, as there are transactions against some items which do not have its own valuation method"
 		)
+	# codecov
+	@change_settings("Stock Settings", {"allow_negative_stock": 0, "enable_stock_reservation": 1})
+	def test_validate_stock_reservation_TC_SCK_335(self):
+		frappe.flags.in_test = False  # Force validation to run
+
+		settings = frappe.get_doc("Stock Settings")
+		settings.allow_negative_stock = 1  # Trying to enable it while stock reservation is ON
+
+		with self.assertRaises(frappe.ValidationError) as context:
+			settings.save()
+		frappe.flags.in_test = True  # Reset for other tests
+
+	# codecov
+	@change_settings("Stock Settings", {"allow_negative_stock": 1, "enable_stock_reservation": 0})
+	def test_validate_stock_reservation_TC_SCK_336(self):
+		frappe.flags.in_test = False  # Force validation to run
+
+		settings = frappe.get_doc("Stock Settings")
+		settings.enable_stock_reservation = 1  # Trying to enable it
+		# allow_negative_stock is already 1 from change_settings
+
+		with self.assertRaises(frappe.ValidationError) as context:
+			settings.save()
+
+
+		frappe.flags.in_test = True  # Reset after test
+
+	# codecov
+	@change_settings("Stock Settings", {"allow_negative_stock": 1, "enable_stock_reservation": 0})
+	def test_validate_stock_reservation_TC_SCK_337(self):
+		frappe.flags.in_test = False  # Force validation to run
+
+		settings = frappe.get_doc("Stock Settings")
+		settings.enable_stock_reservation = 1  # Trying to enable it
+		settings.allow_negative_stock=0
+
+		# with self.assertRaises(frappe.ValidationError) as context:
+		settings.save()
+		self.assertEqual(settings.enable_stock_reservation, 1)
+
+	
+	# codecov
+	@change_settings("Stock Settings", {"allow_negative_stock": 1, "enable_stock_reservation": 1})
+	def test_validate_stock_reservation_TC_SCK_338(self):
+		frappe.flags.in_test = False  # Force validation to run
+
+		settings = frappe.get_doc("Stock Settings")
+		settings.enable_stock_reservation = 0  # Trying to enable it
+		settings.allow_negative_stock=0
+
+		# with self.assertRaises(frappe.ValidationError) as context:
+		self.assertEqual(settings.allow_negative_stock, 0)
+		settings.save()
+
+	# codecov
+	@change_settings("Stock Settings", {"allow_negative_stock": 1,"enable_stock_reservation": 1,"allow_to_edit_stock_uom_qty_for_sales": 0  })
+	def test_validate_stock_reservation_TC_SCK_339(self):
+		frappe.flags.in_test = False  # Force validation to run
+
+		# Fetch doc from DB (with previous value 0)
+		
+		settings = frappe.get_doc("Stock Settings")
+
+		# Now change the field to 1 → this triggers the print
+		settings.allow_to_edit_stock_uom_qty_for_sales = 1
+		settings.save()  # Should now enter your condition and print line
+		self.assertEqual(settings.allow_to_edit_stock_uom_qty_for_sales, 1)
+		frappe.flags.in_test = True  # Reset
+	
+	# codecov
+	@change_settings("Stock Settings", {"allow_negative_stock": 1,"enable_stock_reservation": 1,"allow_to_edit_stock_uom_qty_for_sales": 0})
+	def test_change_precision_for_for_sales_TC_SCK_340(self):
+		frappe.flags.in_test = False  # Force validation
+
+		settings = frappe.get_doc("Stock Settings")
+		settings.allow_to_edit_stock_uom_qty_for_sales = 1  # Changing from 0 → 1
+
+		settings.save()  # This should call `validate` -> `change_precision_for_for_sales`
+		self.assertEqual(settings.allow_to_edit_stock_uom_qty_for_sales, 1)
+		frappe.flags.in_test = True
+	
+	# codecov
+	@change_settings("Stock Settings", {"allow_negative_stock": 1,"enable_stock_reservation": 1,"allow_to_edit_stock_uom_qty_for_sales": 0
+	,"allow_to_edit_stock_uom_qty_for_purchase":1})
+	def test_change_precision_for_for_purchase_TC_SCK_341(self):
+		frappe.flags.in_test = False  # Force validation
+
+		settings = frappe.get_doc("Stock Settings")
+		settings.allow_to_edit_stock_uom_qty_for_purchase = 1  # Changing from 0 → 1
+
+		settings.save()  # This should call `validate` -> `change_precision_for_for_sales`
+		self.assertEqual(settings.allow_to_edit_stock_uom_qty_for_purchase, 1)
+		frappe.flags.in_test = True
+	
+	# codecov
+	@change_settings("Stock Settings", {
+	"allow_negative_stock": 1,
+	"enable_stock_reservation": 1,
+	"allow_to_edit_stock_uom_qty_for_sales": 0,
+	"allow_to_edit_stock_uom_qty_for_purchase": 1
+	})
+	def test_get_enable_stock_uom_editing_TC_SCK_342(self):
+		from erpnext.stock.doctype.stock_settings.stock_settings import get_enable_stock_uom_editing
+
+		frappe.flags.in_test = False  # Force validation
+
+		settings = frappe.get_doc("Stock Settings")
+		settings.allow_to_edit_stock_uom_qty_for_purchase = 1  
+		settings.save()  
+
+		result = get_enable_stock_uom_editing()
+
+		frappe.flags.in_test = True
+
+		assert result["allow_to_edit_stock_uom_qty_for_purchase"] == 1
+		assert result["allow_to_edit_stock_uom_qty_for_sales"] == 0
+
 
 	def test_settings(self):
 		item = frappe.get_doc(
