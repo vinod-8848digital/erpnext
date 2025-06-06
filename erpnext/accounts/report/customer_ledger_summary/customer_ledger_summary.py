@@ -14,6 +14,9 @@ from erpnext.accounts.doctype.accounting_dimension.accounting_dimension import (
 	get_dimension_with_children,
 )
 
+TREE_DOCTYPES = frozenset(
+	["Customer Group", "Territory", "Supplier Group", "Sales Partner", "Sales Person", "Cost Center"]
+)
 
 class PartyLedgerSummaryReport:
 	def __init__(self, filters=None):
