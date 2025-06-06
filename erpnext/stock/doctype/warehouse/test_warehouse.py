@@ -308,7 +308,7 @@ class TestWarehouse(FrappeTestCase):
 		item.save(ignore_permissions=True)
 
     	# Create and submit stock entry - this will auto-create SLE and GL entries
-		s_entry = make_stock_entry(item_code="_Test Item", target=warehouse_doc.name, qty=1)
+		s_entry = make_stock_entry(item_code="_Test Item", target=test_warehouse_name, qty=1)
 		s_entry.submit()
 
     	# Reload warehouse and assign a different account to trigger warning
