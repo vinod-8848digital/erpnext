@@ -55,6 +55,14 @@ repos:
                 erpnext/templates/includes/.*
             )$
 
+  - repo: https://github.com/alessandrojcm/commitlint-pre-commit-hook
+    rev: v9.22.0
+    hooks:
+      - id: commitlint
+        name: Checking commit subject
+        stages: [commit-msg]
+        additional_dependencies: ['@commitlint/config-conventional','conventional-changelog-conventionalcommits']
+
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.2.0
     hooks:
