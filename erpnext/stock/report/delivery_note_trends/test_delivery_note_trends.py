@@ -6,19 +6,18 @@ from erpnext.stock.doctype.item.test_item import create_item
 
 class TestDeliveryNoteTrendsReport(unittest.TestCase):
 	def setUp(self):
-        super().setUp()
-        customer = frappe.get_doc({
+		super().setUp()
+		customer = frappe.get_doc({
 		"doctype": "Customer",
 		"customer_name": "_Test Customer DN",
 		"customer_type": "Individual"
         }).insert(ignore_permissions=True)
-
-        item = create_item(f"_Test Item DN", {
+		
+		item = create_item(f"_Test Item DN", {
                 "is_stock_item": 1,
                 "stock_uom": "Nos"
             })
-
-        self.dn = frappe.get_doc({
+		self.dn = frappe.get_doc({
             "doctype": "Delivery Note",
             "customer": customer.name,
             "posting_date": today(),
@@ -30,7 +29,7 @@ class TestDeliveryNoteTrendsReport(unittest.TestCase):
                 "warehouse": frappe.defaults.get_user_default("Warehouse")
             }]
         }).insert(ignore_permissions=True)
-        self.dn.submit()
+		self.dn.submit()
 
     def test_execute_with_valid_filters(self):
         from erpnext.stock.report.delivery_note_trends import delivery_note_trends
