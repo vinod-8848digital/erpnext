@@ -375,7 +375,6 @@ erpnext.accounts.PurchaseInvoice = class PurchaseInvoice extends erpnext.buying.
 		}
 	}
 
-
 	tax_withholding_category(frm) {
 		var me = this;
 		let filtered_taxes = (me.frm.doc.taxes || []).filter((row) => !row.is_tax_withholding_account);
@@ -423,6 +422,8 @@ erpnext.accounts.PurchaseInvoice = class PurchaseInvoice extends erpnext.buying.
 				this.frm.set_value("is_paid", 0);
 				frappe.msgprint(__("Please specify Company to proceed"));
 			}
+		} else {
+			this.frm.set_value("paid_amount", 0);
 		}
 		this.calculate_outstanding_amount();
 		this.frm.refresh_fields();
@@ -469,7 +470,6 @@ erpnext.accounts.PurchaseInvoice = class PurchaseInvoice extends erpnext.buying.
 			frm: cur_frm,
 		});
 	}
-
 };
 
 cur_frm.script_manager.make(erpnext.accounts.PurchaseInvoice);
@@ -582,15 +582,19 @@ frappe.ui.form.on("Purchase Invoice", {
 				frm.trigger("create_landed_cost_voucher");
 			},
 		};
-		var list = frm.fields_dict['items'].grid.get_field('work_breakdown_structure').get_query = function (doc, cdt, cdn) {
+		var list = (frm.fields_dict["items"].grid.get_field("work_breakdown_structure").get_query = function (
+			doc,
+			cdt,
+			cdn
+		) {
 			var child = locals[cdt][cdn];
 			return {
 				filters: {
-					project : child.project,
-					is_group: 0
-				}
+					project: child.project,
+					is_group: 0,
+				},
 			};
-		};
+		});
 
 		frm.set_query("additional_discount_account", function () {
 			return {
@@ -674,7 +678,9 @@ frappe.ui.form.on("Purchase Invoice", {
 	},
 
 	onload: function (frm) {
-		frm.savecancel = function(btn, callback, on_error){ return frm._cancel(btn, callback, on_error, false);}
+		frm.savecancel = function (btn, callback, on_error) {
+			return frm._cancel(btn, callback, on_error, false);
+		};
 		if (frm.doc.__onload && frm.doc.supplier) {
 			if (frm.is_new()) {
 				frm.doc.apply_tds = frm.doc.__onload.supplier_tds ? 1 : 0;
@@ -734,46 +740,55 @@ frappe.ui.form.on("Purchase Invoice", {
 });
 
 frappe.ui.form.on("Purchase Invoice Item", {
-    work_breakdown_structure: function(frm,cdt,cdn) {
+	work_breakdown_structure: function (frm, cdt, cdn) {
 		let child = locals[cdt][cdn];
-		frappe.db.get_value("Work Breakdown Structure", child.work_breakdown_structure, ["wbs_name", 'locked', 'gl_account'])
-		.then(response => {
-			if (response.message && response.message.wbs_name) {
-				let wbs_name = response.message.wbs_name;
-				if (response.message.locked == 1) {
-					frappe.msgprint(__(`WBS "${child.work_breakdown_structure}" is locked`));
-					child.work_breakdown_structure = null;
+		frappe.db
+			.get_value("Work Breakdown Structure", child.work_breakdown_structure, [
+				"wbs_name",
+				"locked",
+				"gl_account",
+			])
+			.then((response) => {
+				if (response.message && response.message.wbs_name) {
+					let wbs_name = response.message.wbs_name;
+					if (response.message.locked == 1) {
+						frappe.msgprint(__(`WBS "${child.work_breakdown_structure}" is locked`));
+						child.work_breakdown_structure = null;
+					} else {
+						child.wbs_name = wbs_name;
+					}
+					if (response.message.gl_account) {
+						child.expense_account = response.message.gl_account;
+					}
 				} else {
-					child.wbs_name = wbs_name;
+					child.wbs_name = null;
 				}
-				if (response.message.gl_account) {
-					child.expense_account = response.message.gl_account;
-				}
-			} else {
-				child.wbs_name = null;
-			}
-			let row = frm.fields_dict['items'].grid.get_row(cdn);
-			row.refresh_field('work_breakdown_structure')
-            row.refresh_field('wbs_name');
-			row.refresh_field('expense_account');
-		})
+				let row = frm.fields_dict["items"].grid.get_row(cdn);
+				row.refresh_field("work_breakdown_structure");
+				row.refresh_field("wbs_name");
+				row.refresh_field("expense_account");
+			});
 	},
-	expense_account: function(frm,cdt,cdn) {
+	expense_account: function (frm, cdt, cdn) {
 		var child = locals[cdt][cdn];
 		if (child.work_breakdown_structure && child.expense_account) {
-			frappe.db.get_value("Work Breakdown Structure",child.work_breakdown_structure,'gl_account')
-			.then(response => {
-				if (response.message && response.message.gl_account) {
-					if (child.expense_account != response.message.gl_account) {
-						frappe.msgprint(__(`${child.expense_account} is not a GL Account of WBS ${child.work_breakdown_structure}`));
-						child.expense_account = null;
-						let row = frm.fields_dict['items'].grid.get_row(cdn);
-						row.refresh_field('expense_account');
-						row.refresh_field('work_breakdown_structure');
+			frappe.db
+				.get_value("Work Breakdown Structure", child.work_breakdown_structure, "gl_account")
+				.then((response) => {
+					if (response.message && response.message.gl_account) {
+						if (child.expense_account != response.message.gl_account) {
+							frappe.msgprint(
+								__(
+									`${child.expense_account} is not a GL Account of WBS ${child.work_breakdown_structure}`
+								)
+							);
+							child.expense_account = null;
+							let row = frm.fields_dict["items"].grid.get_row(cdn);
+							row.refresh_field("expense_account");
+							row.refresh_field("work_breakdown_structure");
+						}
 					}
-				}
-			});
+				});
 		}
-	}
+	},
 });
-
