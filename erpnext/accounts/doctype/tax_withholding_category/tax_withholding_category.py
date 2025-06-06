@@ -52,7 +52,7 @@ class TaxWithholdingCategory(Document):
 				frappe.throw(_("Row #{0}: Dates overlapping with other row").format(d.idx))
 
 			last_to_date = d.to_date
- 
+
 	def validate_companies_and_accounts(self):
 		existing_accounts = set()
 		companies = set()
@@ -282,9 +282,9 @@ def get_lower_deduction_certificate(company, posting_date, tax_details, pan_no):
 def get_tax_amount(party_type, parties, inv, tax_details, posting_date, pan_no=None):
 	vouchers, voucher_wise_amount = get_invoice_vouchers(
 		parties,
- 		tax_details,
- 		inv.company,
- 		party_type=party_type,
+		tax_details,
+		inv.company,
+		party_type=party_type,
 	)
 
 	payment_entry_vouchers = get_payment_entry_vouchers(
@@ -359,16 +359,16 @@ def get_invoice_vouchers(parties, tax_details, company, party_type="Supplier"):
 	vouchers = []
 
 	ldcs = frappe.db.get_all(
- 		"Lower Deduction Certificate",
- 		filters={
- 			"valid_from": [">=", tax_details.from_date],
- 			"valid_upto": ["<=", tax_details.to_date],
- 			"company": company,
- 			"supplier": ["in", parties],
- 		},
- 		fields=["supplier", "valid_from", "valid_upto", "rate"],
- 	)
-	
+		"Lower Deduction Certificate",
+		filters={
+			"valid_from": [">=", tax_details.from_date],
+			"valid_upto": ["<=", tax_details.to_date],
+			"company": company,
+			"supplier": ["in", parties],
+		},
+		fields=["supplier", "valid_from", "valid_upto", "rate"],
+	)
+
 	doctype = "Purchase Invoice" if party_type == "Supplier" else "Sales Invoice"
 	field = [
 		"base_tax_withholding_net_total as base_net_total" if party_type == "Supplier" else "base_net_total",
@@ -394,19 +394,19 @@ def get_invoice_vouchers(parties, tax_details, company, party_type="Supplier"):
 
 	for d in invoices_details:
 		d = frappe._dict(
- 			{
- 				"voucher_name": d.name,
- 				"voucher_type": doctype,
- 				"taxable_amount": d.base_net_total,
- 				"grand_total": d.grand_total,
- 				"posting_date": d.posting_date,
- 			}
+			{
+				"voucher_name": d.name,
+				"voucher_type": doctype,
+				"taxable_amount": d.base_net_total,
+				"grand_total": d.grand_total,
+				"posting_date": d.posting_date,
+			}
 		)
 
 		if ldc := [x for x in ldcs if d.posting_date >= x.valid_from and d.posting_date <= x.valid_upto]:
 			if ldc[0].supplier in parties and ldc[0].rate == 0:
 				d.update({"taxable_amount": 0})
- 
+
 		vouchers.append(d.voucher_name)
 		voucher_wise_amount.append(d)
 
@@ -636,7 +636,7 @@ def get_tcs_amount(parties, inv, tax_details, vouchers, adv_vouchers):
 				"voucher_no": ["in", vouchers],
 			},
 			"sum(debit)",
-			order_by=None
+			order_by=None,
 		)
 		or 0.0
 	)
@@ -650,7 +650,7 @@ def get_tcs_amount(parties, inv, tax_details, vouchers, adv_vouchers):
 	conditions.append(ple.party.isin(parties))
 	conditions.append(ple.voucher_no == ple.against_voucher_no)
 	conditions.append(ple.company == inv.company)
-
+	conditions.append(ple.posting_date[tax_details.from_date : tax_details.to_date])
 
 	advance_amt = (
 		qb.from_(ple).select(Abs(Sum(ple.amount))).where(Criterion.all(conditions)).run()[0][0] or 0.0
@@ -704,7 +704,7 @@ def get_limit_consumed(ldc, parties):
 			"company": ldc.company,
 		},
 		"sum(tax_withholding_net_total)",
-		order_by=None
+		order_by=None,
 	)
 
 	return limit_consumed

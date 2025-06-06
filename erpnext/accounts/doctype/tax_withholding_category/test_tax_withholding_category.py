@@ -241,17 +241,18 @@ class TestTaxWithholdingCategory(FrappeTestCase):
 		frappe.db.set_value(
 			"Customer", "Test TCS Customer", "tax_withholding_category", "Cumulative Threshold TCS"
 		)
+		fiscal_year = get_fiscal_year(today(), company="_Test Company")
 
 		vouchers = []
 
 		# create advance payment
-		pe = create_payment_entry(
+		pe1 = create_payment_entry(
 			payment_type="Receive", party_type="Customer", party="Test TCS Customer", paid_amount=20000
 		)
-		pe.paid_from = "Debtors - _TC"
-		pe.paid_to = "Cash - _TC"
-		pe.submit()
-		vouchers.append(pe)
+		pe1.paid_from = "Debtors - _TC"
+		pe1.paid_to = "Cash - _TC"
+		pe1.submit()
+		vouchers.append(pe1)
 
 		# create invoice
 		si1 = create_sales_invoice(customer="Test TCS Customer", rate=5000)
@@ -273,6 +274,17 @@ class TestTaxWithholdingCategory(FrappeTestCase):
 		# make another invoice
 		# sum of unallocated amount from payment entry and this sales invoice will breach cumulative threashold
 		# TDS should be calculated
+
+		# this payment should not be considered for TCS calculation as it is outside of fiscal yearAdd commentMore actions
+		pe2 = create_payment_entry(
+			payment_type="Receive", party_type="Customer", party="Test TCS Customer", paid_amount=10000
+		)
+		pe2.paid_from = "Debtors - _TC"
+		pe2.paid_to = "Cash - _TC"
+		pe2.posting_date = add_days(fiscal_year[1], -10)
+		pe2.submit()
+		vouchers.append(pe2)
+
 		si2 = create_sales_invoice(customer="Test TCS Customer", rate=15000)
 		si2.submit()
 		vouchers.append(si2)
@@ -662,7 +674,7 @@ class TestTaxWithholdingCategory(FrappeTestCase):
 				"pan": "ABCTY1234D",
 			},
 		)
- 
+
 		fiscal_year = get_fiscal_year(today(), company="_Test Company")
 		valid_from = fiscal_year[1]
 		valid_upto = add_months(valid_from, 1)
@@ -854,7 +866,7 @@ def create_purchase_invoice(**args):
 		{
 			"doctype": "Purchase Invoice",
 			"set_posting_time": args.set_posting_time or False,
- 			"posting_date": args.posting_date or today(),
+			"posting_date": args.posting_date or today(),
 			"apply_tds": 0 if args.do_not_apply_tds else 1,
 			"supplier": args.supplier,
 			"company": "_Test Company",
@@ -1181,16 +1193,17 @@ def create_tax_withholding_category(
 			}
 		).insert(ignore_permissions=True)
 	elif frappe.db.exists("Tax Withholding Category", category_name):
-		doc = frappe.get_doc("Tax Withholding Category",category_name)
+		doc = frappe.get_doc("Tax Withholding Category", category_name)
 		if doc.accounts:
-			child=frappe.get_doc("Tax Withholding Account",doc.accounts[0].name)
+			child = frappe.get_doc("Tax Withholding Account", doc.accounts[0].name)
 			if child.account != account:
-				child.account=account
+				child.account = account
 				child.save()
 
+
 def create_lower_deduction_certificate(
- 	supplier, tax_withholding_category, tax_rate, certificate_no, limit, valid_from=None, valid_upto=None
- ):
+	supplier, tax_withholding_category, tax_rate, certificate_no, limit, valid_from=None, valid_upto=None
+):
 	fiscal_year = get_fiscal_year(today(), company="_Test Company")
 	if not frappe.db.exists("Lower Deduction Certificate", certificate_no):
 		frappe.get_doc(
@@ -1202,7 +1215,7 @@ def create_lower_deduction_certificate(
 				"tax_withholding_category": tax_withholding_category,
 				"fiscal_year": fiscal_year[0],
 				"valid_from": valid_from or fiscal_year[1],
- 				"valid_upto": valid_upto or fiscal_year[2],
+				"valid_upto": valid_upto or fiscal_year[2],
 				"rate": tax_rate,
 				"certificate_limit": limit,
 			}
