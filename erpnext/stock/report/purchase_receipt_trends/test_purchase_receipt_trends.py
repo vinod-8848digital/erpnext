@@ -100,18 +100,42 @@ class TestPurchaseReceiptTrendsReport(FrappeTestCase):
 	def test_execute_with_empty_data(self):
 		if not frappe.db.exists("Fiscal Year", "2099-2100"):
 			frappe.get_doc({
-				"doctype": "Fiscal Year",
-				"year": "2099-2100",
-				"year_start_date": getdate("2099-04-01"),
-				"year_end_date": getdate("2100-03-31"),
-				"disabled": 0,
-				"companies": [{"company": self.company.name}]
-			}).insert(ignore_permissions=True)
-
+                "doctype": "Fiscal Year",
+                "year": "2099-2100",
+                "year_start_date": getdate("2099-04-01"),
+                "year_end_date": getdate("2100-03-31"),
+                "disabled": 0,
+				"companies": [{'company': "_Test Company"}]
+            }).insert(ignore_permissions=True)
 		filters = frappe._dict({
-			"company": self.company.name,
-			"fiscal_year": "2099-2100",
-			"based_on": "Supplier",
-			"group_by": "Item",
-			"period": "Monthly",
-			"period_based_on": "posting_date"
+            "company": "_Test Company",
+            "fiscal_year": "2099-2100",
+            "based_on": "Supplier",
+            "group_by": "Item",
+            "period": "Monthly",
+            "period_based_on": "posting_date"
+        })
+		cols, data, none_val, chart = execute(filters)
+		self.assertEqual(data, [])
+
+	def test_chart_data_top_10_cutoff(self):
+		_, data, _, _ = execute(self.default_filters)
+		chart = get_chart_data(data, self.default_filters)
+
+		self.assertGreater(len(chart["data"]["labels"]), 0)
+		self.assertLessEqual(len(chart["data"]["labels"]), 10)
+
+	def test_chart_data_without_group_by(self):
+		filters = self.default_filters.copy()
+		del filters["group_by"]
+
+		_, data, _, _ = execute(filters)
+		chart = get_chart_data(data, filters)
+
+		self.assertLessEqual(len(chart["data"]["labels"]), 10)
+
+	def test_chart_data_with_no_data(self):
+		data = []
+		chart = get_chart_data(data, self.default_filters)
+		self.assertEqual(chart, [])
+
