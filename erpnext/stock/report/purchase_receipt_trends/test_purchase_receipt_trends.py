@@ -56,7 +56,7 @@ class TestPurchaseReceiptTrendsReport(FrappeTestCase):
 				item_code=item.name,
 				qty=1,
 				rate=100 + i,
-				warehouse=self.warehouse.name
+				warehouse=self.warehouse
 			)
 			pr.submit()
 			self.purchase_receipts.append(pr)
