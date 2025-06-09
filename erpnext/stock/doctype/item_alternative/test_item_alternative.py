@@ -50,11 +50,9 @@ class TestItemAlternative(FrappeTestCase):
 				"two_way": 1,
 			}
 		)
-
-		with self.assertRaises(frappe.ValidationError) as context:
+		msg = "Not allow to set alternative item for the item"
+		with self.assertRaises(frappe.ValidationError, msg=msg):
 			item_alternative.insert()
-
-		self.assertIn("Not allow to set alternative item for the item", str(context.exception))
 
 	# codecov
 	def test_get_alternative_items_TC_SCK_317(self):
@@ -80,10 +78,9 @@ class TestItemAlternative(FrappeTestCase):
 				"two_way": 1,
 			}
 		)
-
-		with self.assertRaises(frappe.ValidationError) as context:
+		msg = "Allow Alternative Item must be checked on Item Test Item2"
+		with self.assertRaises(frappe.ValidationError, msg=msg):
 			item_alternative.insert()
-		self.assertIn("Allow Alternative Item must be checked on Item Test Item2", str(context.exception))
 
 	# codecov
 	def test_get_alternative_items_TC_SCK_318(self):
@@ -101,9 +98,9 @@ class TestItemAlternative(FrappeTestCase):
 				"two_way": 1,
 			}
 		)
-		with self.assertRaises(frappe.ValidationError) as context:
+		msg = "Alternative item must not be same as item code"
+		with self.assertRaises(frappe.ValidationError, msg=msg):
 			item_alternative.insert()
-		self.assertIn("Alternative item must not be same as item code", str(context.exception))
 
 	def test_alternative_item_for_subcontract_rm(self):
 		set_backflush_based_on("BOM")
