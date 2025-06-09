@@ -1,9 +1,12 @@
 # Copyright (c) 2023, Frappe Technologies Pvt. Ltd. and Contributors
 # See license.txt
+
 from random import randint
 
+import frappe
+from frappe import _
 from frappe.tests.utils import FrappeTestCase, change_settings
-from frappe.utils.data import today
+from frappe.utils.data import add_days, today
 
 from erpnext.selling.doctype.sales_order.test_sales_order import make_sales_order
 from erpnext.stock.doctype.stock_reservation_entry.test_stock_reservation_entry import (
@@ -11,7 +14,7 @@ from erpnext.stock.doctype.stock_reservation_entry.test_stock_reservation_entry 
 	create_items,
 	create_material_receipt,
 )
-from erpnext.stock.report.reserved_stock.reserved_stock import get_data as reserved_stock_report
+from erpnext.stock.report.reserved_stock.reserved_stock import execute as reserved_stock_report
 
 
 class TestReservedStock(FrappeTestCase):
@@ -43,11 +46,39 @@ class TestReservedStock(FrappeTestCase):
 			)
 			so.create_stock_reservation_entries()
 
-		data = reserved_stock_report(
+		columns, data = reserved_stock_report(
 			filters={
 				"company": so.company,
 				"from_date": today(),
 				"to_date": today(),
 			}
 		)
+
+		self.assertTrue(columns)
+		self.assertTrue(data)
+		self.assertIn("item_code", [col["fieldname"] for col in columns])
 		self.assertEqual(len(data), len(items_details))
+
+	def test_missing_filters_throws_T_RS_001(self):
+		with self.assertRaises(frappe.ValidationError, msg="Please set filters"):
+			reserved_stock_report(filters=None)
+
+	def test_missing_individual_filters_T_RS_002(self):
+		with self.assertRaises(frappe.ValidationError, msg="Please set company"):
+			reserved_stock_report(filters={"from_date": today(), "to_date": today()})
+
+		with self.assertRaises(frappe.ValidationError, msg="Please set from_date"):
+			reserved_stock_report(filters={"company": "Test Company", "to_date": today()})
+
+		with self.assertRaises(frappe.ValidationError, msg="Please set to_date"):
+			reserved_stock_report(filters={"company": "Test Company", "from_date": today()})
+
+	def test_invalid_date_range_T_RS_003(self):
+		with self.assertRaises(frappe.ValidationError, msg="From Date cannot be greater than To Date"):
+			reserved_stock_report(
+				filters={
+					"company": "Test Company",
+					"from_date": today(),
+					"to_date": add_days(today(), -1),
+				}
+			)
