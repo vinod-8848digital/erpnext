@@ -191,10 +191,8 @@ class TestWarehouse(FrappeTestCase):
 		se.submit()
 
 		# Try to delete warehouse, should raise ValidationError
-		with self.assertRaises(frappe.ValidationError) as context:
+		with self.assertRaises(frappe.ValidationError, msg="can not be deleted as quantity exists"):
 			frappe.delete_doc("Warehouse", warehouse)
-
-		self.assertIn("can not be deleted as quantity exists", str(context.exception))
 
 	def test_on_trash_with_existing_stock_ledger_entry_TC_SCK_330(self):
 		"""Test warehouse creation with valid inputs."""
@@ -219,10 +217,8 @@ class TestWarehouse(FrappeTestCase):
 		bin_doc.save(ignore_permissions=True)
 
 		# Try deleting the warehouse - should fail due to SLE
-		with self.assertRaises(frappe.ValidationError) as context:
+		with self.assertRaises(frappe.ValidationError, msg="stock ledger entry exists"):
 			frappe.delete_doc("Warehouse", warehouse)
-
-		self.assertIn("stock ledger entry exists", str(context.exception))
 
 	def test_onload_loads_account_if_perpetual_inventory_enabled_TC_SCK_331(self):
 		# Ensure test company exists and enable perpetual inventory
