@@ -6,21 +6,18 @@ from erpnext.stock.doctype.item.test_item import create_item
 
 class TestDeliveryNoteTrendsReport(unittest.TestCase):
 	def setUp(self):
-        super().setUp()
-        customer = frappe.get_doc({
-		"doctype": "Customer",
-		"customer_name": "_Test Customer DN",
-		"customer_type": "Individual"
-        }).insert(ignore_permissions=True)
-
-        # Create a test item
-        item = create_item(f"_Test Item DN", {
-                "is_stock_item": 1,
-                "stock_uom": "Nos"
-            })
-
-        # Create a delivery note manually
-        self.dn = frappe.get_doc({
+		super().setUp()
+		customer = frappe.get_doc({
+			"doctype": "Customer",
+			"customer_name": "_Test Customer DN",
+			"customer_type": "Individual"
+		}).insert(ignore_permissions=True)
+		
+		item = create_item(f"_Test Item DN", {
+			"is_stock_item": 1,
+			"stock_uom": "Nos"
+		})
+		self.dn = frappe.get_doc({
             "doctype": "Delivery Note",
             "customer": customer.name,
             "posting_date": today(),
@@ -31,14 +28,14 @@ class TestDeliveryNoteTrendsReport(unittest.TestCase):
                 "rate": 100,
                 "warehouse": frappe.defaults.get_user_default("Warehouse")
             }]
-        }).insert(ignore_permissions=True)
-        self.dn.submit()
-        fiscal_year = frappe.new_doc("Fiscal Year")
-        fiscal_year.year = "2024-2025"
-        fiscal_year.year_start_date = "01-04-2024"
-        fiscal_year.year_end_date = "31-03-2025"
-        fiscal_year.append("companies", {"company": "_Test Company"})
-        fiscal_year.save()
+		}).insert(ignore_permissions=True)
+		self.dn.submit()
+		fiscal_year = frappe.new_doc("Fiscal Year")
+		fiscal_year.year = "2024-2025"
+		fiscal_year.year_start_date = "01-04-2024"
+		fiscal_year.year_end_date = "31-03-2025"
+		fiscal_year.append("companies", {"company": "_Test Company"})
+		fiscal_year.save()
 		
 	def test_execute_with_valid_filters(self):
 		from erpnext.stock.report.delivery_note_trends import delivery_note_trends
