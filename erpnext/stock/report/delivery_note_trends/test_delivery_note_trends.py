@@ -13,13 +13,11 @@ class TestDeliveryNoteTrendsReport(unittest.TestCase):
 		"customer_type": "Individual"
         }).insert(ignore_permissions=True)
 
-        # Create a test item
         item = create_item(f"_Test Item DN", {
                 "is_stock_item": 1,
                 "stock_uom": "Nos"
             })
 
-        # Create a delivery note manually
         self.dn = frappe.get_doc({
             "doctype": "Delivery Note",
             "customer": customer.name,
@@ -33,12 +31,18 @@ class TestDeliveryNoteTrendsReport(unittest.TestCase):
             }]
         }).insert(ignore_permissions=True)
         self.dn.submit()
-        fiscal_year = frappe.new_doc("Fiscal Year")
-        fiscal_year.year = "2024-2025"
-        fiscal_year.year_start_date = "01-04-2024"
-        fiscal_year.year_end_date = "31-03-2025"
-        fiscal_year.append("companies", {"company": "_Test Company"})
-        fiscal_year.save()
+        if not frappe.db.exists("Fiscal Year", "2024-2025"):
+            fiscal_year = frappe.new_doc("Fiscal Year")
+            fiscal_year.year = "2024-2025"
+            fiscal_year.year_start_date = "2024-04-01"
+            fiscal_year.year_end_date = "2025-03-31"
+            fiscal_year.append("companies", {"company": "_Test Company"})
+            fiscal_year.save()
+        else:
+            fiscal_year = frappe.get_doc("Fiscal Year", "2024-2025")
+            if not any(d.company == "_Test Company" for d in fiscal_year.companies):
+                fiscal_year.append("companies", {"company": "_Test Company"})
+                fiscal_year.save()
 		
 	def test_execute_with_valid_filters(self):
 		from erpnext.stock.report.delivery_note_trends import delivery_note_trends
