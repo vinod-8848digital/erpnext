@@ -64,6 +64,7 @@ class TestStockSettings(FrappeTestCase):
 		# with self.assertRaises(frappe.ValidationError) as context:
 		settings.save()
 		self.assertEqual(settings.enable_stock_reservation, 1)
+		frappe.flags.in_test = True
 
 	# codecov
 	@change_settings("Stock Settings", {"allow_negative_stock": 1, "enable_stock_reservation": 1})
@@ -77,6 +78,7 @@ class TestStockSettings(FrappeTestCase):
 		# with self.assertRaises(frappe.ValidationError) as context:
 		self.assertEqual(settings.allow_negative_stock, 0)
 		settings.save()
+		frappe.flags.in_test = True
 
 	# codecov
 	@change_settings(
