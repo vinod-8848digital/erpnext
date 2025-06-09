@@ -9,22 +9,20 @@ from erpnext.stock.report.stock_and_account_value_comparison.stock_and_account_v
     create_reposting_entries,
 )
 from frappe.utils import nowdate, now_datetime
-from datetime import timedelta, time
+from datetime import timedelta,time
 import erpnext
+
 
 class TestStockAndAccountValueComparison(FrappeTestCase):
     def setUp(self):
         self.company = "_Test Company"
         self.item_code = "_Test Item"
-        self.warehouse = "_Test Warehouse - _TC - _C"
+        self.warehouse = "_Test WareHouse"
         self.account = "Stock In Hand - _TC"
         self.posting_date = nowdate()
-
-        # Fix for global override issue with frappe.db.exists
-        frappe.db.exists = frappe.db.__class__.exists.__get__(frappe.db)
-
+        
         self.ensure_test_data()
-        get_or_create_fiscal_year(self.company)
+        get_or_create_fiscal_year("_Test Company")
         self.stock_entry = self.create_stock_entry()
         self.create_stock_ledger_entry()
         self.create_gl_entry()
@@ -32,12 +30,14 @@ class TestStockAndAccountValueComparison(FrappeTestCase):
     def ensure_test_data(self):
         hsn_code = "10010010"
 
+        # Create GST HSN Code
         if not frappe.db.exists("GST HSN Code", hsn_code):
             frappe.get_doc({
                 "doctype": "GST HSN Code",
                 "hsn_code": hsn_code,
                 "description": "Test HSN Code for automation"
             }).insert()
+
 
         if not frappe.db.exists("Company", self.company):
             frappe.get_doc({
@@ -56,13 +56,29 @@ class TestStockAndAccountValueComparison(FrappeTestCase):
                 "is_stock_item": 1,
                 "gst_hsn_code": hsn_code,
             }).insert()
+            
+            
+        import random
 
         if not frappe.db.exists("Warehouse", self.warehouse):
-            frappe.get_doc({
+            # Generate a unique suffix using timestamp or random number
+            unique_suffix = now_datetime().strftime("%Y%m%d%H%M%S%f")
+            base_name = self.warehouse.split(" - ")[0]  # Strip company if already there
+            company_abbr = self.company.split()[-1]
+
+            warehouse_name = f"{base_name} {unique_suffix} - {company_abbr}"
+
+            warehouse = frappe.get_doc({
                 "doctype": "Warehouse",
-                "warehouse_name": self.warehouse,
+                "warehouse_name": warehouse_name,
                 "company": self.company,
             }).insert()
+
+            self.warehouse = warehouse.name  # Update self.warehouse with new unique name
+            return self.warehouse
+        else:
+            return self.warehouse
+            
 
     def create_stock_entry(self):
         se = frappe.get_doc({
@@ -78,7 +94,7 @@ class TestStockAndAccountValueComparison(FrappeTestCase):
                 "rate": 100
             }]
         })
-        se.insert()
+        se.insert(ignore_permissions=True)
         se.submit()
         return se.name
 
@@ -99,7 +115,7 @@ class TestStockAndAccountValueComparison(FrappeTestCase):
                 "company": self.company,
                 "incoming_rate": 100,
                 "is_cancelled": 0,
-            }).insert()
+            }).insert(ignore_permissions=True)
 
     def create_gl_entry(self):
         if not frappe.db.exists("GL Entry", {"voucher_no": self.stock_entry}):
@@ -113,7 +129,7 @@ class TestStockAndAccountValueComparison(FrappeTestCase):
                 "voucher_no": self.stock_entry,
                 "company": self.company,
                 "fiscal_year": frappe.defaults.get_user_default("fiscal_year")
-            }).insert()
+            }).insert(ignore_permissions=True)
 
     def test_execute_with_perpetual_inventory(self):
         filters = frappe._dict({
@@ -186,6 +202,7 @@ class TestStockAndAccountValueComparison(FrappeTestCase):
             self.assertTrue(True)
 
     def test_create_reposting_entries_duplicate_handling(self):
+        # First creation
         filters = frappe._dict({
             "company": self.company,
             "as_on_date": self.posting_date
@@ -198,10 +215,11 @@ class TestStockAndAccountValueComparison(FrappeTestCase):
                 "voucher_no": row.voucher_no,
                 "posting_date": row.posting_date
             }
+            # Call twice to simulate duplicate entry
             create_reposting_entries([row_dict], self.company)
             create_reposting_entries([row_dict], self.company)
             self.assertTrue(True)
-
+        
     def test_create_reposting_entries_with_string_input(self):
         filters = frappe._dict({
             "company": self.company,
@@ -240,27 +258,30 @@ class TestStockAndAccountValueComparison(FrappeTestCase):
                 if row["posting_time"] is not None:
                     self.assertIsInstance(row["posting_time"], timedelta)
 
+
     def test_get_data_appends_when_difference_exceeds_threshold(self):
         filters = frappe._dict({
             "company": self.company,
             "as_on_date": self.posting_date
         })
 
+        # Modify GL Entry to force difference > 0.1
         frappe.db.set_value(
             "GL Entry",
             {"voucher_no": self.stock_entry},
             "debit_in_account_currency",
-            800
+            800  # lower than stock_value 1000
         )
 
         result = get_data(filters)
-        self.assertTrue(result)
+        self.assertTrue(result)  # Should not be empty
         self.assertGreater(len(result), 0)
 
         for row in result:
             self.assertIn("account_value", row)
             self.assertIn("difference_value", row)
             self.assertTrue(abs(row.difference_value) > 0.1)
+
 
     def test_create_reposting_entries_creates_repost_doc(self):
         filters = frappe._dict({
@@ -279,16 +300,20 @@ class TestStockAndAccountValueComparison(FrappeTestCase):
             "posting_date": row.posting_date
         }
 
+        # Clear any pre-existing repost item valuation for this voucher
         existing = frappe.get_all("Repost Item Valuation", filters=row_dict)
         for doc in existing:
             frappe.delete_doc("Repost Item Valuation", doc.name, force=True)
 
+        # Call the function
         create_reposting_entries([row_dict], self.company)
 
+        # Assert that Repost Item Valuation was created
         repost_doc = frappe.get_all("Repost Item Valuation", filters=row_dict)
         self.assertTrue(repost_doc)
         self.assertEqual(len(repost_doc), 1)
 
+        # Optional: check its values
         doc = frappe.get_doc("Repost Item Valuation", repost_doc[0].name)
         self.assertEqual(doc.company, self.company)
         self.assertEqual(doc.voucher_type, row.voucher_type)
@@ -296,13 +321,18 @@ class TestStockAndAccountValueComparison(FrappeTestCase):
         self.assertEqual(doc.status, "Queued")
         self.assertEqual(doc.based_on, "Transaction")
 
+
+
+    # class TestStockAndAccountValueComparison(frappe.tests.utils.FrappeTestCase):
     def test_difference_value_computation_and_filtering(self):
+        # Simulated stock ledger entry
         sle = frappe._dict({
             "voucher_type": "Stock Entry",
             "voucher_no": "STE-0001",
             "stock_value": 150.00
         })
 
+        # Simulated GL mapping
         voucher_wise_gl_data = {
             ("Stock Entry", "STE-0001"): {
                 "account_value": 100.00
@@ -320,15 +350,20 @@ class TestStockAndAccountValueComparison(FrappeTestCase):
             if abs(d.difference_value) > 0.1:
                 data.append(d)
 
+        # Assertions to confirm logic was followed
         self.assertEqual(len(data), 1)
         self.assertEqual(data[0].account_value, 100.00)
         self.assertEqual(data[0].difference_value, 50.00)
 
+
+
+    # class TestStockAndAccountValueComparison(FrappeTestCase):
     def test_posting_time_conversion_to_timedelta(self):
+        # Simulated SLE row with posting_time
         get_sle_data = [
             {"posting_time": time(hour=10, minute=15, second=30)},
             {"posting_time": None},
-            {},
+            {},  # no 'posting_time' key
         ]
 
         for row in get_sle_data:
@@ -340,37 +375,52 @@ class TestStockAndAccountValueComparison(FrappeTestCase):
                     seconds=posting_time.second
                 )
 
+        # Assert conversion happened only for the first entry
         self.assertIsInstance(get_sle_data[0]["posting_time"], timedelta)
         self.assertEqual(get_sle_data[0]["posting_time"], timedelta(hours=10, minutes=15, seconds=30))
+
+        # Second entry should remain None
         self.assertIsNone(get_sle_data[1]["posting_time"])
+
+        # Third entry should not have 'posting_time'
         self.assertNotIn("posting_time", get_sle_data[2])
 
 
+
+
+
+
+
 def get_or_create_fiscal_year(company):
-    from datetime import datetime
+	from datetime import datetime
 
-    current_date = datetime.today()
-    formatted_date = current_date.strftime("%d-%m-%Y")
-    existing_fy = frappe.get_all(
-        "Fiscal Year",
-        filters={
-            "year_start_date": ["<=", formatted_date],
-            "year_end_date": [">=", formatted_date],
-            "disabled": 0,
-        },
-        fields=["name"],
-    )
+	current_date = datetime.today()
+	formatted_date = current_date.strftime("%d-%m-%Y")
+	existing_fy = frappe.get_all(
+		"Fiscal Year",
+		filters={
+			"year_start_date": ["<=", formatted_date],
+			"year_end_date": [">=", formatted_date],
+			"disabled": 0,
+		},
+		fields=["name"],
+	)
 
-    if existing_fy:
-        fiscal_year = frappe.get_doc("Fiscal Year", existing_fy[0].name)
-        if not any(row.company == company for row in fiscal_year.companies):
-            fiscal_year.append("companies", {"company": company})
-            fiscal_year.save()
-    else:
-        current_year = datetime.now().year
-        fiscal_year = frappe.new_doc("Fiscal Year")
-        fiscal_year.year = f"{current_year}"
-        fiscal_year.year_start_date = f"01-01-{current_year}"
-        fiscal_year.year_end_date = f"31-12-{current_year}"
-        fiscal_year.append("companies", {"company": company})
-        fiscal_year.save()
+	if existing_fy:
+		fiscal_year = frappe.get_doc("Fiscal Year", existing_fy[0].name)
+		for years in fiscal_year.companies:
+			if years.company == company:
+				pass
+			else:
+				fiscal_year.append("companies", {"company": company})
+				fiscal_year.save()
+	else:
+		current_year = datetime.now().year
+		first_date = f"01-01-{current_year}"
+		last_date = f"31-12-{current_year}"
+		fiscal_year = frappe.new_doc("Fiscal Year")
+		fiscal_year.year = f"{current_year}"
+		fiscal_year.year_start_date = first_date
+		fiscal_year.year_end_date = last_date
+		fiscal_year.append("companies", {"company": company})
+		fiscal_year.save()

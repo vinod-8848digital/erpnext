@@ -40,6 +40,7 @@ class TestTotalStockSummary(FrappeTestCase):
 				"is_stock_item": 1,
 				"stock_uom": "Nos",
 				"gst_hsn_code": hsn_code,
+				"item_group": "All Item Groups" ,
 			}).insert()
 
 		# Create Company
