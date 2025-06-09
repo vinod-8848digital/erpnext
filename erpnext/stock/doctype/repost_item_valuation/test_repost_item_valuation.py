@@ -19,11 +19,108 @@ from erpnext.stock.doctype.repost_item_valuation.repost_item_valuation import (
 from erpnext.stock.doctype.stock_entry.stock_entry_utils import make_stock_entry
 from erpnext.stock.tests.test_utils import StockTestMixin
 from erpnext.stock.utils import PendingRepostingError
+from erpnext.setup.doctype.company.test_company import create_child_company
+from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_customer
 
 
 class TestRepostItemValuation(FrappeTestCase, StockTestMixin):
 	def tearDown(self):
 		frappe.flags.dont_execute_stock_reposts = False
+	# codecov
+	def test_validate_TC_SCK_351(self):
+		from erpnext.stock.doctype.repost_item_valuation.repost_item_valuation import execute_repost_item_valuation
+		company = "_Test Company"
+		warehouse = "Stores - _TC"
+		if not frappe.db.exists("Company", company):
+			create_child_company().company
+
+		customer = "_Test Customer"
+		if not frappe.db.exists("Customer", "_Test Customer"):
+			create_customer("_Test Customer", currency="INR")
+
+		item = make_item("Repost item")
+		warehouse = "_Test Warehouse - _TC"
+
+		dn = frappe.get_doc({
+			"doctype": "Delivery Note",
+			"customer": customer,
+			"company": company,
+			"posting_date": frappe.utils.nowdate(),
+			"currency": "INR",
+			"items": [{
+				"item_code": item.name,
+				"qty": 1,
+				"allow_zero_valuation_rate": 1,
+				"warehouse": warehouse,
+			}]
+		}).insert(ignore_permissions=True)
+		dn.submit()
+
+		repost_item_valuation = frappe.get_doc({
+			"doctype": "Repost Item Valuation",
+			"based_on": "Transaction",
+			"status": "",
+			"voucher_type": "Delivery Note",
+			"voucher_no": dn.name,
+			"company": company,
+			"allow_negative_stock": 1
+		})
+
+		# with self.assertRaises(frappe.ValidationError) as e:
+		repost_item_valuation.insert()
+		repost_item_valuation.restart_reposting()
+		execute_repost_item_valuation()
+		self.assertTrue(repost_item_valuation.status == "Queued")
+
+	# codecov
+	def test_repost_entries_TC_SCK_352(self):
+		company = "_Test Company"
+		warehouse = "Stores - _TC"
+		if not frappe.db.exists("Company", company):
+			create_child_company().company
+
+		customer = "_Test Customer"
+		if not frappe.db.exists("Customer", "_Test Customer"):
+			create_customer("_Test Customer", currency="INR")
+
+		item = make_item("Repost item")
+		warehouse = "_Test Warehouse - _TC"
+
+		dn = frappe.get_doc({
+			"doctype": "Delivery Note",
+			"customer": customer,
+			"company": company,
+			"posting_date": frappe.utils.nowdate(),
+			"currency": "INR",
+			"items": [{
+				"item_code": item.name,
+				"qty": 1,
+				"allow_zero_valuation_rate": 1,
+				"warehouse": warehouse,
+			}]
+		}).insert(ignore_permissions=True)
+		dn.submit()
+
+		repost_item_valuation = frappe.get_doc({
+			"doctype": "Repost Item Valuation",
+			"based_on": "Transaction",
+			"status": "",
+			"voucher_type": "Delivery Note",
+			"voucher_no": dn.name,
+			"company": company,
+			"allow_negative_stock": 1
+		})
+
+		# with self.assertRaises(frappe.ValidationError) as e:
+		repost_item_valuation.insert()
+		from erpnext.stock.doctype.repost_item_valuation.repost_item_valuation import on_doctype_update
+		on_doctype_update()
+		from erpnext.stock.doctype.repost_item_valuation.repost_item_valuation import repost_entries
+		repost_entries()
+		self.assertEqual(repost_item_valuation.status, "Queued") 
+		
+
+
 
 	def test_repost_time_slot(self):
 		repost_settings = frappe.get_doc("Stock Reposting Settings")

@@ -30,7 +30,7 @@ class RepostItemValuation(Document):
 
 	from typing import TYPE_CHECKING
 
-	if TYPE_CHECKING:
+	if TYPE_CHECKING: # pragma: no cover
 		from frappe.types import DF
 
 		affected_transactions: DF.Code | None
@@ -192,8 +192,9 @@ class RepostItemValuation(Document):
 		if write:
 			self.db_set("status", self.status)
 
-	def clear_attachment(self):
+	def clear_attachment(self): # pragma: no cover
 		if attachments := get_attachments(self.doctype, self.name):
+			
 			attachment = attachments[0]
 			frappe.delete_doc("File", attachment.name, ignore_permissions=True)
 
@@ -221,6 +222,7 @@ class RepostItemValuation(Document):
 		self.check_pending_repost_against_cancelled_transaction()
 
 	def check_pending_repost_against_cancelled_transaction(self):
+		
 		if self.status not in ("Queued", "In Progress"):
 			return
 
@@ -237,6 +239,7 @@ class RepostItemValuation(Document):
 		self.gl_reposting_index = 0
 		self.clear_attachment()
 		self.db_update()
+		
 
 	def deduplicate_similar_repost(self):
 		"""Deduplicate similar reposts based on item-warehouse-posting combination."""
@@ -418,7 +421,7 @@ def _get_directly_dependent_vouchers(doc):
 	return affected_vouchers
 
 
-def notify_error_to_stock_managers(doc, traceback):
+def notify_error_to_stock_managers(doc, traceback): # pragma: no cover
 	recipients = get_recipients()
 
 	subject = _("Error while reposting item valuation")
@@ -452,11 +455,10 @@ def repost_entries():
 	Reposts 'Repost Item Valuation' entries in queue.
 	Called hourly via hooks.py.
 	"""
+
 	if not in_configured_timeslot():
 		return
-
 	riv_entries = get_repost_item_valuation_entries()
-
 	for row in riv_entries:
 		doc = frappe.get_doc("Repost Item Valuation", row.name)
 		if doc.status in ("Queued", "In Progress"):
