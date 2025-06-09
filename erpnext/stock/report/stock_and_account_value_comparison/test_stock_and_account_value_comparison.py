@@ -57,6 +57,7 @@ class TestStockAndAccountValueComparison(FrappeTestCase):
                 "gst_hsn_code": hsn_code,
             }).insert()
             
+            
         import random
 
         if not frappe.db.exists("Warehouse", self.warehouse):
