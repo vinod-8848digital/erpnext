@@ -14,14 +14,18 @@ from erpnext.stock.doctype.stock_reservation_entry.test_stock_reservation_entry 
 	create_items,
 	create_material_receipt,
 )
+from erpnext.stock.doctype.warehouse.test_warehouse import create_warehouse
 from erpnext.stock.report.reserved_stock.reserved_stock import execute as reserved_stock_report
 
 
 class TestReservedStock(FrappeTestCase):
 	def setUp(self) -> None:
+		from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_company
+
+		create_company()
 		super().setUp()
 		self.stock_qty = 100
-		self.warehouse = "_Test Warehouse - _TC"
+		self.warehouse = create_warehouse("_Test Warehouse - _TC", "_Test Company")
 
 	def tearDown(self) -> None:
 		cancel_all_stock_reservation_entries()
