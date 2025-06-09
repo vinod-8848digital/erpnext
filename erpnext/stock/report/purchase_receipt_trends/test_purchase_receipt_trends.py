@@ -43,8 +43,6 @@ class TestPurchaseReceiptTrendsReport(FrappeTestCase):
 				supplier = frappe.get_doc("Supplier", supplier_name)
 
 			# Ensure default payable account is set
-			frappe.db.set_value("Supplier", supplier.name, "default_payable_account", "Creditors - _TC")
-
 			self.supplier_names.append(supplier.name)
 
 			item = create_item(f"_Test Item Chart {i}", {
