@@ -5,6 +5,11 @@ from frappe.tests.utils import FrappeTestCase
 from frappe.utils import now_datetime, nowdate
 
 import erpnext
+from erpnext.accounts.doctype.account.test_account import create_account
+from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_company
+from erpnext.stock.doctype.item.test_item import create_item
+from erpnext.stock.doctype.stock_entry.test_stock_entry import get_or_create_fiscal_year
+from erpnext.stock.doctype.warehouse.test_warehouse import create_warehouse
 from erpnext.stock.report.stock_and_account_value_comparison.stock_and_account_value_comparison import (
 	create_reposting_entries,
 	execute,
@@ -17,78 +22,39 @@ from erpnext.stock.report.stock_and_account_value_comparison.stock_and_account_v
 
 class TestStockAndAccountValueComparison(FrappeTestCase):
 	def setUp(self):
-		self.company = "_Test Company"
-		self.item_code = "_Test Item"
-		self.warehouse = "_Test WareHouse"
+		if not frappe.db.exists("Company", "_Test Company"):
+			self.company = create_company("_Test Company")
+		else:
+			self.company = "_Test Company"
+
+		if not frappe.db.exists("Warehouse", "_Test Warehouse - _TC"):
+			# print("working","working")
+			self.warehouse = create_warehouse(warehouse_name="_Test Warehouse - _TC", company="_Test Company")
+		else:
+			frappe.db.set_value(
+				"Warehouse", "_Test Warehouse - _TC", "company", "_Test Company", update_modified=False
+			)
+			self.warehouse = frappe.db.get_value("Warehouse", "_Test Warehouse - _TC", "name")
+
+		if not frappe.db.exists("Item", "_Test Item"):
+			self.item_code = create_item(item_code="_Test Item", valuation_rate=100)
+		else:
+			self.item_code = "_Test Item"
+
 		self.account = "Stock In Hand - _TC"
 		self.posting_date = nowdate()
 
-		self.ensure_test_data_T_SAAVC_001()
 		get_or_create_fiscal_year("_Test Company")
 		self.stock_entry = self.create_stock_entry()
 		self.create_stock_ledger_entry()
 		self.create_gl_entry()
-
-	def ensure_test_data_T_SAAVC_001(self):
-		hsn_code = "10010010"
-
-		# Create GST HSN Code
-		if not frappe.db.exists("GST HSN Code", hsn_code):
-			frappe.get_doc(
-				{
-					"doctype": "GST HSN Code",
-					"hsn_code": hsn_code,
-					"description": "Test HSN Code for automation",
-				}
-			).insert()
-
-		if not frappe.db.exists("Company", self.company):
-			frappe.get_doc(
-				{"doctype": "Company", "company_name": self.company, "default_currency": "INR"}
-			).insert()
-
-		if not frappe.db.exists("Item", self.item_code):
-			frappe.get_doc(
-				{
-					"doctype": "Item",
-					"item_code": self.item_code,
-					"item_name": "Test Item",
-					"stock_uom": "Nos",
-					"valuation_rate": 100,
-					"is_stock_item": 1,
-					"gst_hsn_code": hsn_code,
-				}
-			).insert()
-
-		import random
-
-		if not frappe.db.exists("Warehouse", self.warehouse):
-			# Generate a unique suffix using timestamp or random number
-			unique_suffix = now_datetime().strftime("%Y%m%d%H%M%S%f")
-			base_name = self.warehouse.split(" - ")[0]  # Strip company if already there
-			company_abbr = self.company.split()[-1]
-
-			warehouse_name = f"{base_name} {unique_suffix} - {company_abbr}"
-
-			warehouse = frappe.get_doc(
-				{
-					"doctype": "Warehouse",
-					"warehouse_name": warehouse_name,
-					"company": self.company,
-				}
-			).insert()
-
-			self.warehouse = warehouse.name  # Update self.warehouse with new unique name
-			return self.warehouse
-		else:
-			return self.warehouse
 
 	def create_stock_entry(self):
 		se = frappe.get_doc(
 			{
 				"doctype": "Stock Entry",
 				"stock_entry_type": "Material Receipt",
-				"company": self.company,
+				"company": "_Test Company",
 				"posting_date": self.posting_date,
 				"items": [
 					{
@@ -142,13 +108,13 @@ class TestStockAndAccountValueComparison(FrappeTestCase):
 				}
 			).insert(ignore_permissions=True)
 
-	def test_execute_with_perpetual_inventory_T_SAAVC_002(self):
+	def test_execute_with_perpetual_inventory_T_SAAVC_001(self):
 		filters = frappe._dict({"company": self.company, "as_on_date": self.posting_date})
 		columns, data = execute(filters)
 		self.assertTrue(columns)
 		self.assertIsInstance(data, list)
 
-	def test_execute_without_perpetual_inventory_T_SAAVC_003(self):
+	def test_execute_without_perpetual_inventory_T_SAAVC_002(self):
 		from erpnext import is_perpetual_inventory_enabled
 
 		original = is_perpetual_inventory_enabled
@@ -158,12 +124,12 @@ class TestStockAndAccountValueComparison(FrappeTestCase):
 			execute(filters)
 		erpnext.is_perpetual_inventory_enabled = original
 
-	def test_get_data_T_SAAVC_004(self):
+	def test_get_data_T_SAAVC_003(self):
 		filters = frappe._dict({"company": self.company, "as_on_date": self.posting_date})
 		result = get_data(filters)
 		self.assertIsInstance(result, list)
 
-	def test_get_gl_data_with_and_without_account_T_SAAVC_005(self):
+	def test_get_gl_data_with_and_without_account_T_SAAVC_004(self):
 		filters = frappe._dict({"company": self.company, "as_on_date": self.posting_date})
 		gl_data = get_gl_data(
 			filters, {"company": self.company, "posting_date": ("<=", self.posting_date), "is_cancelled": 0}
@@ -176,12 +142,12 @@ class TestStockAndAccountValueComparison(FrappeTestCase):
 		)
 		self.assertIsInstance(gl_data_with_account, dict)
 
-	def test_get_columns_T_SAAVC_006(self):
+	def test_get_columns_T_SAAVC_005(self):
 		columns = get_columns({})
 		self.assertTrue(columns)
 		self.assertIn("fieldname", columns[0])
 
-	def test_create_reposting_entries_success_T_SAAVC_007(self):
+	def test_create_reposting_entries_success_T_SAAVC_006(self):
 		data = get_data(frappe._dict({"company": self.company, "as_on_date": self.posting_date}))
 		if data:
 			row = data[0]
@@ -193,7 +159,7 @@ class TestStockAndAccountValueComparison(FrappeTestCase):
 			create_reposting_entries([row_dict], self.company)
 			self.assertTrue(True)
 
-	def test_create_reposting_entries_duplicate_handling_T_SAAVC_008(self):
+	def test_create_reposting_entries_duplicate_handling_T_SAAVC_007(self):
 		# First creation
 		filters = frappe._dict({"company": self.company, "as_on_date": self.posting_date})
 		data = get_data(filters)
@@ -209,7 +175,7 @@ class TestStockAndAccountValueComparison(FrappeTestCase):
 			create_reposting_entries([row_dict], self.company)
 			self.assertTrue(True)
 
-	def test_create_reposting_entries_with_string_input_T_SAAVC_009(self):
+	def test_create_reposting_entries_with_string_input_T_SAAVC_008(self):
 		filters = frappe._dict({"company": self.company, "as_on_date": self.posting_date})
 		data = get_data(filters)
 		if data:
@@ -223,7 +189,7 @@ class TestStockAndAccountValueComparison(FrappeTestCase):
 			create_reposting_entries(row_string, self.company)
 			self.assertTrue(True)
 
-	def test_get_stock_ledger_data_posting_time_conversion_T_SAAVC_010(self):
+	def test_get_stock_ledger_data_posting_time_conversion_T_SAAVC_009(self):
 		filters = frappe._dict(
 			{
 				"company": self.company,
@@ -242,7 +208,7 @@ class TestStockAndAccountValueComparison(FrappeTestCase):
 				if row["posting_time"] is not None:
 					self.assertIsInstance(row["posting_time"], timedelta)
 
-	def test_get_data_appends_when_difference_exceeds_threshold_T_SAAVC_011(self):
+	def test_get_data_appends_when_difference_exceeds_threshold_T_SAAVC_010(self):
 		filters = frappe._dict({"company": self.company, "as_on_date": self.posting_date})
 
 		# Modify GL Entry to force difference > 0.1
@@ -262,8 +228,8 @@ class TestStockAndAccountValueComparison(FrappeTestCase):
 			self.assertIn("difference_value", row)
 			self.assertTrue(abs(row.difference_value) > 0.1)
 
-	def test_create_reposting_entries_creates_repost_doc_T_SAAVC_012(self):
-		filters = frappe._dict({"company": self.company, "as_on_date": self.posting_date})
+	def test_create_reposting_entries_creates_repost_doc_T_SAAVC_011(self):
+		filters = frappe._dict({"company": "_Test Company", "as_on_date": self.posting_date})
 
 		data = get_data(filters)
 		if not data:
@@ -298,7 +264,7 @@ class TestStockAndAccountValueComparison(FrappeTestCase):
 		self.assertEqual(doc.based_on, "Transaction")
 
 	# class TestStockAndAccountValueComparison(frappe.tests.utils.FrappeTestCase):
-	def test_difference_value_computation_and_filtering_T_SAAVC_013(self):
+	def test_difference_value_computation_and_filtering_T_SAAVC_012(self):
 		# Simulated stock ledger entry
 		sle = frappe._dict({"voucher_type": "Stock Entry", "voucher_no": "STE-0001", "stock_value": 150.00})
 
@@ -322,7 +288,7 @@ class TestStockAndAccountValueComparison(FrappeTestCase):
 		self.assertEqual(data[0].difference_value, 50.00)
 
 	# class TestStockAndAccountValueComparison(FrappeTestCase):
-	def test_posting_time_conversion_to_timedelta_T_SAAVC_014(self):
+	def test_posting_time_conversion_to_timedelta_T_SAAVC_013(self):
 		# Simulated SLE row with posting_time
 		get_sle_data = [
 			{"posting_time": time(hour=10, minute=15, second=30)},
@@ -346,38 +312,3 @@ class TestStockAndAccountValueComparison(FrappeTestCase):
 
 		# Third entry should not have 'posting_time'
 		self.assertNotIn("posting_time", get_sle_data[2])
-
-
-def get_or_create_fiscal_year(company):
-	from datetime import datetime
-
-	current_date = datetime.today()
-	formatted_date = current_date.strftime("%d-%m-%Y")
-	existing_fy = frappe.get_all(
-		"Fiscal Year",
-		filters={
-			"year_start_date": ["<=", formatted_date],
-			"year_end_date": [">=", formatted_date],
-			"disabled": 0,
-		},
-		fields=["name"],
-	)
-
-	if existing_fy:
-		fiscal_year = frappe.get_doc("Fiscal Year", existing_fy[0].name)
-		for years in fiscal_year.companies:
-			if years.company == company:
-				pass
-			else:
-				fiscal_year.append("companies", {"company": company})
-				fiscal_year.save()
-	else:
-		current_year = datetime.now().year
-		first_date = f"01-01-{current_year}"
-		last_date = f"31-12-{current_year}"
-		fiscal_year = frappe.new_doc("Fiscal Year")
-		fiscal_year.year = f"{current_year}"
-		fiscal_year.year_start_date = first_date
-		fiscal_year.year_end_date = last_date
-		fiscal_year.append("companies", {"company": company})
-		fiscal_year.save()
