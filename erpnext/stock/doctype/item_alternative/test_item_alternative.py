@@ -49,12 +49,10 @@ class TestItemAlternative(FrappeTestCase):
 				"alternative_item_code": item_code,
 				"two_way": 1,
 			}
-		).insert()
-		self.assertRaises(
-			frappe.ValidationError,
-			item_alternative.insert,
-			msg="Not allow to set alternative item for the item Test Item",
 		)
+		msg = "Not allow to set alternative item for the item"
+		with self.assertRaises(frappe.ValidationError, msg=msg):
+			item_alternative.insert()
 
 	# codecov
 	def test_get_alternative_items_TC_SCK_317(self):
@@ -79,12 +77,10 @@ class TestItemAlternative(FrappeTestCase):
 				"alternative_item_code": item2,
 				"two_way": 1,
 			}
-		).insert()
-		self.assertRaises(
-			frappe.ValidationError,
-			item_alternative.insert,
-			msg="Allow Alternative Item must be checked on Item Test Item2",
 		)
+		msg = "Allow Alternative Item must be checked on Item Test Item2"
+		with self.assertRaises(frappe.ValidationError, msg=msg):
+			item_alternative.insert()
 
 	# codecov
 	def test_get_alternative_items_TC_SCK_318(self):
@@ -94,7 +90,6 @@ class TestItemAlternative(FrappeTestCase):
 		item_create = make_test_item(item_code)
 		item_create.allow_alternative_item = 1
 		item_create.save()
-
 		item_alternative = frappe.get_doc(
 			{
 				"doctype": "Item Alternative",
@@ -102,12 +97,10 @@ class TestItemAlternative(FrappeTestCase):
 				"alternative_item_code": item_code,
 				"two_way": 1,
 			}
-		).insert()
-		self.assertRaises(
-			frappe.ValidationError,
-			item_alternative.insert,
-			msg="Alternative item must not be same as item code",
 		)
+		msg = "Alternative item must not be same as item code"
+		with self.assertRaises(frappe.ValidationError, msg=msg):
+			item_alternative.insert()
 
 	def test_alternative_item_for_subcontract_rm(self):
 		set_backflush_based_on("BOM")

@@ -4614,9 +4614,14 @@ class TestSalesOrder(AccountsTestMixin, FrappeTestCase):
 		self.assertEqual(si.status, "Paid")
 
 	def test_sales_order_create_si_via_pe_dn_with_pricing_rule_TC_S_046(self):
+		self.customer = frappe.get_doc("Customer", self.customer)
+		# Append company if not already present
+		company = "_Test Company"
+		if company and not any(c.company == company for c in self.customer.companies):
+			self.customer.append("companies", {"company": company})
+			self.customer.save()
 		make_item_price()
 		make_pricing_rule()
-
 		so = make_sales_order(qty=10, rate=90)
 		so.save()
 		so.submit()
@@ -8392,7 +8397,7 @@ def create_registered_customer():
 				"customer_name": "_Test Registered Customer",
 				"customer_type": "Company",
 				"customer_group": "Commercial",
-				"territory": "India",
+				"territory": "_Test Territory",
 				"gstin": "24AANFA2641L1ZF",
 				"gst_category": "Registered Regular",
 			}

@@ -1819,6 +1819,7 @@ class TestMaterialRequest(FrappeTestCase):
 
 	def test_mr_to_partial_pr_TC_B_019(self):
 		# MR => 2RFQ => 2SQ => 2PO => 2PR => 2PI
+
 		make_test_item("Testing-31")
 		args = frappe._dict()
 		args["mr"] = [
@@ -4910,7 +4911,29 @@ class TestMaterialRequest(FrappeTestCase):
 				"rate": 100,
 			},
 		]
-
+		# Add stock to the rejected warehouse to avoid NegativeStockError
+		warehouse_rej = create_warehouse("_Test warehouse Rejected", company="_Test Company")
+		stock_entry = frappe.get_doc(
+			{
+				"doctype": "Stock Entry",
+				"stock_entry_type": "Material Receipt",
+				"company": "_Test Company",
+				"posting_date": frappe.utils.nowdate(),
+				"posting_time": frappe.utils.nowtime(),
+				"items": [
+					{
+						"item_code": "_Test Item",
+						"qty": 5,
+						"uom": "Nos",
+						"stock_uom": "Nos",
+						"t_warehouse": warehouse_rej,
+						"basic_rate": 100,
+					}
+				],
+			}
+		)
+		stock_entry.insert()
+		stock_entry.submit()
 		doc_mr = make_material_request(**mr_dict_list[0])
 		self.assertEqual(doc_mr.docstatus, 1)
 
