@@ -29,6 +29,11 @@ class TestDeliveryNoteTrendsReport(unittest.TestCase):
 			}]
 		}).insert(ignore_permissions=True)
 		self.dn.submit()
+		fiscal_years = frappe.get_all("Fiscal Year", filters={"year": year}, fields=["name"])
+		for fy in fiscal_years:
+			doc = frappe.get_doc("Fiscal Year", fy.name)
+			if not doc.companies:
+				doc.delete()
 		if not frappe.db.exists("Fiscal Year", "2024-2025"):
 			fiscal_year = frappe.new_doc("Fiscal Year")
 			fiscal_year.year = "2024-2025"
