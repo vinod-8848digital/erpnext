@@ -2,10 +2,10 @@
 # For license information, please see license.txt
 
 
-from frappe.model.document import Document
+from frappe.model.document import Document  # pragma: no cover
 
 
-class ItemVariant(Document):
+class ItemVariant(Document):  # pragma: no cover
 	# begin: auto-generated types
 	# This code is auto-generated. Do not modify anything in this block.
 
