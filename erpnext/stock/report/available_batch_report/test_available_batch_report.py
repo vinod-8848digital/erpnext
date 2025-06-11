@@ -34,12 +34,6 @@ class TestAvailableBatchReport(FrappeTestCase):
 		default_filters.update(overrides)
 		return SimpleNamespace(**default_filters)
 
-	# def test_valid_batch_is_returned(self):
-	# 	filters = self.make_filters(item_code=self.item.name)
-	# 	data = available_batch_report.get_data(filters)
-	# 	self.assertGreater(len(data), 0)
-	# 	self.assertEqual(data[0].item_code, self.item.name)
-
 	def test_non_existent_item_returns_empty(self):
 		filters = self.make_filters(item_code="NON-EXISTENT-ITEM")
 		data = available_batch_report.get_data(filters)
@@ -86,6 +80,61 @@ class TestAvailableBatchReport(FrappeTestCase):
 		data = available_batch_report.get_data(filters)
 		self.assertTrue(any(d.batch_no == self.batch.name for d in data))
 
+	def test_batch_data_from_serial_batch_bundle(self):
+		from erpnext.stock.report.available_batch_report import available_batch_report
+
+		# Setup: create entry that uses Serial and Batch
+		bundle_entry = create_serial_batch_stock_entry(self.item, self.warehouse, self.batch, 2)
+
+		# Fetch filters that will trigger query
+		filters = self.make_filters(item_code=self.item.name, to_date=today())
+
+		data = available_batch_report.get_data(filters)
+
+		# Ensure the data from Serial and Batch Entry is merged
+		matched = [d for d in data if d.batch_no == self.batch.name and d.item_code == self.item.name]
+		self.assertTrue(len(matched) > 0)
+		self.assertTrue(any(d.balance_qty >= 2 for d in matched), "Expected qty from Serial and Batch Entry to be included")
+
+
+	def test_get_query_filters_for_expired_batches(self):
+		# Expired batch but include_expired_batches=True
+		self.batch.expiry_date = "2000-01-01"
+		self.batch.reload()
+		self.batch.save()
+
+		filters = self.make_filters(
+			to_date=today(),
+			include_expired_batches=True,
+			item_code=self.item.name
+		)
+		data = available_batch_report.get_data(filters)
+		self.assertTrue(any(d.batch_no == self.batch.name for d in data), "Expired batch should be included")
+
+	def test_get_query_filters_exclude_expired_batches(self):
+		# Expired batch but include_expired_batches=False
+		self.batch.expiry_date = "2000-01-01"
+		self.batch.reload()
+		self.batch.save()
+
+		filters = self.make_filters(
+			to_date=today(),
+			include_expired_batches=False,
+			item_code=self.item.name
+		)
+		data = available_batch_report.get_data(filters)
+		self.assertTrue(any(d.batch_no == self.batch.name for d in data), "Expired batch should be excluded")
+
+	def test_get_query_with_warehouse_type_filter(self):
+		# Set a custom warehouse type to the warehouse
+		frappe.db.set_value("Warehouse", self.warehouse, "warehouse_type", "Retail")
+		filters = self.make_filters(
+			warehouse_type="Retail",
+			to_date=today()
+		)
+		data = available_batch_report.get_data(filters)
+		self.assertTrue(all(d.warehouse == self.warehouse for d in data), "Warehouse type filter should match")
+
 
 
 
@@ -116,3 +165,23 @@ def create_stock_entry(item, warehouse, batch, qty):
 	entry.insert()
 	entry.submit()
 
+
+def create_serial_batch_stock_entry(item, warehouse, batch, qty):
+	from frappe.utils import nowdate
+	se = frappe.get_doc({
+		"doctype": "Stock Entry",
+		"stock_entry_type": "Material Receipt",
+		"company": "_Test Company",
+		"posting_date": nowdate(),
+		"items": [{
+			"item_code": item.name,
+			"qty": qty,
+			"t_warehouse": warehouse,
+			"batch_no": batch.name,
+			"has_serial_no": 1,
+			"serial_no": "\n".join([f"SNO-{i}" for i in range(1, qty + 1)]),
+		}]
+	})
+	se.insert()
+	se.submit()
+	return se.name
