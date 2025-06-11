@@ -58,7 +58,7 @@ class TestDeliveryNoteTrendsReport(unittest.TestCase):
 	def test_execute_with_fiscal_year_filter(self):
 		filters = frappe._dict({
             "company": "_Test Company",
-            "fiscal_year": "2024-2025",
+            "fiscal_year": "2025",
             "based_on": "Customer",         # Dimension to analyze
             "group_by": "Item",             # Must not match 'based_on'
             "period": "Monthly",
@@ -80,7 +80,7 @@ class TestDeliveryNoteTrendsReport(unittest.TestCase):
 	def test_execute_with_empty_filters(self):
 		filters = frappe._dict({
             "company": "_Test Company",
-            "fiscal_year": "2024-2025",
+            "fiscal_year": "2025",
             "based_on": "Customer",
             "group_by": "Item",
             "period": "Monthly",
