@@ -805,6 +805,18 @@ def get_je_matching_query(
 	if cint(filter_by_reference_date):
 		filter_by_date = je.cheque_date.between(from_reference_date, to_reference_date)
 
+	groupby_fields = [je.name]
+	if frappe.db.db_type == "postgres":
+		groupby_fields = [
+			je.name,
+			je.cheque_no,
+			je.cheque_date,
+			je.pay_to_recd_from,
+			jea.party_type,
+			je.posting_date,
+			jea.account_currency,
+		]
+
 	subquery = (
 		frappe.qb.from_(jea)
 		.join(je)
@@ -825,15 +837,7 @@ def get_je_matching_query(
 		.where(je.clearance_date.isnull())
 		.where(jea.account == common_filters.bank_account)
 		.where(filter_by_date)
-		.groupby(
-			je.name,
-			je.cheque_no,
-			je.cheque_date,
-			je.pay_to_recd_from,
-			jea.party_type,
-			je.posting_date,
-			jea.account_currency,
-		)
+		.groupby(*groupby_fields)
 		.orderby(je.cheque_date if cint(filter_by_reference_date) else je.posting_date)
 	)
 
