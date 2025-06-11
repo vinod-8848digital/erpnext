@@ -24,6 +24,7 @@ class TestTotalStockSummary(FrappeTestCase):
 		frappe.db.get_value = self.original_get_value
 
 		self.company = create_company("_Test Company")
+		self.company = "_Test Company"
 		self.warehouse = create_warehouse(warehouse_name="_Test Warehouse - _TC", company="_Test Company")
 		self.item = create_item(
 			item_code="TEST-STOCK-ITEM",
@@ -38,44 +39,39 @@ class TestTotalStockSummary(FrappeTestCase):
 			item_code=self.item, warehouse="_Test Warehouse - _TC", qty=15, company="_Test Company"
 		)
 
+		self.filters = {"group_by": "Warehouse", "company": "_Test Company"}
+
 	def test_execute_without_filters_T_TSS_001(self):
 		from erpnext.stock.report.total_stock_summary.total_stock_summary import execute
 
-		columns, data = execute()
-		assert columns
-		assert data
-		assert "Company" in columns[0]
+		# Test with filters - group by Warehouse
+		columns, data = execute(self.filters)
+		assert columns, "Expected columns to be returned"
+		assert data, "Expected data to be returned"
+		assert columns[0].startswith(
+			"Warehouse"
+		), f"Expected first column to be 'Warehouse', got '{columns[0]}'"
+		assert any(
+			row[0] == self.warehouse and row[1] == self.item.item_code for row in data
+		), f"Expected data row for warehouse '{self.warehouse}' and item '{self.item.item_code}', got {data}"
 
-	def test_execute_with_group_by_warehouse_T_TSS_002(self):
-		from erpnext.stock.report.total_stock_summary.total_stock_summary import execute
+		# Test with no filters (default group_by should be Company)
+		columns_default, data_default = execute()
+		assert columns_default, "Expected columns with default filters"
+		assert data_default, "Expected data with default filters"
+		assert columns_default[0].startswith(
+			"Company"
+		), f"Expected first column to be 'Company', got '{columns_default[0]}'"
+		assert any(
+			row[0] == self.company and row[1] == self.item.name for row in data_default
+		), f"Expected row for company '{self.company}', got {data_default}"
 
-		filters = {"group_by": "Warehouse", "company": "_Test Company"}
-		columns, data = execute(filters)
-		assert columns
-		assert data
-		assert "Warehouse" in columns[0]
-
-	def test_get_columns_variants_T_TSS_003(self):
-		from erpnext.stock.report.total_stock_summary.total_stock_summary import get_columns
-
-		columns_warehouse = get_columns({"group_by": "Warehouse"})
-		assert "Warehouse" in columns_warehouse[0]
-
-		columns_company = get_columns({})
-		assert "Company" in columns_company[0]
-
-	def test_get_total_stock_variants_T_TSS_004(self):
-		from erpnext.stock.report.total_stock_summary.total_stock_summary import get_total_stock
-
-		# Without group_by
-		data = get_total_stock({})
-		assert data
-		assert any(float(d[3]) > 0 for d in data)
-
-		# With group_by Warehouse
-		data2 = get_total_stock({"group_by": "Warehouse", "company": "_Test Company"})
-		assert data2
-		assert any(float(d[3]) > 0 for d in data2)
+		# Simulate empty stock scenario
+		frappe.db.sql("DELETE FROM `tabBin` WHERE item_code = %s", self.item.name)
+		frappe.db.commit()
+		columns_empty, data_empty = execute(self.filters)
+		assert columns_empty, "Expected columns even if no data"
+		assert data_empty == [], f"Expected no data after deleting stock, got {data_empty}"
 
 
 def create_stock_entry(item_code, warehouse, qty, company):
