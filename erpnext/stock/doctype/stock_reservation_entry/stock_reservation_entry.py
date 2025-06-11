@@ -18,7 +18,7 @@ class StockReservationEntry(Document):
 
 	from typing import TYPE_CHECKING
 
-	if TYPE_CHECKING:
+	if TYPE_CHECKING: # pragma: no cover
 		from frappe.types import DF
 
 		from erpnext.stock.doctype.serial_and_batch_entry.serial_and_batch_entry import (
@@ -257,7 +257,6 @@ class StockReservationEntry(Document):
 							frappe.bold(self.warehouse),
 							frappe.bold(_("Stock Reservation Entry")),
 						)
-
 						frappe.throw(msg)
 
 					if entry.serial_no in selected_serial_nos:
@@ -448,10 +447,10 @@ class StockReservationEntry(Document):
 		qty_to_be_reserved = flt(qty_to_be_reserved, self.precision("reserved_qty"))
 
 		if self.get("_action") != "submit" and self.voucher_type == "Sales Order" and allowed_qty <= 0:
+			print("1")
 			msg = _("Item {0} is already reserved/delivered against Sales Order {1}.").format(
 				frappe.bold(self.item_code), frappe.bold(self.voucher_no)
 			)
-
 			if self.docstatus == 1:
 				self.cancel()
 				return frappe.msgprint(msg)
@@ -945,7 +944,6 @@ def create_stock_reservation_entries_for_so_items(
 		is_stock_item, has_serial_no, has_batch_no = frappe.get_cached_value(
 			"Item", item.item_code, ["is_stock_item", "has_serial_no", "has_batch_no"]
 		)
-
 		# Skip if Non-Stock Item.
 		if not is_stock_item:
 			if not from_voucher_type:
@@ -956,7 +954,6 @@ def create_stock_reservation_entries_for_so_items(
 					title=_("Stock Reservation"),
 					indicator="yellow",
 				)
-
 			item.db_set("reserve_stock", 0)
 			continue
 
