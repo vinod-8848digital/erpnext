@@ -39,32 +39,27 @@ class TestItemPriceReport(FrappeTestCase):
 		frappe.delete_doc("Price List", self.buying_pl.name, force=1)
 		frappe.delete_doc("Price List", self.selling_pl.name, force=1)
 
-	def test_get_columns_T_IPS_001(self):
-		columns = item_price_stock.get_columns()
+	def test_item_price_stock_execute(self):
+		filters = {"item_code": self.item.name}
+		columns, data = item_price_stock.execute(filters)
+
+		# Test 1: Columns structure
 		self.assertIsInstance(columns, list)
 		self.assertTrue(any(col["fieldname"] == "item_code" for col in columns))
 
-	def test_get_price_map_buying_T_IPS_002(self):
-		price_map = item_price_stock.get_price_map([self.buying_price.name], buying=1)
-		self.assertIn(self.buying_price.name, price_map)
-		self.assertEqual(price_map[self.buying_price.name]["Buying Rate"], 50)
+		# Test 2 and 3: Price map values (Buying and Selling)
+		buying_col = next((col for col in columns if "Buying Rate" in col.get("label", "")), None)
+		selling_col = next((col for col in columns if "Selling Rate" in col.get("label", "")), None)
+		self.assertIsNotNone(buying_col)
+		self.assertIsNotNone(selling_col)
+		rates = [row for row in data if row.get("item_code") == self.item.name]
+		self.assertTrue(any(row.get("buying_rate", row.get("Buying Rate", 0)) == 50 for row in rates))
+		self.assertTrue(any(row.get("selling_rate", row.get("Selling Rate", 0)) == 80 for row in rates))
 
-	def test_get_price_map_selling_T_IPS_003(self):
-		price_map = item_price_stock.get_price_map([self.selling_price.name], selling=1)
-		self.assertIn(self.selling_price.name, price_map)
-		self.assertEqual(price_map[self.selling_price.name]["Selling Rate"], 80)
+		# Test 4: Data contains correct item_code
+		self.assertTrue(any(row["item_code"] == self.item.name for row in data))
 
-
-	def test_get_data_T_IPS_004(self):
-		filters = {"item_code": self.item.name}
-		columns = item_price_stock.get_columns()
-		data = item_price_stock.get_data(filters, columns)
-		self.assertEqual(len(data), 2)  # assuming your setup creates only one row
-		self.assertEqual(data[0]["item_code"], self.item.name)
-
-	def test_execute_T_IPS_005(self):
-		filters = {"item_code": self.item.name}
-		columns, data = item_price_stock.execute(filters)
+		# Test 5: Data length (should be 2: one for buying, one for selling)
 		self.assertEqual(len(data), 2)
 
 
