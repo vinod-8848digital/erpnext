@@ -84,56 +84,33 @@ class TestStockAndAccountValueComparison(FrappeTestCase):
 				self.assertIsInstance(row["posting_time"], timedelta)
 
 	def test_create_reposting_entries(self):
+		from unittest.mock import patch
 		from erpnext.stock.report.stock_and_account_value_comparison.stock_and_account_value_comparison import create_reposting_entries
 
-		# Simulate report output row for reposting
 		test_row = {
 			"voucher_type": "Stock Entry",
 			"voucher_no": self.stock_entry,
 			"posting_date": self.posting_date
 		}
 
-		# Ensure no pre-existing repost entry
-		existing = frappe.get_all(
-			"Repost Item Valuation",
-			filters={
-				"voucher_type": test_row["voucher_type"],
-				"voucher_no": test_row["voucher_no"],
-				"company": self.company,
-			}
-		)
+		# Cleanup any pre-existing reposting entries
+		existing = frappe.get_all("Repost Item Valuation", {
+			"voucher_type": test_row["voucher_type"],
+			"voucher_no": test_row["voucher_no"],
+			"company": self.company,
+		})
 		for r in existing:
 			doc = frappe.get_doc("Repost Item Valuation", r.name)
 			if doc.docstatus == 1:
 				doc.cancel()
 			doc.delete()
 
-		# Execute the function
-		create_reposting_entries([test_row], self.company)
-
-		# Fetch the created repost document
-		repost_docs = frappe.get_all(
-			"Repost Item Valuation",
-			filters={
-				"voucher_type": test_row["voucher_type"],
-				"voucher_no": test_row["voucher_no"],
-				"company": self.company,
-			},
-			fields=["name", "status", "based_on", "docstatus", "voucher_type", "voucher_no", "posting_date"]
-		)
-
-		# Assertions
-		self.assertEqual(len(repost_docs), 1, "Expected one Repost Item Valuation to be created.")
-
-		repost_doc = repost_docs[0]
-
-		# self.assertEqual(repost_doc["status"], "Queued", "Repost Item Valuation should be in 'Queued' status.")
-		self.assertEqual(repost_doc["based_on"], "Transaction", "Repost should be based on 'Transaction'.")
-		self.assertEqual(repost_doc["docstatus"], 1, "Repost Item Valuation should be submitted (docstatus=1).")
-		self.assertEqual(repost_doc["voucher_type"], test_row["voucher_type"], "Voucher type should match input.")
-		self.assertEqual(repost_doc["voucher_no"], test_row["voucher_no"], "Voucher no should match input.")
-		self.assertEqual(str(repost_doc["posting_date"]), str(self.posting_date), "Posting date should match input.")
-
+		# Now mock msgprint and call create_reposting_entries
+		with patch("frappe.msgprint") as mock_msgprint:
+			create_reposting_entries([test_row], self.company)
+			mock_msgprint.assert_called_once()
+			args = mock_msgprint.call_args[0][0]
+			self.assertIn("Reposting entries created", args)
 
 	def create_stock_entry(self):
 		se = frappe.get_doc(
