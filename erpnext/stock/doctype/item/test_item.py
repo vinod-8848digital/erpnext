@@ -1211,6 +1211,240 @@ class TestItem(FrappeTestCase):
 		item = make_item("_Test Book", item_fields)
 		self.assertEqual(item.name, "_Test Book")
 		self.assertEqual(item.valuation_method, "FIFO")
+	
+	def test_validate_customer_provided_part_valuation_rate_TC_SCK_391(self):
+		item_fields = {
+			"is_stock_item": 1,
+			"is_customer_provided_item": 1,
+			"is_purchase_item": 0,
+			"valuation_rate": 100
+		}
+		msg = '"Customer Provided Item" cannot have Valuation Rate'
+		with self.assertRaises(frappe.ValidationError, msg=msg):
+			item = make_item("_test_valuation_rate_item", item_fields)
+	
+	def test_validate_customer_provided_part_is_purchase_item_TC_SCK_392(self):
+		item_fields = {
+			"is_stock_item": 1,
+			"is_customer_provided_item": 1,
+			"is_purchase_item": 1,
+		}
+		msg = '"Customer Provided Item" cannot be Purchase Item also'
+		with self.assertRaises(frappe.ValidationError, msg=msg):
+			item = make_item("_test_purchase_item", item_fields)
+
+	def test_validate_set_opening_stock_TC_SCK_393(self):
+		item_fields = {
+			"is_stock_item": 1,
+			"is_customer_provided_item": 0,
+			"standard_rate":0,
+			"valuation_rate":0,
+			"has_serial_no":0,
+			"has_batch_no":0,
+			"opening_stock":1
+		}
+		msg = frappe._("Valuation Rate is mandatory if Opening Stock entered")
+		with self.assertRaises(frappe.ValidationError, msg=msg):
+			item = make_item("_test_opening_stock_item", item_fields)
+		
+	def test_validate_naming_series_for_dot_TC_SCK_394(self):
+		item_fields = {
+			"is_stock_item": 1,
+			"serial_no_series": "SRS###",
+		}
+
+		msg = frappe._("Invalid naming series (. missing) for Serial Number Series")
+		with self.assertRaises(frappe.ValidationError, msg=msg):
+			make_item("_test_naming_series_item", item_fields)
+	
+	def test_validate_naming_series_for_hash_TC_SCK_395(self):
+		item_fields = {
+			"is_stock_item": 1,
+			"serial_no_series": "SRS. ###", 
+		}
+		msg = (frappe._("Invalid naming series (avoid spaces between '.' and '#') for Serial Number Series."))
+		with self.assertRaises(frappe.ValidationError, msg=msg):
+			make_item("_test_naming_series_item", item_fields)
+	
+	def test_update_bom_item_description_TC_SCK_396(self):
+		item = make_item("_test-item-for-bom", {"is_stock_item": 1})
+		item.description = "Initial Description"
+		item.save()
+
+		bom = frappe.get_doc({
+			"doctype": "BOM",
+			"item": item.name,
+			"quantity": 1,
+			"is_active": 1,
+			"is_default": 1,
+			"items": [{
+				"item_code": item.name,
+				"qty": 1,
+				"rate": 100
+			}]
+		})
+		bom.insert()
+		bom.submit()
+
+		item.reload()
+		item.description = "Updated BOM Description"
+		item.save()
+
+		item.update_bom_item_desc()
+
+		bom_desc = frappe.db.get_value("BOM", bom.name, "description")
+		bom_item_desc = frappe.db.get_value("BOM Item", {"parent": bom.name, "item_code": item.name}, "description")
+		explosion_desc = frappe.db.get_value("BOM Explosion Item", {"parent": bom.name, "item_code": item.name}, "description")
+		
+		self.assertEqual(bom_desc, "Updated BOM Description")
+		self.assertEqual(bom_item_desc, "Updated BOM Description")
+		self.assertEqual(explosion_desc, "Updated BOM Description")
+	
+	def test_deleted_attribute_in_template_raises_error_TC_SCK_397(self):
+		create_attribute("Color", ["Red", "Blue"])
+		create_attribute("Size", ["S", "M", "L"])
+		if not frappe.db.exists("GST HSN Code", "1445576"):
+			gst_hsn_code = frappe.new_doc("GST HSN Code")
+			gst_hsn_code.hsn_code = "14455767"
+			gst_hsn_code.save()
+		template = frappe.get_doc({
+			"doctype": "Item",
+			"item_code": "_test_variant_attr",
+			"gst_hsn_code": "14455767",
+			"has_variants":1,
+			"attributes": [
+				{"attribute": "Color", "attribute_value": "Red"},
+				{"attribute": "Size", "attribute_value": "M"}
+			]
+		}).insert(ignore_permissions=True)
+
+		variant = frappe.get_doc({
+			"doctype": "Item",
+			"item_code": "_test_variant_attr1",
+			"gst_hsn_code": "14455767",
+			"variant_of": template.name,
+			"attributes": [
+				{"attribute": "Color", "attribute_value": "Red"},
+				{"attribute": "Size", "attribute_value": "M"}
+			]
+		})
+		variant.insert(ignore_permissions=True)
+
+		template.reload()
+		template.set("attributes", [])
+		template.append("attributes", {
+			"attribute": "Color",
+			"attribute_values": ["Red", "Blue"]
+		})
+		with self.assertRaises(frappe.ValidationError) as context:
+			template.save()
+	
+ 
+	def test_item_autoname_with_naming_series_TC_SCK_398(self):
+		frappe.db.set_default("item_naming_by", "Naming Series")
+	
+		template = frappe.get_doc({
+			"doctype": "Item",
+			"item_code": "_test_variant_template",
+			"item_name": "Test Variant Template",
+			"stock_uom": "Nos",
+			"item_group": "All Item Groups",
+			"has_variants": 1,
+			"gst_hsn_code": "14455767",
+			"attributes": [{
+				"attribute": "Color",
+				"attribute_value": "Red"
+			}]
+		}).insert(ignore_permissions=True)
+
+		variant = frappe.get_doc({
+			"doctype": "Item",
+			"item_name": "Variant Without Item Code",
+			"variant_of": template.name,
+			"gst_hsn_code": "14455767",
+			"stock_uom": "Nos",
+			"item_group": "All Item Groups",
+			"attributes": [{
+				"attribute": "Color",
+				"attribute_value": "Red"
+			}]
+		})
+
+		variant.autoname()
+  
+	def test_update_template_tables_TC_SCK_399(self):
+		create_tax_accounts()
+		frappe.db.set_default("item_naming_by", "Naming Series")
+
+		if not frappe.db.exists("Item Tax Template", "Standard Tax Template - _TC"):
+			tax_template = frappe.get_doc({
+				"doctype": "Item Tax Template",
+				"title": "Standard Tax Template",
+				"gst_rate": 18,
+				"company": "_Test Company",
+				"item_tax_template_name": "Standard Tax Template",
+				"taxes": [
+					{
+						"tax_type": "CGST - _TC",
+						"tax_rate": 9
+					},
+					{
+						"tax_type": "SGST - _TC",
+						"tax_rate": 9
+					}
+				],
+				"gst_category": "Taxable"
+			})
+			tax_template.insert(ignore_permissions=True)
+
+		template = frappe.get_doc({
+			"doctype": "Item",
+			"item_code": "_test_template_tables",
+			"item_name": "Template Tables",
+			"item_group": "All Item Groups",
+			"stock_uom": "Nos",
+			"gst_hsn_code": get_hsn(),
+			"has_variants": 1,
+			"taxes": [
+				{	"item_tax_template": "Standard Tax Template - _TC",
+					"charge_type": "On Net Total",
+					"account_head": "CGST - _TC",
+					"maximum_net_rate": 9
+				},
+			],
+			"reorder_levels": [
+				{
+					"warehouse": "_Test Warehouse - _TC",
+					"warehouse_reorder_level": 10,
+					"warehouse_reorder_qty": 25,
+					"material_request_type": "Purchase"
+				}
+			],
+			"attributes": [
+				{
+					"attribute": "Color",
+					"attribute_value": "Red"
+				}
+			]
+		}).insert(ignore_permissions=True)
+
+		item = frappe.get_doc({
+			"doctype": "Item",
+			"item_code": "_test_update_template_tables",
+			"item_name": "Test Copy From Template",
+			"variant_of": template.name,
+			"item_group": "All Item Groups",
+			"stock_uom": "Nos",
+			"gst_hsn_code": get_hsn(),
+			"item_tax_template": "Standard Tax Template"
+		})
+
+		item.update_template_tables()
+
+		self.assertEqual(len(item.taxes), 1)
+		self.assertEqual(item.taxes[0].maximum_net_rate, 9)
+		self.assertEqual(len(item.reorder_levels), 1)
+		self.assertEqual(item.reorder_levels[0].warehouse_reorder_qty, 25)
 
 def set_item_variant_settings(fields):
 	doc = frappe.get_doc("Item Variant Settings")
@@ -1283,3 +1517,74 @@ def create_item(
 	else:
 		item = frappe.get_doc("Item", item_code)
 	return item
+
+def create_attribute(name, values):
+    existing = frappe.db.get("Item Attribute", name)
+    if existing:
+        attr_doc = frappe.get_doc("Item Attribute", name)
+        existing_values = {v.attribute_value for v in attr_doc.item_attribute_values}
+        existing_abbrs = {v.abbr for v in attr_doc.item_attribute_values if v.abbr}
+
+        for v in values:
+            if v not in existing_values:
+                abbr = v[:1].upper()
+                counter = 1
+                while abbr in existing_abbrs:
+                    abbr = f"{v[:1].upper()}{counter}"
+                    counter += 1
+                attr_doc.append("item_attribute_values", {
+                    "attribute_value": v,
+                    "abbr": abbr
+                })
+                existing_abbrs.add(abbr)
+        attr_doc.save()
+    else:
+        abbrs = set()
+        value_rows = []
+        for v in values:
+            abbr = v[:1].upper()
+            counter = 1
+            while abbr in abbrs:
+                abbr = f"{v[:1].upper()}{counter}"
+                counter += 1
+            value_rows.append({
+                "attribute_value": v,
+                "abbr": abbr
+            })
+            abbrs.add(abbr)
+
+        frappe.get_doc({
+            "doctype": "Item Attribute",
+            "attribute_name": name,
+            "item_attribute_values": value_rows
+        }).insert()
+def get_hsn(hsn="14455767"):
+	if not frappe.db.exists("GST HSN Code", hsn):
+		gst_hsn_code = frappe.new_doc("GST HSN Code")
+		gst_hsn_code.hsn_code = hsn
+		gst_hsn_code.save()
+		return gst_hsn_code.name
+	else: return hsn
+ 
+def create_tax_accounts():
+	from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_company
+	create_company()
+	if not frappe.db.exists("Account", "CGST - _TC"):
+		frappe.get_doc({
+			"doctype": "Account",
+			"account_name": "CGST",
+			"company": "_Test Company",
+			"parent_account": "Duties and Taxes - _TC",
+			"account_type": "Tax",
+			"is_group": 0
+		}).insert(ignore_permissions=True)
+
+	if not frappe.db.exists("Account", "SGST - _TC"):
+		frappe.get_doc({
+			"doctype": "Account",
+			"account_name": "SGST",
+			"company": "_Test Company",
+			"parent_account": "Duties and Taxes - _TC",
+			"account_type": "Tax",
+			"is_group": 0
+		}).insert(ignore_permissions=True)
