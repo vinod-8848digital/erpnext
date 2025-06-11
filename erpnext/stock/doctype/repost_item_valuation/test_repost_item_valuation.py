@@ -145,6 +145,86 @@ class TestRepostItemValuation(FrappeTestCase, StockTestMixin):
 		from erpnext.stock.doctype.repost_item_valuation.repost_item_valuation import repost_entries
 		repost_entries()
 		self.assertEqual(repost_item_valuation.status, "Queued") 
+
+	# codecov
+	def test_repost_entries_failure_traceback_TC_SCK_358(self):
+		from erpnext.stock.doctype.repost_item_valuation.repost_item_valuation import repost
+		import erpnext.stock.doctype.repost_item_valuation.repost_item_valuation as riv
+
+		company = "_Test Company"
+		warehouse = "Stores - _TC"
+		if not frappe.db.exists("Company", company):
+			create_child_company().company
+
+		customer = "_Test Customer"
+		if not frappe.db.exists("Customer", "_Test Customer"):
+			create_customer("_Test Customer", currency="INR")
+
+		item = make_item("Repost item")
+		warehouse = "_Test Warehouse - _TC"
+		stock_entry = frappe.get_doc({
+		"doctype": "Stock Entry",
+		"stock_entry_type": "Material Receipt",
+		"company": company,
+		"items": [{
+			"item_code": item.name,
+			"qty": 1,
+			"t_warehouse": warehouse,
+			"basic_rate": 100
+			}]
+		})
+		stock_entry.insert(ignore_permissions=True)
+		stock_entry.submit()
+		
+		dn = frappe.get_doc({
+			"doctype": "Delivery Note",
+			"customer": customer,
+			"company": company,
+			"posting_date": frappe.utils.nowdate(),
+			"currency": "INR",
+			"items": [{
+				"item_code": item.name,
+				"qty": 1,
+				"allow_zero_valuation_rate": 1,
+				"warehouse": warehouse,
+			}]
+		}).insert(ignore_permissions=True)
+		dn.submit()
+
+		repost_item_valuation = frappe.get_doc({
+			"doctype": "Repost Item Valuation",
+			"based_on": "Transaction",
+			"status": "",
+			"voucher_type": "Delivery Note",
+			"voucher_no": dn.name,
+			"company": company,
+			"allow_negative_stock": 1
+		})
+		# with self.assertRaises(frappe.ValidationError) as e:
+		repost_item_valuation.insert()
+
+		def throw_error(doc):
+			raise Exception("Simulated error")
+
+		riv.repost_sl_entries = throw_error
+
+		# Disable test mode to allow error handling block to execute
+		original_in_test = frappe.flags.in_test
+		frappe.flags.in_test = False
+
+		repost(repost_item_valuation)
+
+		# Restore test flag
+		frappe.flags.in_test = original_in_test
+		from erpnext.stock.doctype.repost_item_valuation.repost_item_valuation import on_doctype_update
+		on_doctype_update()
+		from erpnext.stock.doctype.repost_item_valuation.repost_item_valuation import repost_entries
+		msg = "Simulated error"
+		with self.assertRaises(Exception,msg=msg):
+			repost(repost_item_valuation)
+
+
+
 		
 
 
