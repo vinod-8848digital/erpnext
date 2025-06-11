@@ -310,6 +310,36 @@ class TestShipment(FrappeTestCase):
 		get_contact_name("Shipment",shipment.name)
 		self.assertEqual(shipment.pickup_address_name, address1.name)
 
+	# codecov
+	def test_get_company_contact_TC_SCK_392(self):
+		from erpnext.stock.doctype.shipment.shipment import get_company_contact
+		# Create test user directly
+		user_email = "testuser@example.com"
+		if frappe.db.exists("User", user_email):
+			frappe.delete_doc("User", user_email, force=1)
+
+		user = frappe.get_doc({
+			"doctype": "User",
+			"email": user_email,
+			"first_name": "Test",
+			"last_name": "User",
+			"mobile_no": "9876543210",
+			"gender": "Male"
+		}).insert(ignore_permissions=True)
+
+		# Call the function
+		result = get_company_contact(user)
+
+		# Assertions
+		self.assertEqual(result["first_name"], "Test")
+		self.assertEqual(result["last_name"], "User")
+		self.assertEqual(result["email"], "testuser@example.com")
+		self.assertEqual(result["mobile_no"], "9876543210")
+		self.assertEqual(result["phone"], "9876543210")  # fallback works
+		self.assertEqual(result["gender"], "Male")
+
+
+
 	def test_get_total_weight(self):
 		shipment = frappe.new_doc("Shipment")
 		shipment.extend(
