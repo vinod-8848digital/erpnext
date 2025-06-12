@@ -50,8 +50,10 @@ class TestDeliveryTrip(FrappeTestCase):
 		self.assertEqual(delivery_trip_doc.docstatus, 2)
 		# get_driver_email
 		driver = create_driver()
-		email_driver = get_driver_email(driver)
-
+		driver.email = "newtonscamnder@gmail.com"
+		driver.save()
+		driver_email = get_driver_email(driver)
+		
 
 
 

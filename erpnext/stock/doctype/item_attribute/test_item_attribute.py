@@ -20,8 +20,8 @@ class TestItemAttribute(FrappeTestCase):
 	def tearDown(self):
 		frappe.db.rollback()
 	
+	# codecov
 	def test_validate_exising_items_TC_SCK_325(self):
-		from erpnext.stock.doctype.item_attribute.item_attribute import ItemAttribute
 		template = "Test Template Item"
 		variant = "Test Variant Item"
 		# Create an Item Attribute with abbr values to avoid .lower() error
@@ -66,10 +66,42 @@ class TestItemAttribute(FrappeTestCase):
 
 		# If no ValidationError is thrown, the test passes.
 		self.assertTrue(True, "Validation passed for existing item attribute values")
+
+	# codecov
+	def test_duplicate_item_attributes_TC_SCK_404(self):
+		template = "Test Template Item"
+		variant = "Test Variant Item"
+		# Create an Item Attribute with abbr values to avoid .lower() error
+		attribute = frappe.get_doc({
+			"doctype": "Item Attribute",
+			"attribute_name": "Test Attribute",
+			"numeric_values": 0,
+			"item_attribute_values": [
+				{"attribute_value": "Red", "abbr": "R"},
+				{"attribute_value": "Red", "abbr": "R"},
+			]
+		})
+		msg = "Attribute value: Red must appear only once"
+		with self.assertRaises(frappe.ValidationError,msg=msg):
+			attribute.insert()
 	
-
-
-
+	# codecov
+	def test_abbrevation_only_once_TC_SCK_405(self):
+		template = "Test Template Item"
+		variant = "Test Variant Item"
+		# Create an Item Attribute with abbr values to avoid .lower() error
+		attribute = frappe.get_doc({
+			"doctype": "Item Attribute",
+			"attribute_name": "Test Attribute",
+			"numeric_values": 0,
+			"item_attribute_values": [
+				{"attribute_value": "Red", "abbr": "R"},
+				{"attribute_value": "Blue", "abbr": "R"},
+			]
+		})
+		msg = "Abbreviation: R must appear only once"
+		with self.assertRaises(frappe.ValidationError,msg=msg):
+			attribute.insert()
 
 	def test_numeric_item_attribute(self):
 		item_attribute = frappe.get_doc(
