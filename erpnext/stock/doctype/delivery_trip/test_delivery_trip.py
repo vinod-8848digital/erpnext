@@ -42,17 +42,9 @@ class TestDeliveryTrip(FrappeTestCase):
 		get_contact_display(contact)
 		self.assertEqual(delivery_trip_doc.docstatus, 2)
 		# get_driver_email
-		if not frappe.db.exists("Driver", {"full_name": "Test Newton Scmander"}):
-			driver = frappe.get_doc(
-				{
-					"doctype": "Driver",
-					"full_name": "Test Newton Scmander",
-					"cell_number": "98343424242",
-					"license_number": "B809",
-					"email": "newtonscamnder@gmail.com",
-				}
-			).insert(ignore_permissions=True)
-
+		driver = create_driver()
+		driver.email = "newtonscamnder@gmail.com"
+		driver.save()
 		driver_email = get_driver_email(driver)
 		self.assertTrue(driver_email, driver.email)
 
