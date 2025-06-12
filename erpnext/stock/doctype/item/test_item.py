@@ -1447,6 +1447,130 @@ class TestItem(FrappeTestCase):
 		self.assertEqual(item.taxes[0].maximum_net_rate, 9)
 		self.assertEqual(len(item.reorder_levels), 1)
 		self.assertEqual(item.reorder_levels[0].warehouse_reorder_qty, 25)
+	def test_after_rename_with_merge_TC_SCK_400(self):
+		old_item = make_item("_test_old_item", {"stock_uom": "Nos"})
+
+		new_item = make_item("_test_new_item", {"stock_uom": "Nos"})
+		if not frappe.db.exists("Account", "Test Tax Account - _TC"):
+			account = frappe.get_doc(
+				{
+					"doctype": "Account",
+					"account_name": "Test Tax Account",
+					"parent_account": "Duties and Taxes - _TC",  # Change suffix to match your company abbreviation
+					"company": "_Test Company",
+					"is_group": 0,
+					"account_type": "Tax",
+				}
+			).insert()
+		invoice = frappe.get_doc(
+			{
+				"doctype": "Sales Invoice",
+				"customer": "_Test Customer",
+				"company": "_Test Company",
+				"items": [{"item_code": old_item.name, "qty": 1, "rate": 100}],
+				"taxes": [
+					{
+						"charge_type": "On Net Total",
+						"account_head": "Test Tax Account - _TC",
+						"description": "Test Tax",
+						"item_wise_tax_detail": json.dumps(
+							{old_item.name: ["10.0", "INR"]}
+						),
+					}
+				],
+			}
+		).insert()
+
+		item_doc = frappe.get_doc("Item", new_item.name)
+		item_doc.after_rename(old_item.name, new_item.name, merge=True)
+
+		invoice.reload()
+		tax_detail = json.loads(invoice.taxes[0].item_wise_tax_detail)
+		assert new_item.name in tax_detail
+		assert old_item.name not in tax_detail
+		assert frappe.db.get_value("Item", new_item.name, "item_code") == new_item.name
+
+
+	def test_validate_properties_before_merge_TC_SCK_401(self):
+
+		item_1 = make_item("_test_item_merge_1", {
+			"stock_uom": "Nos",
+			"is_stock_item": 1,
+			"has_serial_no": 0,
+			"has_batch_no": 0
+		})
+
+		item_2 = make_item("_test_item_merge_2", {
+			"stock_uom": "Box",
+			"is_stock_item": 1,
+			"has_serial_no": 0,
+			"has_batch_no": 0
+		})
+		with self.assertRaises(frappe.ValidationError):
+			item_1.validate_properties_before_merge(item_2.name)
+	
+	def test_validate_duplicate_product_bundles_before_merge_pass_TC_SCK_402(self):
+		from erpnext.stock.doctype.item.test_item import make_item
+
+		item_1 = make_item("_test_item_bundle_1", {"stock_uom": "Nos", "is_stock_item": 0})
+		item_2 = make_item("_test_item_bundle_2", {"stock_uom": "Nos", "is_stock_item": 0})
+
+		frappe.get_doc({
+			"doctype": "Product Bundle",
+			"new_item_code": item_1.name,
+			"items": [
+				{"item_code": item_1.name, "qty": 1}
+			]
+		}).insert()
+
+		frappe.get_doc({
+			"doctype": "Product Bundle",
+			"new_item_code": item_2.name,
+			"items": [
+				{"item_code": item_2.name, "qty": 1}
+			]
+		}).insert()
+		with self.assertRaises(frappe.ValidationError):
+			item_1.validate_duplicate_product_bundles_before_merge(item_1.name, item_2.name)
+	
+	def test_update_variants_TC_SCK_403(self):
+		from erpnext.stock.doctype.item.item import update_variants
+		create_attribute("Color", ["Red", "Blue"])
+		create_attribute("Size", ["S", "M", "L"])
+		template = frappe.get_doc(
+				{
+					"doctype": "Item",
+					"item_code": "_test_variant_attr",
+					"item_group": "All Item Groups",
+					"gst_hsn_code": get_hsn(),
+					"has_variants": 1,
+					"attributes": [
+						{"attribute": "Color", "attribute_value": "Red"},
+						{"attribute": "Size", "attribute_value": "M"},
+					],
+				}
+			).insert(ignore_permissions=True)
+
+		variant = frappe.get_doc(
+			{
+				"doctype": "Item",
+				"item_code": "_test_variant_attr1",
+				"item_group": "All Item Groups",
+				"gst_hsn_code": get_hsn(),
+				"variant_of": template.name,
+				"attributes": [
+					{"attribute": "Color", "attribute_value": "Red"},
+					{"attribute": "Size", "attribute_value": "M"},
+				],
+			}
+		)
+		variant.insert(ignore_permissions=True)
+		variants = [variant.name]
+
+		update_variants(variants, template, publish_progress=True)
+
+		variant.reload()
+		assert variant.stock_uom == template.stock_uom
 
 def set_item_variant_settings(fields):
 	doc = frappe.get_doc("Item Variant Settings")
