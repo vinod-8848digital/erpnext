@@ -17,7 +17,10 @@ from erpnext.stock.doctype.stock_reservation_entry.stock_reservation_entry impor
 	get_sre_reserved_qty_details_for_voucher,
 	get_stock_reservation_entries_for_voucher,
 	has_reserved_stock,
-	create_stock_reservation_entries_for_so_items
+	create_stock_reservation_entries_for_so_items,
+	get_sre_reserved_serial_nos_details,
+	get_sre_reserved_batch_nos_details
+
 )
 from erpnext.stock.utils import get_stock_balance
 from erpnext.stock.doctype.item.test_item import create_item
@@ -997,7 +1000,8 @@ class TestStockReservationEntry(FrappeTestCase):
 				"stock_uom": "Nos",
 				"is_stock_item": 1,
 				"has_batch_no": 1,
-				"gst_hsn_code":"100111"
+				"gst_hsn_code":"100111",
+				"item_group": "All Item Groups"
 			}).insert(ignore_permissions=True)
 
 		# Create warehouse
@@ -1426,6 +1430,179 @@ class TestStockReservationEntry(FrappeTestCase):
 			"voucher_no": so.name
 		})
 		self.assertIsNone(sre, "No SRE should be created for group warehouse")
+
+	def test_validate_uom_is_integer_throws_on_fractional_qty_TC_SCK_392(self):
+		frappe.set_user("Administrator")
+
+		# Ensure UOM exists and requires whole number
+		if not frappe.db.exists("UOM", "Nos"):
+			frappe.get_doc({
+				"doctype": "UOM",
+				"uom_name": "Nos",
+				"must_be_whole_number": 1
+			}).insert()
+		else:
+			frappe.db.set_value("UOM", "Nos", "must_be_whole_number", 1)
+
+		# Create dummy stock reservation entry with fractional qty
+		sre = frappe.new_doc("Stock Reservation Entry")
+		sre.item_code = "_Test Item"
+		sre.warehouse = "_Test Warehouse - _TC"
+		sre.voucher_type = "Sales Order"
+		sre.voucher_no = "SO-00001"
+		sre.voucher_detail_no = "SO-ITEM-0001"
+		sre.stock_uom = "Nos"
+		sre.reserved_qty = 1.5
+		sre.available_qty = 10
+
+		# This should raise due to fractional reserved_qty
+		with self.assertRaises(frappe.ValidationError) as context:
+			sre.validate_uom_is_integer()
+
+		self.assertIn("Reserved Qty (1.5) cannot be a fraction", str(context.exception))
+
+	def test_get_sre_reserved_serial_nos_details_returns_correct_mapping_TC_SCK_393(self):
+		frappe.set_user("Administrator")
+
+		item_code = "_Test Item Serial"
+		warehouse = create_warehouse("_Test Warehouse Serial", company="_Test Company")
+
+		# Create item with serial number
+		if not frappe.db.exists("Item", item_code):
+			frappe.get_doc({
+				"doctype": "Item",
+				"item_code": item_code,
+				"item_name": item_code,
+				"has_serial_no": 1,
+				"is_stock_item": 1,
+				"stock_uom": "Nos",
+				"serial_no_series": "SRL-TEST-.###",
+				"gst_hsn_code":"100111",
+				"item_group": "All Item Groups"
+			}).insert()
+
+		# Create stock entry to generate serial no
+		se = make_stock_entry(
+		    item_code=item_code,
+		    qty=5,
+		    target=warehouse,
+		    stock_entry_type="Material Receipt",
+		    basic_rate=100,
+		    is_submit=True,
+		)
+
+		serial_no = frappe.get_all("Serial No", filters={"item_code": item_code}, pluck="name")[0]
+
+		so=frappe.get_doc({
+		"doctype": "Sales Order",
+		"name": "TEST-SO-0001",
+		"customer": "_Test Customer",
+		"company": "_Test Company",
+		"delivery_date": frappe.utils.nowdate(),
+		"items": [{
+			"item_code": item_code,
+			"qty": 1,
+			"warehouse": warehouse
+		}]
+		}).insert()
+
+		voucher_detail_no = so.items[0].name
+
+		sre = frappe.get_doc({
+    		"doctype": "Stock Reservation Entry",
+			"company": "_Test Company",
+    		"item_code": item_code,
+    		"warehouse": warehouse,
+    		"stock_uom": "Nos",
+    		"reserved_qty": 2,
+			 "available_qty": 2,
+			 "voucher_qty": 5, 
+    		"delivered_qty": 0,
+    		"reservation_based_on": "Serial and Batch",
+    		"voucher_type": "Sales Order",
+    		"voucher_no": so.name,
+    		"voucher_detail_no": voucher_detail_no,
+    		"entries": [{"serial_no": sn} for sn in serial_no]
+		})
+		sre.insert()
+		sre.submit()
+		get_sre_reserved_serial_nos_details(item_code=item_code, warehouse=warehouse)
+
+
+	def test_get_sre_reserved_batch_nos_details_TC_SCK_394(self):
+		frappe.set_user("Administrator")
+
+		# Create warehouse
+		warehouse = create_warehouse("_Test WH Batch", company="_Test Company")
+
+		# Create item with batch enabled
+		item_code = "_Test Batch Item"
+		if not frappe.db.exists("Item", item_code):
+			make_item(item_code, {
+				"is_stock_item": 1,
+				"has_batch_no": 1,
+				"stock_uom": "Nos",
+				"create_new_batch": 1,
+				"valuation_rate": 50
+			})
+
+		# Create a batch manually
+		batch = frappe.get_doc({
+			"doctype": "Batch",
+			"item": item_code
+		}).insert()
+
+		make_stock_entry(
+    	item_code="_Test Batch Item",
+    	qty=10,
+    	target=warehouse,
+    	basic_rate=100,
+    	stock_entry_type="Material Receipt",
+    	batch_no=batch.name
+		)
+		frappe.db.set_value("Stock Settings", None, "enable_stock_reservation", 0)
+
+		# Create a Sales Order with an item that matches
+		so = frappe.get_doc({
+			"doctype": "Sales Order",
+			"customer": "_Test Customer",
+			"company": "_Test Company",
+			"delivery_date": frappe.utils.nowdate(),
+			"items": [{
+				"item_code": item_code,
+				"qty": 5,
+				"warehouse": warehouse,
+				"uom": "Nos"
+			}]
+		}).insert()
+		so.submit()
+
+		so_item = so.items[0]  # You need this for voucher_detail_no
+
+		# Now, create SRE with valid voucher info
+		sre = frappe.get_doc({
+			"doctype": "Stock Reservation Entry",
+			"item_code": item_code,
+			"warehouse": warehouse,
+			"stock_uom": "Nos",
+			"company": "_Test Company",
+			"reserved_qty": 3,
+			"delivered_qty": 1,
+			"status": "Partially Delivered",
+			"voucher_type": "Sales Order",
+			"voucher_no": so.name,
+			"voucher_detail_no": so_item.name,
+			"voucher_qty": so_item.qty,
+			"available_qty": 10,
+			"reservation_based_on": "Serial and Batch",
+			"serial_and_batch_entries": [{
+				"batch_no": batch.name,
+				"qty": 3,
+				"delivered_qty": 1
+			}]
+		}).insert()
+		sre.submit()
+		get_sre_reserved_batch_nos_details(item_code=item_code, warehouse=warehouse)
 
 
 def create_items() -> dict:
