@@ -43,4 +43,4 @@ class TestAccountsSettings(unittest.TestCase):
 			settings.validate()
 			mock_method.assert_called_once()
 		settings.enable_payment_schedule_in_print()
-		self.assertEqual(self.show_payment_schedule_in_print, 1)
+		self.assertEqual(settings.show_payment_schedule_in_print, 1)
