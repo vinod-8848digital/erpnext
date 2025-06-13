@@ -5321,6 +5321,7 @@ class TestStockEntry(FrappeTestCase):
 
 	def test_get_valuation_rate_for_finished_good_entry_TC_SCK_408(self):
 		frappe.set_user("Administrator")
+		frappe.db.set_single_value("Stock Settings", "allow_negative_stock", 1)
 
 		fg_warehouse = create_warehouse("_Test FG WH", company="_Test Company")
 		wip_warehouse = create_warehouse("_Test WIP WH", company="_Test Company")
@@ -5351,6 +5352,26 @@ class TestStockEntry(FrappeTestCase):
 				"gst_hsn_code": "01011010",
 				 "item_group":"All Item Groups"
 			}).insert(ignore_permissions=True)	
+
+
+		# Create a Material Receipt to stock 'Sub Raw Mat' in the source warehouse
+		frappe.get_doc({
+		    "doctype": "Stock Entry",
+		    "stock_entry_type": "Material Receipt",
+		    "purpose": "Material Receipt",
+		    "company": "_Test Company",
+		    "items": [{
+		        "item_code": "Sub Raw Mat",
+		        "t_warehouse":test_warehouse,
+		        "qty": 5,
+		        "uom": "Nos",
+		        "stock_uom": "Nos",
+		        "conversion_factor": 1.0,
+		        "rate": 100
+		    }],
+		    "docstatus": 1
+		}).insert()
+
 
 		if not frappe.db.exists("BOM", {"item": "Valuation FG", "is_active": 1}):
 			bom = frappe.get_doc({
@@ -5571,6 +5592,7 @@ class TestStockEntry(FrappeTestCase):
 
 		# Assert that new bundle was assigned to item
 		self.assertEqual(receiving_entry.items[0].serial_and_batch_bundle, "NEW-SBB-001")
+
 
 
 def create_bom(bom_item, rm_items, company=None, qty=None, properties=None):
