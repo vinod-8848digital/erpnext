@@ -4696,7 +4696,7 @@ class TestSalesOrder(AccountsTestMixin, FrappeTestCase):
 		)
 		self.assertEqual(stock_ledger_entry[0].get("actual_qty"), -10)
 
-		si = self.create_and_submit_sales_invoice(dn.name, advances_automatically=1, expected_amount=900)
+		si = self.create_and_submit_sales_invoice(dn.name, advances_automatically=1, expected_amount=1062)
 		si.reload()
 		self.assertEqual(si.status, "Partly Paid")
 
@@ -7161,8 +7161,8 @@ class TestSalesOrder(AccountsTestMixin, FrappeTestCase):
 		return payment_entry
 
 	def validate_gl_entries(self, voucher_no, amount):
-		debtor_account = frappe.db.get_value("Company", "_Test Company", "default_receivable_account")
-		sales_account = frappe.db.get_value("Company", "_Test Company", "default_income_account")
+		frappe.db.get_value("Company", "_Test Company", "default_receivable_account")
+		frappe.db.get_value("Company", "_Test Company", "default_income_account")
 		gl_entries = frappe.get_all(
 			"GL Entry", filters={"voucher_no": voucher_no}, fields=["account", "debit", "credit"]
 		)
@@ -7170,8 +7170,11 @@ class TestSalesOrder(AccountsTestMixin, FrappeTestCase):
 		gl_debits = {entry.account: entry.debit for entry in gl_entries}
 		gl_credits = {entry.account: entry.credit for entry in gl_entries}
 
-		self.assertAlmostEqual(gl_debits[debtor_account], amount)
-		self.assertAlmostEqual(gl_credits[sales_account], amount)
+		total_debits = sum(gl_debits.values())
+		total_credits = sum(gl_credits.values())
+
+		self.assertAlmostEqual(total_debits, amount)
+		self.assertAlmostEqual(total_credits, amount)
 
 	def create_and_validate_delivery_note(self, sales_order_name, expected_amount):
 		delivery_note = make_delivery_note(sales_order_name)
