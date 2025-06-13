@@ -5439,6 +5439,8 @@ class TestStockEntry(FrappeTestCase):
 
 	def test_set_items_for_stock_in_TC_SCK_409(self):
 		frappe.set_user("Administrator")
+		frappe.db.set_single_value("Stock Settings", "allow_negative_stock", 1)
+
 
 		# Step 1: Create source and target warehouses
 		source_warehouse = create_warehouse("_Test Source WH", company="_Test Company")

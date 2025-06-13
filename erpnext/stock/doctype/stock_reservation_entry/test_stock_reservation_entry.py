@@ -1466,6 +1466,9 @@ class TestStockReservationEntry(FrappeTestCase):
 	def test_get_sre_reserved_serial_nos_details_returns_correct_mapping_TC_SCK_393(self):
 		frappe.set_user("Administrator")
 
+		if not frappe.db.exists("Customer", "_Test Customer"):
+			make_customer(customer="_Test Customer")
+
 		item_code = "_Test Item Serial"
 		warehouse = create_warehouse("_Test Warehouse Serial", company="_Test Company")
 
@@ -1533,6 +1536,9 @@ class TestStockReservationEntry(FrappeTestCase):
 
 	def test_get_sre_reserved_batch_nos_details_TC_SCK_394(self):
 		frappe.set_user("Administrator")
+
+		if not frappe.db.exists("Customer", "_Test Customer"):
+			make_customer(customer="_Test Customer")
 
 		# Create warehouse
 		warehouse = create_warehouse("_Test WH Batch", company="_Test Company")
