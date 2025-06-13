@@ -679,7 +679,14 @@ class TestDeliveryNote(FrappeTestCase):
 		
 
 		make_shipment = make_shipment(dn.name)
-	
+
+	# codecov
+	def test_get_list_context_TC_SCK_411(self):
+		from erpnext.stock.doctype.delivery_note.delivery_note import get_list_context
+		context = get_list_context()
+		self.assertEqual(context["title"], "Shipments")
+		self.assertTrue(context["currency"],"INR")
+
 	def test_delivery_note_no_gl_entry(self):
 		frappe.db.get_value("Warehouse", "_Test Warehouse - _TC", "company")
 		make_stock_entry(target="_Test Warehouse - _TC", qty=5, basic_rate=100)
