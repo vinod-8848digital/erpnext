@@ -31,6 +31,7 @@ from erpnext.stock.utils import get_incoming_rate, get_stock_value_on, get_valua
 class TestStockReconciliation(FrappeTestCase, StockTestMixin):
 	@classmethod
 	def setUpClass(cls):
+		frappe.set_user("Administrator")
 		create_batch_or_serial_no_items()
 		super().setUpClass()
 		frappe.db.set_single_value("Stock Settings", "allow_negative_stock", 1)
