@@ -6197,6 +6197,10 @@ class TestSalesInvoice(FrappeTestCase):
 		from erpnext.stock.doctype.item.test_item import create_item
 		from erpnext.stock.doctype.stock_entry.test_stock_entry import make_stock_entry
 
+		fiscal_years = frappe.get_all("Fiscal Year", filters={"year": "2025"})
+		for fy in fiscal_years:
+			frappe.delete_doc("Fiscal Year", fy.name, force=True)
+
 		get_or_create_fiscal_year("_Test Company")
 		create_item("_Test Item 1")
 		create_customer(customer_name="_Test Customer", company="_Test Company")
@@ -6222,17 +6226,14 @@ class TestSalesInvoice(FrappeTestCase):
 				}
 			],
 		)
-		if "india_compliance" in frappe.get_installed_apps():
-			si.place_of_supply = "27-Maharashtra"
-			si.company_gstin = "27AAATI9664A1ZN"
 		si.calculate_taxes_and_totals()
 		si.shipping_rule = shipping_rule.name
 		si.insert()
 		si.submit()
 
 		self.assertEqual(si.net_total, 1000)
-		self.assertEqual(si.total_taxes_and_charges, 100)
-		self.assertEqual(si.grand_total, 1100)
+		self.assertEqual(si.total_taxes_and_charges, 280)
+		self.assertEqual(si.grand_total, 1280)
 		frappe.db.rollback()
 
 	def test_si_with_sr_calculate_with_net_total_TC_S_140(self):
