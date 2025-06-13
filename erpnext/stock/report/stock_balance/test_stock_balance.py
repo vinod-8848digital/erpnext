@@ -44,18 +44,22 @@ class TestStockBalance(FrappeTestCase):
 
 	def assertInvariants(self, rows):
 		last_balance = frappe.db.sql(
-			"""
-			WITH last_balances AS (
-				SELECT item_code, warehouse,
-					stock_value, qty_after_transaction,
-					ROW_NUMBER() OVER (PARTITION BY item_code, warehouse
-						ORDER BY timestamp(posting_date, posting_time) desc, creation desc)
-						AS rn
-					FROM `tabStock Ledger Entry`
-					where is_cancelled=0
-				)
-				SELECT * FROM last_balances WHERE rn = 1""",
-			as_dict=True,
+		    """
+		    WITH last_balances AS (
+		        SELECT item_code, warehouse,
+		            stock_value, qty_after_transaction,
+		            ROW_NUMBER() OVER (
+		                PARTITION BY item_code, warehouse
+		                ORDER BY (posting_date + posting_time) DESC, creation DESC
+		            ) AS rn
+		        FROM `tabStock Ledger Entry`
+		        WHERE is_cancelled = 0
+		    )
+		    SELECT item_code, warehouse, stock_value, qty_after_transaction
+		    FROM last_balances
+		    WHERE rn = 1
+		    """,
+		    as_dict=True,
 		)
 
 		item_wh_stock = _dict()
