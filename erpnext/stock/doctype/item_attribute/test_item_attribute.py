@@ -50,6 +50,7 @@ class TestItemAttribute(FrappeTestCase):
 					"has_variants": 1,
 					"variant_based_on": "Item Attribute",
 					"gst_hsn_code": "01011010",
+					"item_group": "All Item Groups",
 					"attributes": [{"attribute": attribute.name}],
 				}
 			).insert()
@@ -63,6 +64,7 @@ class TestItemAttribute(FrappeTestCase):
 					"item_name": "Test Variant Item",
 					"variant_of": template.name,
 					"gst_hsn_code": "01011010",
+					"item_group": "All Item Groups",
 					"attributes": [{"attribute": attribute.name, "attribute_value": "Blue"}],
 				}
 			).insert()
