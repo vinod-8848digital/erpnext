@@ -46,7 +46,7 @@ class TestDeliveryTrip(FrappeTestCase):
 		driver.email = "newtonscamnder@gmail.com"
 		driver.save()
 		driver_email = get_driver_email(driver)
-		self.assertTrue(driver_email, driver.email)
+		self.assertEqual(driver_email, driver.email)
 
 	# codecov
 	def test_process_route_TC_SCK_307(self):
