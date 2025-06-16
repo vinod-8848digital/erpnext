@@ -252,7 +252,8 @@ class TestSupplierScorecardPeriod(FrappeTestCase):
 
 		doc.get_eval_statement = lambda formula: "INVALID"
 
-		with self.assertRaises(frappe.ValidationError, msg="Could not solve weighted score function") as cm:
+		msg = "Could not solve weighted score function"
+		with self.assertRaises(frappe.ValidationError, msg=msg):
 			doc.calculate_weighted_score("INVALID FORMULA")
 
 		# self.assertIn("Could not solve weighted score function", str(cm.exception))
@@ -321,10 +322,8 @@ class TestSupplierScorecardPeriod(FrappeTestCase):
 		)
 
 		doc.variables = []
-
-		with self.assertRaises(
-			frappe.ValidationError, msg="Could not solve criteria score function"
-		) as context:
+		msg = "Could not solve criteria score function"
+		with self.assertRaises(frappe.ValidationError, msg=msg):
 			doc.calculate_criteria()
 
 		# self.assertIn("Could not solve criteria score function", str(context.exception))
@@ -333,7 +332,7 @@ class TestSupplierScorecardPeriod(FrappeTestCase):
 def create_supplier_related_records():
 	scorecard_criteria = "_Test Criteria"
 	scorecard_variable = "Test"
-	supplier_document = "Test Supplier for RFQ"
+	supplier_name = "Test Supplier for RFQ"
 	if not frappe.db.exists("Supplier Scorecard Criteria", scorecard_criteria):
 		criteria = frappe.get_doc(
 			{
@@ -344,10 +343,7 @@ def create_supplier_related_records():
 			}
 		).insert(ignore_permissions=True, ignore_if_duplicate=True)
 	else:
-		criteria = frappe.get_doc(
-			{"doctype": "Supplier Scorecard Criteria", "criteria_name": "_Test Criteria"}
-		)
-
+		criteria = frappe.get_doc("Supplier Scorecard Criteria", scorecard_criteria)
 	if not frappe.db.exists("Supplier Scorecard Variable", scorecard_variable):
 		frappe.get_doc(
 			{
@@ -358,7 +354,7 @@ def create_supplier_related_records():
 			}
 		).insert(ignore_permissions=True, ignore_if_duplicate=True)
 
-	if not frappe.db.exists("Supplier", supplier_document):
+	if not frappe.db.exists("Supplier", supplier_name):
 		supplier_doc = frappe.get_doc(
 			{
 				"doctype": "Supplier",
@@ -366,7 +362,7 @@ def create_supplier_related_records():
 			}
 		).insert(ignore_permissions=True, ignore_if_duplicate=True)
 	else:
-		supplier_doc = frappe.get_doc({"doctype": "Supplier", "supplier_name": "Test Supplier for RFQ"})
+		supplier_doc = frappe.get_doc("Supplier", supplier_name)
 
 	scorecard = frappe.get_doc(
 		{
@@ -385,6 +381,6 @@ def create_supplier_related_records():
 	return {
 		"criteria": criteria,
 		"scorecard_variable": scorecard_variable,
-		"supplier_document": supplier_document,
+		"supplier_document": supplier_name,
 		"scorecard": scorecard,
 	}
