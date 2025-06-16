@@ -980,7 +980,6 @@ class TestQualityInspection(FrappeTestCase):
 		# Link to SE item
 		for d in se.items:
 			d.quality_inspection = qi.name
-		se.save()
 		se.reload()
 		se.submit()
 
