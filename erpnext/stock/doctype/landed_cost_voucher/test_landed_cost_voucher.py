@@ -1030,7 +1030,7 @@ class TestLandedCostVoucher(FrappeTestCase):
 				row.valuation_rate,
 				frappe.db.get_value("Serial and Batch Bundle", row.serial_and_batch_bundle, "avg_rate"),
 			)
-	def test_invalid_purchase_receipt_item_reference(self):
+	def test_invalid_purchase_receipt_item_reference_TC_SCK_435(self):
 		from erpnext.stock.doctype.item.test_item import make_item
 		from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_company
 		from erpnext.stock.doctype.warehouse.test_warehouse import create_warehouse
@@ -1075,7 +1075,7 @@ class TestLandedCostVoucher(FrappeTestCase):
 		with self.assertRaises(frappe.ValidationError) as e:
 			lcv.insert()
 
-	def test_receipt_document_and_item_validations(self):
+	def test_receipt_document_and_item_validations_TC_SCK_436(self):
 		from erpnext.stock.doctype.item.test_item import make_item
 		from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_company
 		from erpnext.stock.doctype.warehouse.test_warehouse import create_warehouse

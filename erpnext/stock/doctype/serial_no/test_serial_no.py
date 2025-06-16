@@ -328,7 +328,167 @@ class TestSerialNo(FrappeTestCase):
 
 		self.assertEqual(non_expired_serials, [])
 
+	def test_get_pos_reserved_serial_nos_TC_SCK_437(self):
+		from erpnext.stock.doctype.warehouse.test_warehouse import create_warehouse
+		from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_company
+		from erpnext.stock.doctype.item.test_item import (make_item, get_hsn)
+		from erpnext.accounts.doctype.cost_center.test_cost_center import create_cost_center
+		create_company()
+		warehouse = create_warehouse("_Test Warehouse", company="_Test Company")
+		create_cost_center(cost_center_name="_Test Cost Center", company="_Test Company")
+		item_code = "_Test Item POS"
 
+		item = make_item(
+			item_code,
+			{
+				"has_serial_no": 1,
+				"serial_no_series": "SN-.#####",
+				"is_stock_item": 1,
+				"valuation_rate": 500,
+				"gst_hsn_code": get_hsn(),
+			}
+		)
+		pos_profile = frappe.get_doc({
+		"doctype": "POS Profile",
+		"name": "_Test POS Profile New Serial No",
+		"company": "_Test Company",
+		"currency": "INR",
+		"write_off_cost_center": "_Test Cost Center - _TC",
+		"write_off_account": "Sales - _TC",
+		"warehouse": warehouse,	
+		"accounts": [{
+			"company": "_Test Company",
+			"account": "_Test Account - _TC"  
+		}],
+		"payments": [{
+				"default": 1,
+				"mode_of_payment": "Cash",  
+				"account": "_Test Cash - _TC"
+			}],
+		"warehouses": [{
+			"warehouse": warehouse
+			}]
+		})
+		pos_profile.insert()
+
+		se = frappe.get_doc({
+			"doctype": "Stock Entry",
+			"stock_entry_type": "Material Receipt",
+			"company": "_Test Company",
+			"items": [
+				{
+					"item_code": item.name,
+					"qty": 1,
+					"t_warehouse": warehouse
+				},
+				{
+					"item_code": item.name,
+					"qty": 1,
+					"t_warehouse": warehouse
+				}
+			]
+		})
+		se.insert()
+		se.submit()
+
+		serial_nos = frappe.get_all("Serial No", filters={"item_code": item.name, "warehouse": warehouse}, fields=["name"])
+		serial_no_1 = serial_nos[0].name
+		pos_opening_entry = frappe.get_doc({
+			"doctype": "POS Opening Entry",
+			"pos_profile": pos_profile.name,
+			"company": "_Test Company",
+			"user": "Administrator",
+			"period_start_date": frappe.utils.get_datetime(),
+			"mode_of_payment": "Cash",
+			"balance_details": [
+				{
+					"account": "Sales - _TC",
+					"mode_of_payment": "Cash",
+					"account_currency": "INR",
+					"opening_amount": 1000
+				}									
+			],
+			"posting_date": frappe.utils.today(),
+			"cash_denominations": [
+				{
+					"mode_of_payment": "Cash",
+					"account": "_Test Cash - _TC",
+					"opening_amount": 1000
+				}
+			]
+		})
+		pos_opening_entry.insert()
+		pos_opening_entry.submit()
+		pos_invoice = frappe.get_doc({
+			"doctype": "POS Invoice",
+			"docstatus": 1,
+			"pos_profile": pos_profile.name,
+			"company": "_Test Company",
+			"cost_center": "_Test Cost Center - _TC",
+			"is_return": 0,
+			"paid_amount": 1000,
+			"items": [{
+				"item_code": item.name,
+				"warehouse": warehouse,
+				"serial_no": serial_no_1,
+				"qty": 1
+			}],
+			"payments": [
+				{
+					"mode_of_payment": "Cash",
+					"account": "_Test Cash - _TC",
+					"amount": 1000
+				}
+			]
+		}).insert()
+
+		filters = {
+			"item_code": item.name,
+			"warehouse": warehouse
+		}
+
+		result = get_pos_reserved_serial_nos(filters)
+		self.assertIsInstance(result, list)
+		self.assertEqual(len(result), 1)
+		self.assertEqual(result[0], serial_no_1)
+
+	def test_auto_fetch_serial_number_basic_TC_SCK_438(self):
+		from erpnext.stock.doctype.warehouse.test_warehouse import create_warehouse
+		from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_company
+		from erpnext.stock.doctype.item.test_item import (make_item, get_hsn)
+		from erpnext.accounts.doctype.cost_center.test_cost_center import create_cost_center
+		create_company("_Test Company")
+
+		warehouse = create_warehouse("_Test Warehouse Auto Fetch", company="_Test Company")
+
+		item = make_item("_Test Serial Item Auto", {
+			"has_serial_no": 1,
+			"serial_no_series": "AUTO-SERIAL-.###",
+			"is_stock_item": 1,
+			"has_batch_no": 1,
+			"create_new_batch": 1,
+			"batch_no_series":"AUTO-BATCH-.###",
+			"valuation_rate": 100
+		})
+		se = make_stock_entry(
+			item_code=item.name,
+			qty=2,
+			to_warehouse=warehouse
+		)
+		se.submit()
+		batch = frappe.get_all("Batch", {"item": item.name, "reference_name": se.name})
+		exclude_sr_nos = ["AUTO-SERIAL-001", "AUTO-SERIAL-002"]
+		batch_nos = [d.name for d in batch]
+		sr_nos = auto_fetch_serial_number(
+			qty=2,
+			item_code=item.name,
+			warehouse=warehouse,
+			exclude_sr_nos=exclude_sr_nos,
+			batch_nos=batch_nos
+		)
+
+		assert isinstance(sr_nos, list)
+  
 def get_auto_serial_nos(kwargs):
 	from erpnext.stock.doctype.serial_and_batch_bundle.serial_and_batch_bundle import (
 		get_available_serial_nos,

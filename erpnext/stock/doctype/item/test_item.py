@@ -1212,7 +1212,7 @@ class TestItem(FrappeTestCase):
 		self.assertEqual(item.name, "_Test Book")
 		self.assertEqual(item.valuation_method, "FIFO")
 	
-	def test_validate_customer_provided_part_valuation_rate_TC_SCK_391(self):
+	def test_validate_customer_provided_part_valuation_rate_TC_SCK_425(self):
 		item_fields = {
 			"is_stock_item": 1,
 			"is_customer_provided_item": 1,
@@ -1223,7 +1223,7 @@ class TestItem(FrappeTestCase):
 		with self.assertRaises(frappe.ValidationError, msg=msg):
 			item = make_item("_test_valuation_rate_item", item_fields)
 	
-	def test_validate_customer_provided_part_is_purchase_item_TC_SCK_392(self):
+	def test_validate_customer_provided_part_is_purchase_item_TC_SCK_426(self):
 		item_fields = {
 			"is_stock_item": 1,
 			"is_customer_provided_item": 1,
@@ -1247,7 +1247,7 @@ class TestItem(FrappeTestCase):
 		with self.assertRaises(frappe.ValidationError, msg=msg):
 			item = make_item("_test_opening_stock_item", item_fields)
 		
-	def test_validate_naming_series_for_dot_TC_SCK_394(self):
+	def test_validate_naming_series_for_dot_TC_SCK_427(self):
 		item_fields = {
 			"is_stock_item": 1,
 			"serial_no_series": "SRS###",
@@ -1257,7 +1257,7 @@ class TestItem(FrappeTestCase):
 		with self.assertRaises(frappe.ValidationError, msg=msg):
 			make_item("_test_naming_series_item", item_fields)
 	
-	def test_validate_naming_series_for_hash_TC_SCK_395(self):
+	def test_validate_naming_series_for_hash_TC_SCK_428(self):
 		item_fields = {
 			"is_stock_item": 1,
 			"serial_no_series": "SRS. ###", 
@@ -1266,7 +1266,7 @@ class TestItem(FrappeTestCase):
 		with self.assertRaises(frappe.ValidationError, msg=msg):
 			make_item("_test_naming_series_item", item_fields)
 	
-	def test_update_bom_item_description_TC_SCK_396(self):
+	def test_update_bom_item_description_TC_SCK_429(self):
 		item = make_item("_test-item-for-bom", {"is_stock_item": 1})
 		item.description = "Initial Description"
 		item.save()
@@ -1342,7 +1342,7 @@ class TestItem(FrappeTestCase):
 			template.save()
 	
  
-	def test_item_autoname_with_naming_series_TC_SCK_398(self):
+	def test_item_autoname_with_naming_series_TC_SCK_430(self):
 		frappe.db.set_default("item_naming_by", "Naming Series")
 	
 		template = frappe.get_doc({
@@ -1374,7 +1374,7 @@ class TestItem(FrappeTestCase):
 
 		variant.autoname()
   
-	def test_update_template_tables_TC_SCK_399(self):
+	def test_update_template_tables_TC_SCK_431(self):
 		create_tax_accounts()
 		frappe.db.set_default("item_naming_by", "Naming Series")
 
@@ -1491,7 +1491,7 @@ class TestItem(FrappeTestCase):
 		assert frappe.db.get_value("Item", new_item.name, "item_code") == new_item.name
 
 
-	def test_validate_properties_before_merge_TC_SCK_401(self):
+	def test_validate_properties_before_merge_TC_SCK_432(self):
 
 		item_1 = make_item("_test_item_merge_1", {
 			"stock_uom": "Nos",
@@ -1509,7 +1509,7 @@ class TestItem(FrappeTestCase):
 		with self.assertRaises(frappe.ValidationError):
 			item_1.validate_properties_before_merge(item_2.name)
 	
-	def test_validate_duplicate_product_bundles_before_merge_pass_TC_SCK_402(self):
+	def test_validate_duplicate_product_bundles_before_merge_pass_TC_SCK_433(self):
 		from erpnext.stock.doctype.item.test_item import make_item
 
 		item_1 = make_item("_test_item_bundle_1", {"stock_uom": "Nos", "is_stock_item": 0})
@@ -1533,7 +1533,7 @@ class TestItem(FrappeTestCase):
 		with self.assertRaises(frappe.ValidationError):
 			item_1.validate_duplicate_product_bundles_before_merge(item_1.name, item_2.name)
 	
-	def test_update_variants_TC_SCK_403(self):
+	def test_update_variants_TC_SCK_434(self):
 		from erpnext.stock.doctype.item.item import update_variants
 		create_attribute("Color", ["Red", "Blue"])
 		create_attribute("Size", ["S", "M", "L"])
