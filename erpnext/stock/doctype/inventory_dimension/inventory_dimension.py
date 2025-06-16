@@ -25,7 +25,7 @@ class InventoryDimension(Document):
 
 	from typing import TYPE_CHECKING
 
-	if TYPE_CHECKING:
+	if TYPE_CHECKING: # pragma: no cover
 		from frappe.types import DF
 
 		apply_to_all_doctypes: DF.Check

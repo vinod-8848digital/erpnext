@@ -12,6 +12,7 @@ from erpnext.stock.doctype.inventory_dimension.inventory_dimension import (
 	CanNotBeDefaultDimension,
 	DoNotChangeError,
 	delete_dimension,
+	get_parent_fields
 )
 from erpnext.stock.doctype.item.test_item import create_item
 from erpnext.stock.doctype.purchase_receipt.test_purchase_receipt import make_purchase_receipt
@@ -523,6 +524,61 @@ class TestInventoryDimension(FrappeTestCase):
 		# frappe.db.sql("ALTER TABLE `tabStock Ledger Entry` DROP COLUMN IF EXISTS `inv_site`")
 		# frappe.db.sql("ALTER TABLE `tabStock Entry Detail` DROP COLUMN IF EXISTS `inv_site`")
 		# frappe.db.sql("ALTER TABLE `tabStock Entry Detail` DROP COLUMN IF EXISTS `to_inv_site`")
+
+	def test_get_parent_fields_TC_SCK_447(self):
+		frappe.set_user("Administrator")
+
+    	# Create child DocType if not exists
+		if not frappe.db.exists("DocType", "Test Child Doc"):
+			frappe.get_doc({
+    	        "doctype": "DocType",
+    	        "name": "Test Child Doc",
+    	        "module": "Custom",
+    	        "custom": 1,
+    	        "istable": 1,
+    	        "fields": [
+    	            {
+    	                "fieldname": "dummy_field",
+    	                "label": "Dummy",
+    	                "fieldtype": "Data"
+    	            }
+    	        ],
+    	        "permissions": [{"role": "System Manager"}]
+    	    }).insert()
+
+    	# Create parent DocType with:
+    	# - a Table field referencing the child
+    	# - a Link field referencing the dimension "Pallet"
+		if not frappe.db.exists("DocType", "Test Parent Doc"):
+			frappe.get_doc({
+    	        "doctype": "DocType",
+    	        "name": "Test Parent Doc",
+    	        "module": "Custom",
+    	        "custom": 1,
+    	        "fields": [
+    	            {
+    	                "fieldname": "test_child_table",
+    	                "label": "Test Child Table",
+    	                "fieldtype": "Table",
+    	                "options": "Test Child Doc"
+    	            },
+    	            {
+    	                "fieldname": "pallet",
+    	                "label": "Pallet",
+    	                "fieldtype": "Link",
+    	                "options": "Pallet"
+    	            }
+    	        ],
+    	        "permissions": [{"role": "System Manager"}]
+    	    }).insert()
+
+    	# Call the function under test
+		fields = get_parent_fields("Test Child Doc", "Pallet")
+
+    	# Assert that 'pallet' field was found
+		fieldnames = [d["value"] for d in fields]
+		self.assertIn("pallet", fieldnames)
+
 
 
 def get_voucher_sl_entries(voucher_no, fields):
