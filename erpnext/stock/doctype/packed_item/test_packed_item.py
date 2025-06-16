@@ -1,7 +1,7 @@
 # Copyright (c) 2022, Frappe Technologies Pvt. Ltd. and Contributors
 # License: GNU General Public License v3. See license.txt
 
-
+import json
 import frappe
 from frappe.tests.utils import FrappeTestCase, change_settings
 from frappe.utils import add_to_date, nowdate
@@ -11,6 +11,7 @@ from erpnext.selling.doctype.sales_order.test_sales_order import make_sales_orde
 from erpnext.stock.doctype.item.test_item import make_item
 from erpnext.stock.doctype.purchase_receipt.test_purchase_receipt import get_gl_entries
 from erpnext.stock.doctype.stock_entry.stock_entry_utils import make_stock_entry
+from erpnext.stock.doctype.warehouse.test_warehouse import create_warehouse
 
 
 def create_product_bundle(
@@ -56,6 +57,114 @@ class TestPackedItem(FrappeTestCase):
 	# def setUp(self):
 	# 	if frappe.db.get_single_value("Selling Settings", "validate_selling_price"):
 	# 		frappe.db.set_single_value("Selling Settings", "validate_selling_price", 0)
+
+	# codecov
+	def test_update_packed_item_from_cancelled_doc_TC_SCK_415(self):
+		from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_customer
+		from erpnext.accounts.doctype.payment_entry.test_payment_entry import make_test_item
+		company="_Test Indian Registered Company"
+		warehouse = "Stores - _TIRC"
+		if not frappe.db.exists("Warehouse", warehouse):
+			warehouse = create_warehouse(warehouse, company=company)
+
+		customer = "_Test Customer"
+		if not frappe.db.exists("Customer", "_Test Customer"):
+			create_customer("_Test Customer",currency="INR")
+		item = "test packed item"
+		item = make_test_item(item)
+		item.item_group = "Products"
+		item.is_stock_item = 0
+		item.is_fixed_asset = 0
+		item.auto_create_assets = 0
+		item.save()
+		assert frappe.db.exists("Item", "Test Item")
+		
+		product_bundle = frappe.get_doc({
+			"doctype":"Product Bundle",
+			"new_item_code":item.item_code,
+			"items":[{
+				"item_code":item.item_code,
+				"qty":2
+			}]
+
+		}).insert()
+		dn=frappe.get_doc({
+			"doctype":"Delivery Note",
+			"customer":customer,
+			"company":company,
+			"set_warehouse":warehouse,
+			"items":[{
+				"item_code":item.item_code,
+				"item_name":item.item_name,
+				"qty":2,
+				"uom":"_Test UOM",
+				"stock_uom":"Nos",
+			}]
+		}).insert()
+		dn.submit()
+		self.assertEqual(dn.docstatus, 1, "Delivery Note was not submitted")
+		self.assertEqual(dn.status, "To Bill", f"Unexpected status after submit: {dn.status}")
+		dn.reload()
+		dn.cancel()
+		self.assertEqual(dn.docstatus, 2, "Delivery Note was not cancelled")
+		self.assertEqual(dn.status, "Cancelled", f"Expected status 'Cancelled', got {dn.status}")
+		amended_dn = frappe.copy_doc(dn)
+		amended_dn.amended_from = dn.name
+		amended_dn.docstatus = 0
+		amended_dn.name = None  # allow system to generate new name
+		amended_dn.insert()
+	
+	# codecov
+	def test_on_doctype_update(self):
+		from erpnext.stock.doctype.packed_item.packed_item import on_doctype_update
+		from erpnext.stock.doctype.packed_item.packed_item import get_items_from_product_bundle
+		from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_customer
+		from erpnext.accounts.doctype.payment_entry.test_payment_entry import make_test_item
+		company="_Test Indian Registered Company"
+		warehouse = "Stores - _TIRC"
+		if not frappe.db.exists("Warehouse", warehouse):
+			warehouse = create_warehouse(warehouse, company=company)
+
+		customer = "_Test Customer"
+		if not frappe.db.exists("Customer", "_Test Customer"):
+			create_customer("_Test Customer",currency="INR")
+		item = "test packed item"
+		item = make_test_item(item)
+		item.item_group = "Products"
+		item.is_stock_item = 0
+		item.is_fixed_asset = 0
+		item.auto_create_assets = 0
+		item.save()
+		assert frappe.db.exists("Item", "Test Item")
+		
+		product_bundle = frappe.get_doc({
+			"doctype":"Product Bundle",
+			"new_item_code":item.item_code,
+			"items":[{
+				"item_code":item.item_code,
+				"qty":2
+			}]
+
+		}).insert()
+		dn=frappe.get_doc({
+			"doctype":"Delivery Note",
+			"customer":customer,
+			"company":company,
+			"set_warehouse":warehouse,
+			"items":[{
+				"item_code":item.item_code,
+				"item_name":item.item_name,
+				"qty":2,
+				"uom":"_Test UOM",
+				"stock_uom":"Nos",
+			}]
+		}).insert()
+		on_doctype_update()
+		dn.submit()
+		msg="Please specify Company"
+		with self.assertRaises(frappe.ValidationError, msg=msg):
+			get_items_from_product_bundle(json.dumps(product_bundle.items[0].as_dict()))
+		
 
 	def test_adding_bundle_item(self):
 		"Test impact on packed items if bundle item row is added."

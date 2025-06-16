@@ -256,7 +256,7 @@ def update_packed_item_from_cancelled_doc(main_item_row, packing_item, pi_row, d
 	prev_doc_packed_items_map = None
 	if doc.amended_from:
 		prev_doc_packed_items_map = get_cancelled_doc_packed_item_details(doc.packed_items)
-
+	
 	if prev_doc_packed_items_map and prev_doc_packed_items_map.get(
 		(packing_item.item_code, main_item_row.item_code)
 	):
@@ -315,10 +315,9 @@ def on_doctype_update():
 @frappe.whitelist()
 def get_items_from_product_bundle(row):
 	row, items = json.loads(row), []
-
 	bundled_items = get_product_bundle_items(row["item_code"])
 	for item in bundled_items:
-		row.update({"item_code": item.item_code, "qty": flt(row["quantity"]) * flt(item.qty)})
+		row.update({"item_code": item.item_code, "qty": flt(row["qty"]) * flt(item.qty)})
 		items.append(get_item_details(row))
 
 	return items
