@@ -952,12 +952,8 @@ class TestQuotation(FrappeTestCase):
 
 	def test_quotation_to_sales_invoice_with_partially_payment_entry_TC_S_080(self):
 		from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_company
+		from erpnext.accounts.doctype.sales_invoice.test_sales_invoice import create_fiscal_year
 		from erpnext.stock.doctype.item.test_item import create_item
-		from erpnext.stock.doctype.stock_entry.test_stock_entry import get_or_create_fiscal_year
-
-		fiscal_years = frappe.get_all("Fiscal Year", filters={"year": "2025"})
-		for fy in fiscal_years:
-			frappe.delete_doc("Fiscal Year", fy.name, force=True)
 
 		create_company("_Test Company")
 		create_item(
@@ -967,7 +963,7 @@ class TestQuotation(FrappeTestCase):
 			company="_Test Company",
 			is_stock_item=1,
 		)
-		get_or_create_fiscal_year("_Test Company")
+		create_fiscal_year("_Test Company")
 		create_customer()
 		quotation = self.create_and_submit_quotation("_Test Item Home Desktop 100", 1, 5000, "Stores - _TC")
 		sales_order = self.create_and_submit_sales_order(quotation.name, add_days(nowdate(), 5))
