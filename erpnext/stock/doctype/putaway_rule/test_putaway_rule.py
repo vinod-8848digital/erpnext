@@ -42,11 +42,14 @@ class TestPutawayRule(FrappeTestCase):
 	# codecov
 	def test_validate_priority_TC_SCK_412(self):
 		company = "_Test Company"
+
 		item = "Test Item Putway"
 		warehouse = "_Test Warehouse - _TC"
+		from erpnext.accounts.doctype.account.test_account import make_company
 		from erpnext.accounts.doctype.payment_entry.test_payment_entry import make_test_item
 		from erpnext.stock.doctype.item.test_item import make_item
 
+		make_company(company)
 		item = make_item(item)
 
 		if not frappe.db.exists("Warehouse", "_Test Warehouse - _TC"):
@@ -80,9 +83,11 @@ class TestPutawayRule(FrappeTestCase):
 		company = "_Test Company"
 		item_code = "Test Item Putway"
 		warehouse = "_Test Warehouse - _TC"
+		from erpnext.accounts.doctype.account.test_account import make_company
 		from erpnext.accounts.doctype.payment_entry.test_payment_entry import make_test_item
 		from erpnext.stock.doctype.item.test_item import make_item
 
+		make_company(company)
 		item_code = make_item(item_code)
 
 		if not frappe.db.exists("Warehouse", "_Test Warehouse - _TC"):
