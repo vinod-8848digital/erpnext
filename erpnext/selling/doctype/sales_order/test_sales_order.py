@@ -7161,8 +7161,6 @@ class TestSalesOrder(AccountsTestMixin, FrappeTestCase):
 		return payment_entry
 
 	def validate_gl_entries(self, voucher_no, amount):
-		frappe.db.get_value("Company", "_Test Company", "default_receivable_account")
-		frappe.db.get_value("Company", "_Test Company", "default_income_account")
 		gl_entries = frappe.get_all(
 			"GL Entry", filters={"voucher_no": voucher_no}, fields=["account", "debit", "credit"]
 		)
