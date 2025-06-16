@@ -6193,15 +6193,10 @@ class TestSalesInvoice(FrappeTestCase):
 
 	def test_si_with_sr_calculate_with_fixed_TC_S_139(self):
 		from erpnext.accounts.doctype.shipping_rule.test_shipping_rule import create_shipping_rule
-		from erpnext.buying.doctype.purchase_order.test_purchase_order import get_or_create_fiscal_year
 		from erpnext.stock.doctype.item.test_item import create_item
 		from erpnext.stock.doctype.stock_entry.test_stock_entry import make_stock_entry
 
-		fiscal_years = frappe.get_all("Fiscal Year", filters={"year": "2025"})
-		for fy in fiscal_years:
-			frappe.delete_doc("Fiscal Year", fy.name, force=True)
-
-		get_or_create_fiscal_year("_Test Company")
+		create_fiscal_year("_Test Company")
 		create_item("_Test Item 1")
 		create_customer(customer_name="_Test Customer", company="_Test Company")
 		shipping_rule = create_shipping_rule(
@@ -8074,3 +8069,48 @@ def create_uom(uom):
 		new_uom.uom_name = uom
 		new_uom.save()
 		return new_uom.uom_name
+
+
+def create_fiscal_year(company):
+	from datetime import date, datetime
+
+	import frappe
+
+	current_date = datetime.today().date()
+	# Fetch all enabled fiscal years
+	existing_fy = frappe.get_all(
+		"Fiscal Year", filters={"disabled": 0}, fields=["name", "year_start_date", "year_end_date"]
+	)
+
+	# Filter fiscal years where current date falls between start and end
+	matching_fy_list = [fy for fy in existing_fy if fy.year_start_date <= current_date <= fy.year_end_date]
+
+	is_company = False
+	if len(matching_fy_list) > 0:
+		for fy in matching_fy_list:
+			fiscal_year = frappe.get_doc("Fiscal Year", fy["name"])
+			for years in fiscal_year.companies:
+				if years.company == company:
+					is_company = True
+					break
+			if is_company:
+				break
+
+		if not is_company:
+			fiscal_year = frappe.get_doc("Fiscal Year", matching_fy_list[0]["name"])
+			fiscal_year.append("companies", {"company": company})
+			fiscal_year.save()
+
+	else:
+		# No fiscal year includes current date — create a new one
+		current_year = current_date.year
+		first_date = date(current_year, 1, 1)
+		last_date = date(current_year, 12, 31)
+
+		fiscal_year = frappe.new_doc("Fiscal Year")
+		fiscal_year.year = f"{current_year}-{company}"
+		fiscal_year.year_start_date = first_date
+		fiscal_year.year_end_date = last_date
+		fiscal_year.company = company  # Required to avoid overlap error
+		fiscal_year.append("companies", {"company": company})
+		fiscal_year.save()
