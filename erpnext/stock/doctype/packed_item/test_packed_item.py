@@ -115,7 +115,7 @@ class TestPackedItem(FrappeTestCase):
 		amended_dn.insert()
 	
 	# codecov
-	def test_on_doctype_update(self):
+	def test_on_doctype_update_TC_SCK_416(self):
 		from erpnext.stock.doctype.packed_item.packed_item import on_doctype_update
 		from erpnext.stock.doctype.packed_item.packed_item import get_items_from_product_bundle
 		from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_customer

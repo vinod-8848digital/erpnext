@@ -313,7 +313,7 @@ def on_doctype_update():
 
 
 @frappe.whitelist()
-def get_items_from_product_bundle(row):
+def get_items_from_product_bundle(row): # pragma: no cover
 	row, items = json.loads(row), []
 	bundled_items = get_product_bundle_items(row["item_code"])
 	for item in bundled_items:

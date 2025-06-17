@@ -45,8 +45,11 @@ class TestPutawayRule(FrappeTestCase):
 		item = "Test Item Putway"
 		warehouse="_Test Warehouse - _TC"
 		from erpnext.accounts.doctype.payment_entry.test_payment_entry import make_test_item
+		from erpnext.accounts.doctype.account.test_account import make_company
 		from erpnext.stock.doctype.item.test_item import make_item
 		item = make_item(item)
+		make_company(company)
+
 
 		if not frappe.db.exists("Warehouse", "_Test Warehouse - _TC"):
 			warehouse = frappe.get_doc({
