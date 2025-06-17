@@ -294,6 +294,96 @@ class TestAccountingDimension(unittest.TestCase):
 				self.assertEqual(val_source, 0)
 				self.assertEqual(val_target, 0)
 
+	def test_get_dimension_with_children_TC_ACC_203(self):
+		from erpnext.accounts.doctype.accounting_dimension.accounting_dimension import (
+			get_dimension_with_children,
+		)
+
+		frappe.flags.in_test = True
+		root_cost_center = frappe.get_value("Company", "_Test Company", "name")
+
+		# Create parent Cost Center
+		if not frappe.db.exists("Cost Center", "_Test Cost Center1 - _TC"):
+			frappe.get_doc(
+				{
+					"doctype": "Cost Center",
+					"cost_center_name": "_Test Cost Center1",
+					"company": "_Test Company",
+					"parent_cost_center": f"{root_cost_center} - _TC",
+					"is_group": 1,
+				}
+			).insert()
+
+		# Create child 1
+		if not frappe.db.exists("Cost Center", "_Test Child 1 - _TC"):
+			frappe.get_doc(
+				{
+					"doctype": "Cost Center",
+					"cost_center_name": "_Test Child 1",
+					"company": "_Test Company",
+					"parent_cost_center": "_Test Cost Center1 - _TC",
+					"is_group": 0,
+				}
+			).insert()
+
+		# Create child 2
+		if not frappe.db.exists("Cost Center", "_Test Child 2 - _TC"):
+			frappe.get_doc(
+				{
+					"doctype": "Cost Center",
+					"cost_center_name": "_Test Child 2",
+					"company": "_Test Company",
+					"parent_cost_center": "_Test Cost Center1 - _TC",
+					"is_group": 0,
+				}
+			).insert()
+
+		# Now test on the correct parent!
+		children = get_dimension_with_children("Cost Center", "_Test Cost Center1 - _TC")
+
+		# Correct assertions
+		self.assertIn("_Test Cost Center1 - _TC", children)
+		self.assertIn("_Test Child 1 - _TC", children)
+		self.assertIn("_Test Child 2 - _TC", children)
+
+		frappe.flags.in_test = False
+
+	def test_create_accounting_dimensions_for_doctype_TC_ACC_204(self):
+		from erpnext.accounts.doctype.accounting_dimension.accounting_dimension import (
+			create_accounting_dimensions_for_doctype,
+		)
+
+		frappe.flags.in_test = True
+
+		# Prepare test Accounting Dimension
+		self.test_doc, _ = prepare_test_dimension_and_fields()
+
+		# Delete any existing Custom Field for this dimension in MyTestDocType
+		frappe.db.sql(
+			"DELETE FROM `tabCustom Field` WHERE dt = %s AND fieldname = %s",
+			("MyTestDocType", "test_dimension"),
+		)
+
+		# Run create_accounting_dimensions_for_doctype
+		create_accounting_dimensions_for_doctype("MyTestDocType")
+
+		# Verify Custom Field was created
+		field_exists = frappe.db.exists(
+			"Custom Field", {"dt": "MyTestDocType", "fieldname": "test_dimension"}
+		)
+		self.assertTrue(field_exists)
+
+		# Verify properties
+		field = frappe.get_doc("Custom Field", {"dt": "MyTestDocType", "fieldname": "test_dimension"})
+		self.assertEqual(field.fieldtype, "Link")
+		self.assertEqual(field.options, "MyTestDocType")
+		self.assertEqual(field.insert_after, "accounting_dimensions_section")
+
+		# Clean up
+		frappe.db.sql("DELETE FROM `tabAccounting Dimension` WHERE fieldname = 'test_dimension'")
+		frappe.db.sql("DELETE FROM `tabCustom Field` WHERE fieldname = 'test_dimension'")
+		frappe.flags.in_test = False
+
 
 def prepare_test_dimension_and_fields(include_property_setter=False):
 	from erpnext.accounts.doctype.accounting_dimension.accounting_dimension import (
