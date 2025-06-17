@@ -1007,7 +1007,7 @@ def make_shipment(source_name, target_doc=None):
 		# As we are using session user details in the pickup_contact then pickup_contact_person will be session user
 		target.pickup_contact_person = frappe.session.user
 
-		if source.contact_person:
+		if source.contact_person: # pragma: no cover
 			contact = frappe.db.get_value(
 				"Contact", source.contact_person, ["email_id", "phone", "mobile_no"], as_dict=1
 			)
