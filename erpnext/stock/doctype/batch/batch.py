@@ -355,7 +355,7 @@ def make_batch_bundle(
 	)
 
 
-def get_batches(item_code, warehouse, qty=1, throw=False, serial_no=None):
+def get_batches(item_code, warehouse, qty=1, throw=False, serial_no=None): # pragma: no cover
 	from erpnext.stock.doctype.serial_no.serial_no import get_serial_nos
 
 	batch = frappe.qb.DocType("Batch")

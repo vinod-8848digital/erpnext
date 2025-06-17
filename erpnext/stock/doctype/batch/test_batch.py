@@ -40,7 +40,8 @@ class TestBatch(FrappeTestCase):
 
 		if not frappe.db.exists(item_name):
 			return make_item(item_name, dict(has_batch_no=1, create_new_batch=1, is_stock_item=1))
-
+	def tearDown(self):
+		frappe.db.rollback()
 	# codecov
 	def test_get_batches_by_oldest_TC_SCK_293(self):
 		from erpnext.stock.doctype.batch.batch import get_batches_by_oldest
@@ -256,6 +257,7 @@ class TestBatch(FrappeTestCase):
 		result_batch = get_batch_no(bundle_id=serial_batch_bundle.name)
 		assert serial_batch_bundle.docstatus == 1, "Serial and Batch Bundle should be submitted"
 
+	
 
 	def test_purchase_receipt(self, batch_qty=100):
 		"""Test automated batch creation from Purchase Receipt"""

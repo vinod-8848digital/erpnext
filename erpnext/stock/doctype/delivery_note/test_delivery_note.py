@@ -711,6 +711,118 @@ class TestDeliveryNote(FrappeTestCase):
 
 		self.assertFalse(get_gl_entries("Delivery Note", dn.name))
 
+	# codecov
+	def test_set_serial_and_batch_bundle_from_pick_list_TC_SCK_450(self):
+		from erpnext.stock.doctype.delivery_note.delivery_note import update_delivery_note_status
+		company = "_Test Company"
+		warehouse = "_Test Warehouse 1 - _TC"
+		customer = "_Test Customer"
+		if not frappe.db.exists("Customer", customer):
+			create_customer(customer,currency="INR")
+
+
+		# Create or fetch the customer and company objects
+		company = "_Test Company"
+		if not frappe.db.exists("Company", company):
+			create_child_company()
+
+		# Create the item ITEM-001 before using it in the Delivery Note
+		item_code = "_Test Item1"
+		if not frappe.db.exists("Item", item_code):
+			item_create = make_test_item(item_code)
+			item_create.is_stock_item = 1
+			item_create.is_fixed_asset = 0
+			item_create.has_serial_no = 1
+			item_create.has_batch_no = 1
+			item_create.save()
+
+		so = make_sales_order(
+			item_code=item_code, warehouse=warehouse, qty=5, rate=1000
+		)
+		pick_list = frappe.get_doc(
+			{
+				"doctype": "Pick List",
+				"company": company,
+				"customer": "_Test Customer",
+				"items_based_on": "Sales Order",
+				"purpose": "Delivery",
+				"locations": [
+					{
+						"item_code": item_code,
+						"qty": 1000,
+						"stock_qty": 1000,
+						"conversion_factor": 1,
+						"sales_order": so.name,
+						"sales_order_item": so.items[0].name,
+					}
+				],
+			}
+		)
+
+		pick_list.insert()
+		pick_list.submit()
+		serial_no = "MDC0001"
+		batch = "Batch_0001"
+		if not frappe.db.exists("Serial No", "MDC0001"):
+			serial_no = frappe.get_doc({
+				"doctype": "Serial No",
+				"serial_no": "MDC0001",
+				"item_code": item_code,
+				"company": company,
+				"item_group": "Raw Material"
+			}).insert(ignore_permissions=True)
+		
+
+
+
+		# Create batch
+		if not frappe.db.exists("Batch", "Batch_0001"):
+			batch = frappe.get_doc({
+				"doctype": "Batch",
+				"batch_id": "Batch_0001",
+				"stock_uom": "Nos",
+				"item": item_code,
+				"manufacturing_date": frappe.utils.now(),
+			}).insert(ignore_permissions=True)
+		
+		serial_batch_bundle = frappe.get_doc({
+			"doctype": "Serial and Batch Bundle",
+			"naming_series": "SABB-.########",
+			"item_code": item_code,
+			"warehouse": warehouse,
+			"company": company,
+			"type_of_transaction": "Inward",
+			"has_serial_no": 1,
+			"has_batch_no": 1,
+			"entries": [{
+				"serial_no": serial_no,
+				"batch_no": batch.name,
+				"qty": 1,
+				"warehouse": warehouse
+			}],
+			"voucher_type": "Pick List",
+			"voucher_no": pick_list.name,
+			"posting_date": frappe.utils.now(),
+		}).insert(ignore_permissions=True)
+		serial_batch_bundle.submit()
+		so = make_sales_order(po_no="12345")
+		dn  = make_delivery_note(so.name)
+		dn.customer = customer
+		dn.company = company
+		dn.currency = "INR"
+		dn.pick_list=pick_list.name
+		dn.items[0].item_code = item_code
+		dn.items[0].pick_list_item = pick_list.name
+		dn.items[0].allow_zero_valuation_rate =1
+		dn.items[0].against_sales_order = so.name
+		dn.items[0].use_serial_batch_fields=0
+		dn.items[0].so_detail = so.items[0].name
+		dn.items[0].warehouse = warehouse
+		dn.items[0].qty =1
+		msg = "Incorrect value in row 1:Item Code must be equal to '_Test Item'"
+		with self.assertRaises(frappe.ValidationError, msg=msg):
+			dn.save()
+
 	def test_delivery_note_gl_entry_packing_item(self):
 		frappe.db.get_value("Warehouse", "Stores - TCP1", "company")
 
