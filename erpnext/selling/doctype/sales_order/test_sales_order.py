@@ -7913,8 +7913,7 @@ class TestSalesOrder(AccountsTestMixin, FrappeTestCase):
 			address.insert(ignore_permissions=True)
 
 		so = make_sales_order(item_list=so_items, do_not_submit=True)
-		if address:
-			so.shipping_address_name = address.name
+		so.shipping_address_name = "_Test Address so-Billing-1"
 		so.submit()
 
 		po1 = make_purchase_order_for_default_supplier(so.name)
