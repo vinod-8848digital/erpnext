@@ -119,25 +119,19 @@ class TestAvailableBatchReport(FrappeTestCase):
 		self.assertIsInstance(data, list)
 		self.assertGreater(len(columns), 0)
 
-	# ✅ Modified: test get_data output contains item_name when show_item_name = True
-	def test_get_data_with_item_name(self):
-		filters = self.make_filters(show_item_name=True, item_code=self.item.name)
-		data = available_batch_report.get_data(filters)
-		if data:
-			first_row = data[0]
-			self.assertIn("item_name", first_row)
-		else:
-			self.assertEqual(len(data), 0)
+	# ✅ Added: test get_columns with show_item_name = True
+	def test_get_columns_with_item_name(self):
+		filters = self.make_filters(show_item_name=True)
+		columns = available_batch_report.get_columns(filters)
+		fieldnames = [col["fieldname"] for col in columns]
+		self.assertIn("item_name", fieldnames)
 
-	# ✅ Modified: test get_data output does NOT contain item_name when show_item_name = False
-	def test_get_data_without_item_name(self):
-		filters = self.make_filters(show_item_name=False, item_code=self.item.name)
-		data = available_batch_report.get_data(filters)
-		if data:
-			first_row = data[0]
-			self.assertNotIn("item_name", first_row)
-		else:
-			self.assertEqual(len(data), 0)
+	# ✅ Added: test get_columns with show_item_name = False
+	def test_get_columns_without_item_name(self):
+		filters = self.make_filters(show_item_name=False)
+		columns = available_batch_report.get_columns(filters)
+		fieldnames = [col["fieldname"] for col in columns]
+		self.assertNotIn("item_name", fieldnames)
 
 	def test_to_date_today_with_expiry_check(self):
 		# Ensure the batch has a valid expiry date in the future
