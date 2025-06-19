@@ -5,6 +5,7 @@ from frappe.tests.utils import FrappeTestCase
 from frappe.utils import today
 from erpnext.stock.doctype.stock_entry.test_stock_entry import get_or_create_fiscal_year
 from erpnext.stock.report.available_batch_report import available_batch_report
+from erpnext.stock.doctype.warehouse.test_warehouse import create_warehouse
 
 
 class TestAvailableBatchReport(FrappeTestCase):
@@ -12,12 +13,7 @@ class TestAvailableBatchReport(FrappeTestCase):
 		self.company = create_company("_Test Company")
 		get_or_create_fiscal_year("_Test Company")
 
-		if not frappe.db.exists("Warehouse", "Stores - _TC"):
-			self.warehouse = frappe.get_doc(
-				{"doctype": "Warehouse", "warehouse_name": "Stores - W1", "company": "_Test Company"}
-			).insert()
-		else:
-			self.warehouse = frappe.get_doc("Warehouse", "Stores - _TC")
+		self.warehouse = create_warehouse("Stores - _TC")
 
 		self.item = create_item("TEST-ITEM-100")
 		self.batch = create_batch("BATCH-001", self.item, self.warehouse)
@@ -68,7 +64,7 @@ class TestAvailableBatchReport(FrappeTestCase):
 		self.assertEqual(len(data), 0)
 
 	def test_get_batchwise_data_warehouse(self):
-		filters = self.make_filters(warehouse=self.warehouse.name)
+		filters = self.make_filters(warehouse=self.warehouse)
 		data = available_batch_report.get_data(filters)
 		self.assertEqual(len(data), 0)
 
@@ -95,7 +91,7 @@ class TestAvailableBatchReport(FrappeTestCase):
 	def test_get_batchwise_data_multiple_filters(self):
 		filters = self.make_filters(
 			item_code=self.item.name,
-			warehouse=self.warehouse.name,
+			warehouse=self.warehouse,
 			batch_no=self.batch.name,
 			expiry_date="2025-12-31",
 			show_item_name=True,
@@ -109,7 +105,7 @@ class TestAvailableBatchReport(FrappeTestCase):
 	def test_execute_function(self):
 		filters = self.make_filters(
 			item_code=self.item.name,
-			warehouse=self.warehouse.name,
+			warehouse=self.warehouse,
 			batch_no=self.batch.name,
 			show_item_name=True,
 			to_date="2025-12-31",
@@ -161,11 +157,13 @@ class TestAvailableBatchReport(FrappeTestCase):
 
 	def test_filter_by_warehouse_type(self):
 		# Add warehouse_type and filter by it
-		if not frappe.db.exists("Warehouse Type", "Raw Material"):
-			frappe.get_doc(
+		# if not frappe.db.exists("Warehouse Type", "Raw Material"):
+		frappe.get_doc(
 				{"doctype": "Warehouse Type", "name": "Raw Material", "warehouse_type": "Raw Material"}
 			).insert()
 		warehouse_type = "Raw Material"
+		self.warehouse = frappe.get_doc('Warehouse', self.warehouse)
+		print("warehouse",self.warehouse)
 		self.warehouse.warehouse_type = warehouse_type
 		self.warehouse.is_group = 0
 		self.warehouse.save()
