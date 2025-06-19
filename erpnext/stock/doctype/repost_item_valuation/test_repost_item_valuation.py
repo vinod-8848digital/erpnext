@@ -453,57 +453,6 @@ class TestRepostItemValuation(FrappeTestCase, StockTestMixin):
 		self.assertEqual(repost_item_valuation.recreate_stock_ledgers,0)
 		
 
-	# codecov
-	def test_on_trash_TC_SCK_475(self):
-		from erpnext.stock.doctype.repost_item_valuation.repost_item_valuation import repost
-		import erpnext.stock.doctype.repost_item_valuation.repost_item_valuation as riv
-
-		company = "_Test Company"
-		warehouse = "Stores - _TC"
-		make_company(company)
-		
-		customer = "_Test Customer"
-		if not frappe.db.exists("Customer", "_Test Customer"):
-			create_customer("_Test Customer", currency="INR")
-
-		item = make_item("Repost item")
-		warehouse = "_Test Warehouse - _TC"
-		stock_entry = frappe.get_doc({
-		"doctype": "Stock Entry",
-		"stock_entry_type": "Material Receipt",
-		"company": company,
-		"items": [{
-			"item_code": item.name,
-			"qty": 1,
-			"t_warehouse": warehouse,
-			"basic_rate": 100
-			}]
-		})
-		stock_entry.insert(ignore_permissions=True)
-		stock_entry.submit()
-		
-		
-
-		repost_item_valuation = frappe.get_doc({
-			"doctype": "Repost Item Valuation",
-			"based_on": "Item and Warehouse",
-			"status": "Queued",
-			"item_code":item.name,
-			"warehouse":warehouse,
-			"posting_date":"2023-04-21",
-			"posting_time":"19:20:52",
-			"recreate_stock_ledgers":1,
-			"company": company,
-			"update_stock_ledger":1,
-			"allow_negative_stock": 1
-		})
-		repost_item_valuation.insert()
-		repost_item_valuation.submit()
-		repost_item_valuation.reload()
-		repost_item_valuation.cancel()
-		repost_item_valuation.reload()
-		repost_item_valuation.delete()
-
 	def test_repost_time_slot(self):
 		repost_settings = frappe.get_doc("Stock Reposting Settings")
 

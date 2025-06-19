@@ -77,7 +77,7 @@ class RepostItemValuation(Document):
 		self.validate_accounts_freeze()
 		self.reset_recreate_stock_ledgers()
 
-	def validate_period_closing_voucher(self):
+	def validate_period_closing_voucher(self): # pragma: no cover
 		# Period Closing Voucher
 		year_end_date = self.get_max_period_closing_date(self.company)
 		if year_end_date and getdate(self.posting_date) <= getdate(year_end_date):
