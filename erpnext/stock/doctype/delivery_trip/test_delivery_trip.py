@@ -207,7 +207,7 @@ def create_address(driver):
 				"address_type": "Office",
 				"address_line1": "Station Road",
 				"city": "_Test City",
-				"state": "Test State",
+				"state": "Maharashtra",
 				"country": "India",
 				"links": [{"link_doctype": "Driver", "link_name": driver.name}],
 			}
