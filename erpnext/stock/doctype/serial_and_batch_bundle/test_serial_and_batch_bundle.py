@@ -581,28 +581,28 @@ class TestSerialandBatchBundle(FrappeTestCase):
 		item.has_serial_no=1		
 		item.save()
 
-		if not frappe.db.exists("Batch", "Batch_01011"):
+		if not frappe.db.exists("Batch", "Batch_01013"):
 			batch = frappe.get_doc({
 				"doctype": "Batch",
-				"batch_id": "Batch_01011",
+				"batch_id": "Batch_01013",
 				"stock_uom": "Nos",
 				"item": item.name,
 				"manufacturing_date": frappe.utils.now(),
 			}).insert(ignore_permissions=True)
 		else:
-			batch = frappe.get_doc("Batch", "Batch_01011")
+			batch = frappe.get_doc("Batch", "Batch_01013")
 
-		if not frappe.db.exists("Serial No", "MDC01011"):
+		if not frappe.db.exists("Serial No", "MDC01013"):
 			serial_no = frappe.get_doc({
 				"doctype": "Serial No",
-				"serial_no": "MDC01011",
+				"serial_no": "MDC01013",
 				"batch_no": batch.name,
 				"item_code": item.name,
 				"company": company,
 				"item_group": "Raw Material"
 			}).insert(ignore_permissions=True)
 		else:
-			serial_no = frappe.get_doc("Serial No", "MDC01011")
+			serial_no = frappe.get_doc("Serial No", "MDC01013")
 
 		
 
@@ -616,7 +616,7 @@ class TestSerialandBatchBundle(FrappeTestCase):
 					"qty": 1,
 					"s_warehouse": None,
 					"t_warehouse": warehouse,
-					"serial_no": "MDC01011",
+					"serial_no": "MDC01013",
 					"batch_no": batch.name
 				}]
 			})
@@ -677,7 +677,7 @@ class TestSerialandBatchBundle(FrappeTestCase):
 			"posting_time": frappe.utils.now()
 		}
 		get_serial_and_batch_ledger=get_serial_and_batch_ledger(**args)
-		excepted=[{'serial_no': 'MDC01011', 'warehouse': 'Stores - _TIRC', 'batch_no': 'Batch_01011', 'qty': 1.0, 'incoming_rate': 0.0}]
+		excepted=[{'serial_no': 'MDC01013', 'warehouse': 'Stores - _TIRC', 'batch_no': 'Batch_01013', 'qty': 1.0, 'incoming_rate': 0.0}]
 		self.assertEqual(get_serial_and_batch_ledger,excepted)
 
 	# codecov
