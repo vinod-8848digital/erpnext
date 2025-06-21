@@ -666,8 +666,8 @@ class TestSerialandBatchBundle(FrappeTestCase):
 		}).insert(ignore_permissions=True)
 
 		args = {
-			"item_code": sle.item_code,
-			"warehouse": sle.warehouse,
+			"item_code": item.item_code,
+			"warehouse": warehouse,
 			"serial_nos":[serial_no.name],
 			"batch_nos": [batch.name],
 			"fetch_incoming_rate": 10,
