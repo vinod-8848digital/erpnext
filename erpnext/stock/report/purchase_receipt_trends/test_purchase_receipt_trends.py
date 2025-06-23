@@ -2,6 +2,7 @@ import frappe
 from frappe.tests.utils import FrappeTestCase
 from frappe.utils import getdate
 
+from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_company
 from erpnext.stock.doctype.item.test_item import create_item
 from erpnext.stock.doctype.purchase_receipt.test_purchase_receipt import (
 	make_purchase_receipt,
@@ -16,6 +17,7 @@ from erpnext.stock.report.purchase_receipt_trends.purchase_receipt_trends import
 class TestPurchaseReceiptTrendsReport(FrappeTestCase):
 	def setUp(self):
 		frappe.set_user("Administrator")
+		create_company()
 		self.company = frappe.get_doc("Company", "_Test Company")
 
 		# Fetch dynamic accounts
@@ -92,19 +94,7 @@ class TestPurchaseReceiptTrendsReport(FrappeTestCase):
 		)
 
 	def tearDown(self):
-		for pr in self.purchase_receipts:
-			if frappe.db.exists("Purchase Receipt", pr.name):
-				doc = frappe.get_doc("Purchase Receipt", pr.name)
-				if doc.docstatus == 1:
-					doc.cancel()
-
-		for supplier in self.supplier_names:
-			if frappe.db.exists("Supplier", supplier):
-				supplier = frappe.get_doc("Supplier", supplier)
-				supplier.disabled = 1
-
-		if frappe.db.exists("Fiscal Year", "2099-2100"):
-			frappe.delete_doc("Fiscal Year", "2099-2100", force=True)
+		frappe.db.rollback()
 
 	def test_execute_with_valid_filters_T_PRT_001(self):
 		cols, data, none_val, chart = execute(self.default_filters)
