@@ -1604,6 +1604,7 @@ def create_item(
 	buying_cost_center=None,
 	selling_cost_center=None,
 	company="_Test Company",
+	has_batch_no = 0,
 ):
 	if not frappe.db.exists("Item", item_code):
 		item = frappe.new_doc("Item")
@@ -1620,6 +1621,7 @@ def create_item(
 		item.is_purchase_item = is_purchase_item
 		item.is_customer_provided_item = is_customer_provided_item
 		item.customer = customer or ""
+		item.has_batch_no = has_batch_no
 		item.append(
 			"item_defaults",
 			{
