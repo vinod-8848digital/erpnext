@@ -30,12 +30,14 @@ class TestDelayedOrderReport(FrappeTestCase):
             valuation_rate=100,
             warehouse=self.warehouse,
             company=self.company,
+            has_batch_no = 1,
         )
 
         self.batch = frappe.new_doc("Batch")
         self.batch.item = self.item_code
         self.batch.batch_qty = 2
         self.batch.expiry_date = date(2030, 1, 1)
+        self.batch.batch_id = "TEST-BATCH-001"
         self.batch.insert()
 
         # Create price list (avoid currency errors)
