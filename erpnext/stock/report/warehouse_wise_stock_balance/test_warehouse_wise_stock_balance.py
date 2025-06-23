@@ -9,19 +9,6 @@ from erpnext.stock.doctype.stock_entry.test_stock_entry import make_stock_entry
 from erpnext.stock.report.warehouse_wise_stock_balance import warehouse_wise_stock_balance
 
 
-def create_warehouse(name, is_group=False, parent_warehouse=None, disabled=0):
-	return frappe.get_doc(
-		{
-			"doctype": "Warehouse",
-			"warehouse_name": name,
-			"is_group": is_group,
-			"parent_warehouse": parent_warehouse,
-			"disabled": disabled,
-			"company": "_Test Company",
-		}
-	).insert()
-
-
 class TestWarehouseStockBalanceReport(FrappeTestCase):
 	def setUp(self):
 		frappe.set_user("Administrator")
@@ -91,3 +78,16 @@ class TestWarehouseStockBalanceReport(FrappeTestCase):
 
 		indent_map = {d.name: d.get("indent", 0) for d in data}
 		self.assertGreater(indent_map[self.child_wh1.name], indent_map[self.parent_wh.name])
+
+
+def create_warehouse(name, is_group=False, parent_warehouse=None, disabled=0):
+	return frappe.get_doc(
+		{
+			"doctype": "Warehouse",
+			"warehouse_name": name,
+			"is_group": is_group,
+			"parent_warehouse": parent_warehouse,
+			"disabled": disabled,
+			"company": "_Test Company",
+		}
+	).insert()
