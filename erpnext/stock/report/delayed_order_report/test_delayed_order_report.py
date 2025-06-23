@@ -9,6 +9,7 @@ from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_com
 from erpnext.stock.doctype.item.test_item import create_item
 from erpnext.stock.doctype.warehouse.test_warehouse import create_warehouse
 from erpnext.accounts.doctype.sales_invoice.test_sales_invoice import create_territory
+from datetime import date
 
 class TestDelayedOrderReport(FrappeTestCase):
 
@@ -29,7 +30,15 @@ class TestDelayedOrderReport(FrappeTestCase):
             valuation_rate=100,
             warehouse=self.warehouse,
             company=self.company,
+            has_batch_no = 1,
         )
+
+        self.batch = frappe.new_doc("Batch")
+        self.batch.item = self.item_code
+        self.batch.batch_qty = 2
+        self.batch.expiry_date = date(2030, 1, 1)
+        self.batch.batch_id = "TEST-BATCH-001"
+        self.batch.insert()
 
         # Create price list (avoid currency errors)
         if not frappe.db.exists("Price List", "Test Selling"):
@@ -86,6 +95,7 @@ class TestDelayedOrderReport(FrappeTestCase):
                 "item_code": self.item_code,
                 "qty": 1,
                 "rate": 100,
+                "batch_no": "TEST-BATCH-001",
             }],
             "po_no": "PO-001"
         }).insert()
@@ -104,10 +114,28 @@ class TestDelayedOrderReport(FrappeTestCase):
                 "item_code": self.item_code,
                 "qty": 1,
                 "rate": 200,
+                "batch_no": "TEST-BATCH-001",
             }],
             "po_no": "PO-002"
         }).insert()
         self.so2.submit()
+
+
+        stock_entry = frappe.get_doc({
+            "doctype": "Stock Entry",
+            "stock_entry_type": "Material Receipt",
+            "company": self.company,
+            "to_warehouse": self.warehouse,
+            "items": [{
+                "item_code": self.item_code,
+                "qty": 2,
+                "rate": 100,
+                "t_warehouse": self.warehouse,
+                "batch_no": self.batch.name
+            }]
+        })
+        stock_entry.insert()
+        stock_entry.submit()
 
         from erpnext.selling.doctype.sales_order.sales_order import make_sales_invoice
 
@@ -115,7 +143,10 @@ class TestDelayedOrderReport(FrappeTestCase):
         self.si1 = make_sales_invoice(self.so1.name)
         self.si1.posting_date = nowdate()
         self.si1.currency = "INR"
+        self.si1.update_stock = 1
         self.si1.set_posting_time = 1
+        for item in self.si1.items:
+            item.batch_no = self.batch.name
         self.si1.insert()
         self.si1.submit()
 
@@ -123,15 +154,30 @@ class TestDelayedOrderReport(FrappeTestCase):
         self.si2 = make_sales_invoice(self.so2.name)
         self.si2.posting_date = nowdate()
         self.si2.currency = "INR"
+        self.si2.update_stock = 1
         self.si2.set_posting_time = 1
+        for item in self.si2.items:
+            item.batch_no = self.batch.name
         self.si2.insert()
         self.si2.submit()
+        # frappe.db.commit()
 
+
+        sales_invoice_list = frappe.db.get_list('Sales Invoice', {'posting_date': nowdate(), "company": self.company}, ['name'])
+        print("sales_invoice_list",sales_invoice_list)
 
     def test_get_data_returns_unique_sales_orders(self):
-        report = DelayedOrderReport(self.filters)
-        data = report.get_data(consolidated=True)
-        print("data",data)
+        # print("sales invocie_1",self.si1.items["item_code"])
+
+        
+
+        filters = {
+            "based_on": "Sales Invoice",
+            "from_date": add_days(nowdate(), -30),
+            "to_date": add_days(nowdate(), +30),
+            "company": self.company
+        }
+        columns, data = execute(filters)
 
         # Ensure at least one entry exists
         self.assertTrue(len(data) >= 1)
