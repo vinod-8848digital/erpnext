@@ -1677,7 +1677,7 @@ class TestStockReconciliation(FrappeTestCase, StockTestMixin):
 		
 
 
-	def test_has_change_in_serial_batch_detects_difference(self):
+	def test_has_change_in_serial_batch_detects_difference_TC_SCK_486(self):
 		from erpnext.stock.doctype.stock_entry.test_stock_entry import make_stock_entry
 
 		frappe.set_user("Administrator")		
@@ -1759,7 +1759,7 @@ class TestStockReconciliation(FrappeTestCase, StockTestMixin):
 		self.assertFalse(frappe.db.exists("Serial and Batch Bundle", bundle_2.name))
 
 
-	def test_set_new_serial_and_batch_bundle_logic(self):
+	def test_set_new_serial_and_batch_bundle_logic_TC_SCK_487(self):
 		from erpnext.stock.doctype.stock_entry.test_stock_entry import make_stock_entry
 	
 		frappe.set_user("Administrator")
@@ -1863,7 +1863,7 @@ class TestStockReconciliation(FrappeTestCase, StockTestMixin):
 		self.assertEqual(item2.valuation_rate, expected_rate)
 
 
-	def test_make_adjustment_entry_creates_sle_on_difference(self):
+	def test_make_adjustment_entry_creates_sle_on_difference_TC_SCK_488(self):
 
 		# Mock method to simulate stock difference
 		def mock_get_stock_value_difference(item_code, warehouse, posting_date, posting_time, name):
@@ -1906,7 +1906,7 @@ class TestStockReconciliation(FrappeTestCase, StockTestMixin):
 		self.assertEqual(sle["is_adjustment_entry"], 1)
 
 
-	def test_make_adjustment_entry_skips_on_zero_difference(self):
+	def test_make_adjustment_entry_skips_on_zero_difference_TC_SCK_489(self):
 
 		# Patch to return zero difference
 		import erpnext.stock.stock_ledger
@@ -1930,7 +1930,7 @@ class TestStockReconciliation(FrappeTestCase, StockTestMixin):
 		self.assertEqual(sl_entries, [])  # should stay empty
 
 
-	def test_update_valuation_rate_for_serial_no_applies_to_all_serials(self):
+	def test_update_valuation_rate_for_serial_no_applies_to_all_serials_TC_SCK_490(self):
 		from erpnext.stock.doctype.stock_entry.test_stock_entry import make_stock_entry
 
 		frappe.set_user("Administrator")
@@ -1991,7 +1991,7 @@ class TestStockReconciliation(FrappeTestCase, StockTestMixin):
 			rate = frappe.db.get_value("Serial No", sn, "purchase_rate")
 			self.assertEqual(rate, 500)
 
-	def test_update_valuation_rate_for_serial_nos_respects_docstatus_and_rate(self):
+	def test_update_valuation_rate_for_serial_nos_respects_docstatus_and_rate_TC_SCK_491(self):
 		from erpnext.stock.doctype.stock_entry.test_stock_entry import make_stock_entry
 
 		frappe.set_user("Administrator")
@@ -2057,7 +2057,7 @@ class TestStockReconciliation(FrappeTestCase, StockTestMixin):
 		doc.update_valuation_rate_for_serial_nos(row_none, [serial_no])
 		# No assertion needed — this should simply not throw or update anything
 
-	def test_merge_similar_item_serial_nos_merges_correctly(self):
+	def test_merge_similar_item_serial_nos_merges_correctly_TC_SCK_492(self):
 
 		doc = frappe.new_doc("Stock Reconciliation")
 
@@ -2117,7 +2117,7 @@ class TestStockReconciliation(FrappeTestCase, StockTestMixin):
 		self.assertAlmostEqual(merged.incoming_rate, expected_valuation_rate)
 
 
-	def test_get_items_for_populates_items_based_on_warehouse(self):
+	def test_get_items_for_populates_items_based_on_warehouse_TC_SCK_493(self):
 		from erpnext.stock.doctype.stock_entry.test_stock_entry import make_stock_entry
 
 		frappe.set_user("Administrator")
@@ -2162,7 +2162,7 @@ class TestStockReconciliation(FrappeTestCase, StockTestMixin):
 		self.assertEqual(item_row.item_code, item_code)
 		self.assertEqual(item_row.warehouse, warehouse)
 
-	def test_submit_behavior_based_on_item_count(self):
+	def test_submit_behavior_based_on_item_count_TC_SCK_494(self):
 
 		frappe.set_user("Administrator")
 
@@ -2200,7 +2200,7 @@ class TestStockReconciliation(FrappeTestCase, StockTestMixin):
 		self.assertTrue(getattr(doc2, "__queued__", False))  # Confirm queue was triggered
 
 	@change_settings("Stock Settings", {"enable_stock_reservation":0,"allow_negative_stock": 1,})
-	def test_has_negative_stock_allowed_behavior(self):
+	def test_has_negative_stock_allowed_behavior_TC_SCK_495(self):
 
 		frappe.set_user("Administrator")
 
@@ -2235,7 +2235,7 @@ class TestStockReconciliation(FrappeTestCase, StockTestMixin):
 		self.assertFalse(doc.has_negative_stock_allowed())
 
 
-	def test_get_item_and_warehouses_returns_correct_structure(self):
+	def test_get_item_and_warehouses_returns_correct_structure_TC_SCK_496(self):
 		from erpnext.stock.doctype.stock_reconciliation.stock_reconciliation import get_item_and_warehouses
 		from frappe.utils.nestedset import get_descendants_of
 
@@ -2274,7 +2274,7 @@ class TestStockReconciliation(FrappeTestCase, StockTestMixin):
 		self.assertEqual(result_leaf[0].warehouse, leaf_wh)
 		self.assertEqual(result_leaf[0].item_code, "_Test Item W1")
 
-	def test_get_difference_account_returns_correct_account(self):
+	def test_get_difference_account_returns_correct_account_TC_SCK_497(self):
 		from erpnext.stock.doctype.stock_reconciliation.stock_reconciliation import get_difference_account
 		from erpnext.accounts.doctype.account.test_account import create_account
 	
