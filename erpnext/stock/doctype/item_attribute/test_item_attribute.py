@@ -50,6 +50,7 @@ class TestItemAttribute(FrappeTestCase):
 					"has_variants": 1,
 					"variant_based_on": "Item Attribute",
 					"gst_hsn_code": "01011010",
+					"item_group": "All Item Groups",
 					"attributes": [{"attribute": attribute.name}],
 				}
 			).insert()
@@ -63,6 +64,7 @@ class TestItemAttribute(FrappeTestCase):
 					"item_name": "Test Variant Item",
 					"variant_of": template.name,
 					"gst_hsn_code": "01011010",
+					"item_group": "All Item Groups",
 					"attributes": [{"attribute": attribute.name, "attribute_value": "Blue"}],
 				}
 			).insert()
@@ -73,6 +75,42 @@ class TestItemAttribute(FrappeTestCase):
 
 		# If no ValidationError is thrown, the test passes.
 		self.assertTrue(True, "Validation passed for existing item attribute values")
+
+	# codecov
+	def test_duplicate_item_attributes_TC_SCK_404(self):
+		# Create an Item Attribute with abbr values to avoid .lower() error
+		attribute = frappe.get_doc(
+			{
+				"doctype": "Item Attribute",
+				"attribute_name": "Test Attribute",
+				"numeric_values": 0,
+				"item_attribute_values": [
+					{"attribute_value": "Red", "abbr": "R"},
+					{"attribute_value": "Red", "abbr": "R"},
+				],
+			}
+		)
+		msg = "Attribute value: Red must appear only once"
+		with self.assertRaises(frappe.ValidationError, msg=msg):
+			attribute.insert()
+
+	# codecov
+	def test_abbrevation_only_once_TC_SCK_405(self):
+		# Create an Item Attribute with abbr values to avoid .lower() error
+		attribute = frappe.get_doc(
+			{
+				"doctype": "Item Attribute",
+				"attribute_name": "Test Attribute",
+				"numeric_values": 0,
+				"item_attribute_values": [
+					{"attribute_value": "Red", "abbr": "R"},
+					{"attribute_value": "Blue", "abbr": "R"},
+				],
+			}
+		)
+		msg = "Abbreviation: R must appear only once"
+		with self.assertRaises(frappe.ValidationError, msg=msg):
+			attribute.insert()
 
 	def test_numeric_item_attribute(self):
 		item_attribute = frappe.get_doc(
