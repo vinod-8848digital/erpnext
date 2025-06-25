@@ -61,12 +61,9 @@ class TestPackedItem(FrappeTestCase):
 
 		company = "_Test Indian Registered Company"
 		warehouse = "Stores - _TIRC"
-		if not frappe.db.exists("Warehouse", warehouse):
-			warehouse = create_warehouse(warehouse, company=company)
-
+		warehouse = create_warehouse(warehouse, company=company)
 		customer = "_Test Customer"
-		if not frappe.db.exists("Customer", "_Test Customer"):
-			create_customer("_Test Customer", currency="INR")
+		create_customer("_Test Customer", currency="INR")
 		item = "test packed item"
 		item = make_test_item(item)
 		item.item_group = "Products"
@@ -74,15 +71,9 @@ class TestPackedItem(FrappeTestCase):
 		item.is_fixed_asset = 0
 		item.auto_create_assets = 0
 		item.save()
-		assert frappe.db.exists("Item", "Test Item")
 
-		frappe.get_doc(
-			{
-				"doctype": "Product Bundle",
-				"new_item_code": item.item_code,
-				"items": [{"item_code": item.item_code, "qty": 2}],
-			}
-		).insert()
+		assert frappe.db.exists("Item", "test packed item")
+
 		dn = frappe.get_doc(
 			{
 				"doctype": "Delivery Note",
@@ -136,13 +127,20 @@ class TestPackedItem(FrappeTestCase):
 		item.is_fixed_asset = 0
 		item.auto_create_assets = 0
 		item.save()
-		assert frappe.db.exists("Item", "Test Item")
-
+		assert frappe.db.exists("Item", "test packed item")
+		item1 = "test packed item1"
+		item1 = make_test_item(item)
+		item1.item_group = "Products"
+		item1.is_stock_item = 0
+		item1.is_fixed_asset = 0
+		item.has_variants = 0
+		item1.auto_create_assets = 0
+		item1.save()
 		product_bundle = frappe.get_doc(
 			{
 				"doctype": "Product Bundle",
-				"new_item_code": item.item_code,
-				"items": [{"item_code": item.item_code, "qty": 2}],
+				"new_item_code": item1.item_code,
+				"items": [{"item_code": item1.item_code, "qty": 2}],
 			}
 		).insert()
 		dn = frappe.get_doc(
@@ -165,8 +163,9 @@ class TestPackedItem(FrappeTestCase):
 		on_doctype_update()
 		dn.submit()
 		msg = "Please specify Company"
-		with self.assertRaises(frappe.ValidationError, msg=msg):
+		with self.assertRaises(frappe.ValidationError) as e:
 			get_items_from_product_bundle(json.dumps(product_bundle.items[0].as_dict()))
+		self.assertIn(msg, str(e.exception))
 
 	def test_adding_bundle_item(self):
 		"Test impact on packed items if bundle item row is added."
