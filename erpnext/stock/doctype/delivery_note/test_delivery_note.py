@@ -9,7 +9,7 @@ import frappe
 from frappe.tests.utils import FrappeTestCase, if_app_installed
 from frappe.utils import add_days, cstr, flt, getdate, nowdate, nowtime, today
 
-from erpnext.accounts.doctype.account.test_account import get_inventory_account
+from erpnext.accounts.doctype.account.test_account import get_inventory_account, make_company
 from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_customer, make_test_item
 from erpnext.accounts.utils import get_balance_on
 from erpnext.buying.doctype.supplier.test_supplier import create_supplier
@@ -688,13 +688,11 @@ class TestDeliveryNote(FrappeTestCase):
 		company = "_Test Company"
 		warehouse = "_Test Warehouse 1 - _TC"
 		customer = "_Test Customer"
-		if not frappe.db.exists("Customer", customer):
-			create_customer(customer, currency="INR")
+		create_customer(customer, currency="INR")
 
 		# Create or fetch the customer and company objects
 		company = "_Test Company"
-		if not frappe.db.exists("Company", company):
-			create_child_company()
+		make_company(company)
 
 		# Create the item ITEM-001 before using it in the Delivery Note
 		item_code = "_Test Item1"
@@ -787,8 +785,9 @@ class TestDeliveryNote(FrappeTestCase):
 		dn.items[0].warehouse = warehouse
 		dn.items[0].qty = 1
 		msg = "Incorrect value in row 1:Item Code must be equal to '_Test Item'"
-		with self.assertRaises(frappe.ValidationError, msg=msg):
+		with self.assertRaises(frappe.ValidationError) as e:
 			dn.save()
+		self.assertIn(msg, str(e.exception))
 
 	def test_delivery_note_no_gl_entry(self):
 		frappe.db.get_value("Warehouse", "_Test Warehouse - _TC", "company")
