@@ -12,7 +12,6 @@ from frappe.utils import add_days, today
 import re
 import random
 from erpnext.stock.doctype.warehouse.warehouse import convert_to_group_or_ledger
-
 from erpnext.controllers.item_variant import (
 	InvalidItemAttributeValueError,
 	ItemVariantExistsError,
@@ -1313,33 +1312,32 @@ class TestItem(FrappeTestCase):
 	def test_deleted_attribute_in_template_raises_error_TC_SCK_397(self):
 		create_attribute("Color", ["Red", "Blue"])
 		create_attribute("Size", ["S", "M", "L"])
-		if not frappe.db.exists("GST HSN Code", "1445576"):
-			gst_hsn_code = frappe.new_doc("GST HSN Code")
-			gst_hsn_code.hsn_code = "14455767"
-			gst_hsn_code.save()
+		
 		template = frappe.get_doc({
 			"doctype": "Item",
 			"item_code": "_test_variant_attr",
 			"item_group": "All Item Groups",
-			"gst_hsn_code": "14455767",
 			"has_variants":1,
 			"attributes": [
 				{"attribute": "Color", "attribute_value": "Red"},
 				{"attribute": "Size", "attribute_value": "M"}
 			]
-		}).insert(ignore_permissions=True)
-
+		})
+		if "india_compliance" in frappe.get_installed_apps():
+			template.gst_hsn_code = get_hsn()
+		template.insert(ignore_permissions=True)
 		variant = frappe.get_doc({
 			"doctype": "Item",
 			"item_code": "_test_variant_attr1",
 			"item_group": "All Item Groups",
-			"gst_hsn_code": "14455767",
 			"variant_of": template.name,
 			"attributes": [
 				{"attribute": "Color", "attribute_value": "Red"},
 				{"attribute": "Size", "attribute_value": "M"}
 			]
 		})
+		if "india_compliance" in frappe.get_installed_apps():
+			variant.gst_hsn_code = get_hsn()
 		variant.insert(ignore_permissions=True)
 
 		template.reload()
@@ -1348,13 +1346,17 @@ class TestItem(FrappeTestCase):
 			"attribute": "Color",
 			"attribute_values": ["Red", "Blue"]
 		})
-		with self.assertRaises(frappe.ValidationError) as context:
+		msg = frappe._(
+			"The following deleted attributes exist in Variants but not in the Template. "
+			"You can either delete the Variants or keep the attribute(s) in template.\n\n"
+			"Variant Items        Attributes\n"
+			"_test_variant_attr1  Size"
+		)
+		with self.assertRaises(frappe.ValidationError, msg=msg):
 			template.save()
-	
- 
+   
 	def test_item_autoname_with_naming_series_TC_SCK_398(self):
 		frappe.db.set_default("item_naming_by", "Naming Series")
-	
 		template = frappe.get_doc({
 			"doctype": "Item",
 			"item_code": "_test_variant_template",
@@ -1362,18 +1364,19 @@ class TestItem(FrappeTestCase):
 			"stock_uom": "Nos",
 			"item_group": "All Item Groups",
 			"has_variants": 1,
-			"gst_hsn_code": "14455767",
 			"attributes": [{
 				"attribute": "Color",
 				"attribute_value": "Red"
 			}]
-		}).insert(ignore_permissions=True)
+		})
+		if "india_compliance" in frappe.get_installed_apps():
+			template.gst_hsn_code = get_hsn()
+		template.insert(ignore_permissions=True)
 
 		variant = frappe.get_doc({
 			"doctype": "Item",
-			"item_name": "Variant Without Item Code",
+			"item_code": "Variant Without Item Code",
 			"variant_of": template.name,
-			"gst_hsn_code": "14455767",
 			"stock_uom": "Nos",
 			"item_group": "All Item Groups",
 			"attributes": [{
@@ -1381,8 +1384,13 @@ class TestItem(FrappeTestCase):
 				"attribute_value": "Red"
 			}]
 		})
-
+		if "india_compliance" in frappe.get_installed_apps():
+			template.gst_hsn_code = get_hsn()
+		
 		variant.autoname()
+		
+  		#set name as item code 
+		self.assertEqual(variant.name, "Variant Without Item Code")
   
 	def test_update_template_tables_TC_SCK_399(self):
 		create_tax_accounts()
