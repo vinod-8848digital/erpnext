@@ -179,7 +179,7 @@ class TestSerialNoLedger(FrappeTestCase):
 
     def test_real_get_serial_nos_logic(self):
         # Save original frappe.get_all to restore later
-        original_get_all = frappe.get_all
+        original_get_all = snl.frappe.get_all
 
         try:
             # Define a mock version of frappe.get_all
@@ -197,15 +197,12 @@ class TestSerialNoLedger(FrappeTestCase):
                     {"serial_no": "SN-C", "parent": "BND-456", "valuation_rate": 0},
                 ]
 
-            # Replace frappe.get_all with mock
-            frappe.get_all = mock_get_all
+            # Patch the correct reference
+            snl.frappe.get_all = mock_get_all
 
-            # Import and call the function under test
-            from erpnext.stock.report.serial_no_ledger.serial_no_ledger import get_serial_nos
-
-            filters = {}
+            # Call the function under test
             bundle_ids = ["BND-123", "BND-456"]
-            result = get_serial_nos(filters, bundle_ids)
+            result = snl.get_serial_nos({}, bundle_ids)
 
             expected = {
                 "BND-123": [
@@ -216,10 +213,9 @@ class TestSerialNoLedger(FrappeTestCase):
                     {"serial_no": "SN-C", "valuation_rate": 0}
                 ]
             }
-            print("result",result)
 
             self.assertEqual(result, expected)
 
         finally:
-            # Always restore original frappe.get_all
-            frappe.get_all = original_get_all
+            # Restore original method
+            snl.frappe.get_all = original_get_all
