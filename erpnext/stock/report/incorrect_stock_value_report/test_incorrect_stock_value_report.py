@@ -1,144 +1,157 @@
-# Copyright (c) 2013, Frappe Technologies Pvt. Ltd. and contributors
-# For license information, please see license.txt
-
-
 import frappe
-from frappe import _
-from frappe.query_builder import Field
-from frappe.query_builder.functions import Min
-from frappe.utils import add_days, getdate, today
-
-import erpnext
-from erpnext.accounts.utils import get_stock_and_account_balance
-from erpnext.stock.utils import get_stock_value_on
-
-
-def execute(filters=None):
-	if not erpnext.is_perpetual_inventory_enabled(filters.get("company")):
-		frappe.throw(
-			_("Perpetual inventory required for the company {0} to view this report.").format(filters.get("company"))
-		)
-
-	data = get_data(filters)
-	columns = get_columns(filters)
-
-	return columns, data
+from frappe.tests.utils import FrappeTestCase
+from frappe.utils import today, add_days
+from erpnext.stock.report.incorrect_stock_value_report.incorrect_stock_value_report import get_data, execute
+from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_company
+from erpnext.stock.doctype.item.test_item import create_item
+from erpnext.stock.doctype.stock_entry.test_stock_entry import get_or_create_fiscal_year
+from erpnext.stock.doctype.warehouse.test_warehouse import create_warehouse
+from erpnext.accounts.doctype.sales_invoice.test_sales_invoice import create_territory
+from datetime import date
+from frappe.utils import nowdate, add_days
 
 
-def get_unsync_date(filters):
-	date = filters.get("from_date")
-	if not date:
-		date = (frappe.qb.from_("Stock Ledger Entry").select(Min(Field("posting_date")))).run()
-		date = date[0][0]
+class TestIncorrectStockValueReport(FrappeTestCase): 
+    def setUp(self):
+        # Company Setup
+        self.company = create_company("_Test Indian Registered Company")
+        self.company = "_Test Indian Registered Company"
+        frappe.db.set_value("Company", self.company, "enable_perpetual_inventory", 1)
+        print("copmany",self.company)
 
-	if not date:
-		return
+        # Ensure required account exists
+        if not frappe.db.exists("Account", "Stock Adjustment - _TIRC"):
+            frappe.get_doc({
+                "doctype": "Account",
+                "account_name": "Stock Adjustment",
+                "company": self.company,
+                "parent_account": "Expenses - _TIRC",  # Ensure this exists
+                "account_type": "Temporary",
+                "is_group": 0
+            }).insert()
+        frappe.db.set_value("Company", self.company, "stock_adjustment_account", "Stock Adjustment - _TIRC")
 
-	while getdate(date) < getdate(today()):
-		account_bal, stock_bal, warehouse_list = get_stock_and_account_balance(
-			posting_date=date, company=filters.get("company"), account=filters.get("account")
-		)
+        # Warehouses
+        self.stores_warehouse = create_warehouse("Stores", company=self.company)
 
-		if abs(account_bal - stock_bal) > 0.1:
-			return date
+        # Or with additional properties
+        self.finished_goods_warehouse = create_warehouse(
+            "Finished Goods",
+            properties={"is_group": 0},  # Optional additional fields
+            company=self.company
+        )
 
-		date = add_days(date, 1)
+        # Items
+        self.item1 =create_item(
+            item_code="ADI-SH-W07",
+            valuation_rate=9250,
+            warehouse=self.stores_warehouse,
+            company=self.company,
+        )
+
+        self.item2 = create_item(
+            item_code="ADI-SH-W08",
+            valuation_rate=37500,
+            warehouse=self.finished_goods_warehouse,
+            company=self.company,
+        )
+        # Posting date
+        posting_date = date(2024, 12, 31)
+
+        # Create Stock Entry to generate initial SLEs
+        stock_entry = frappe.get_doc({
+            "doctype": "Stock Entry",
+            "stock_entry_type": "Material Receipt",
+            "company": "_Test Indian Registered Company",
+            "posting_date": posting_date,
+            "posting_time": "18:55:42",
+            "difference_account": "Stock Adjustment - _TIRC",
+            "items": [
+                {
+                    "item_code": "ADI-SH-W07",
+                    "qty": 5,
+                    "rate": 9250,  # 5 * 9250 = 46250
+                    "t_warehouse": self.stores_warehouse,
+                    # "allow_zero_valuation_rate": 1,
+                },
+                {
+                    "item_code": "ADI-SH-W08",
+                    "qty": 1,
+                    "rate": 37500,  # 1 * 37500 = 37500
+                    "t_warehouse": self.finished_goods_warehouse,
+                    # "allow_zero_valuation_rate": 1,
+                }
+            ]
+        })
+        stock_entry.insert()
+        stock_entry.submit()
+        print("stock",stock_entry)
+
+        # Simulate stock value mismatch
+        sle_list = frappe.get_all(
+            "Stock Ledger Entry",
+            filters={"voucher_no": stock_entry.name},
+            fields=["name", "item_code"]
+        )
+
+        for sle in sle_list:
+            if sle["item_code"] == "ADI-SH-W07":
+                frappe.db.set_value("Stock Ledger Entry", sle["name"], "stock_value", 185000.0)  # mismatch on purpose
+            elif sle["item_code"] == "ADI-SH-W08":
+                frappe.db.set_value("Stock Ledger Entry", sle["name"], "stock_value", 37500.0)   # match, no mismatch
+
+        self.account = "Stock In Hand - _TIRC"
+
+    def test_execute_returns_columns_and_data(self):
+        filters = {
+            "company": "_Test Indian Registered Company",
+            # "account": self.account,
+            # "from_date": nowdate()
+        }
+        columns, data = execute(filters)
+        self.assertTrue(columns, "Report should return columns")
+        self.assertIsInstance(columns, list, "Columns should be a list")
+        self.assertIsInstance(data, list, "Data should be a list")
+
+    def test_get_data_detects_unsync(self):
+        filters = {
+            "company": "_Test Indian Registered Company",
+            # "account": self.account,
+            # "from_date": nowdate()
+        }
+        columns, data = execute(filters)
+        self.assertTrue(data, "Expected at least one mismatch row in the report result")
+        for row in data:
+            self.assertIn("difference_value", row)
+            self.assertGreater(abs(row["difference_value"]), 0.1)
+            self.assertIn("expected_stock_value", row)
+
+    
+    def test_get_data_filters_and_calculates_correctly(self):
+        filters = {
+            "company": "_Test Indian Registered Company",
+            # "account": self.account,
+            # "from_date": nowdate()
+        }
+
+        # Directly invoke get_data to test filtering and calculation logic
+        data = get_data(filters)
+        self.assertIsInstance(data, list)
+
+        for row in data:
 
 
-def get_data(report_filters):
-	frappe.msgprint("report_filters",str(report_filters))
-	from_date = get_unsync_date(report_filters)
+            self.assertIn("stock_value", row)
+            self.assertIn("expected_stock_value", row)
+            self.assertIn("difference_value", row)
 
-	if not from_date:
-		return []
+            # Validate mismatch condition
+            calculated_expected = row["expected_stock_value"]
+            actual_stock_value = row["stock_value"]
+            self.assertAlmostEqual(
+                row["difference_value"],
+                abs(actual_stock_value - calculated_expected),
+                delta=0.01,
+                msg="Difference value must match computed mismatch"
+            )
 
-	result = []
-
-	voucher_wise_dict = {}
-	sle = frappe.qb.DocType("Stock Ledger Entry")
-	data = (
-		frappe.qb.from_(sle)
-		.select(
-			sle.name,
-			sle.posting_date,
-			sle.posting_time,
-			sle.voucher_type,
-			sle.voucher_no,
-			sle.stock_value_difference,
-			sle.stock_value,
-			sle.warehouse,
-			sle.item_code,
-		)
-		.where(
-			(sle.posting_date == from_date)
-			& (sle.company == report_filters.get("company"))
-			& (sle.is_cancelled == 0)
-		)
-		.orderby(sle.posting_datetime, sle.creation)
-	).run(as_dict=True)
-
-
-	for d in data:
-		voucher_wise_dict.setdefault((d.item_code, d.warehouse), []).append(d)
-
-	closing_date = add_days(from_date, -1)
-	for key, stock_data in voucher_wise_dict.items():
-		prev_stock_value = get_stock_value_on(posting_date=closing_date, item_code=key[0], warehouses=key[1])
-		for data in stock_data:
-			expected_stock_value = prev_stock_value + data.stock_value_difference
-			if abs(data.stock_value - expected_stock_value) > 0.1:
-				data.difference_value = abs(data.stock_value - expected_stock_value)
-				data.expected_stock_value = expected_stock_value
-				result.append(data)
-
-
-	return result
-
-
-def get_columns(filters):
-	return [
-		{
-			"label": _("Stock Ledger ID"),
-			"fieldname": "name",
-			"fieldtype": "Link",
-			"options": "Stock Ledger Entry",
-			"width": "80",
-		},
-		{"label": _("Posting Date"), "fieldname": "posting_date", "fieldtype": "Date"},
-		{"label": _("Posting Time"), "fieldname": "posting_time", "fieldtype": "Time"},
-		{"label": _("Voucher Type"), "fieldname": "voucher_type", "width": "110"},
-		{
-			"label": _("Voucher No"),
-			"fieldname": "voucher_no",
-			"fieldtype": "Dynamic Link",
-			"options": "voucher_type",
-			"width": "110",
-		},
-		{
-			"label": _("Item Code"),
-			"fieldname": "item_code",
-			"fieldtype": "Link",
-			"options": "Item",
-			"width": "110",
-		},
-		{
-			"label": _("Warehouse"),
-			"fieldname": "warehouse",
-			"fieldtype": "Link",
-			"options": "Warehouse",
-			"width": "110",
-		},
-		{
-			"label": _("Expected Stock Value"),
-			"fieldname": "expected_stock_value",
-			"fieldtype": "Currency",
-			"width": "150",
-		},
-		{"label": _("Stock Value"), "fieldname": "stock_value", "fieldtype": "Currency", "width": "120"},
-		{
-			"label": _("Difference Value"),
-			"fieldname": "difference_value",
-			"fieldtype": "Currency",
-			"width": "150",
-		},
-	]
