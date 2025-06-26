@@ -5763,6 +5763,7 @@ class TestStockEntry(FrappeTestCase):
 				"schedule_date": frappe.utils.nowdate(),
 				"is_subcontracted": 1,
 				"subcontracting_type": "Raw Material Supplied",
+				"supplier_warehouse": subcontract_wh,
 				"items": [
 					{
 						"fg_item": "Sub Raw Bom Mat",
