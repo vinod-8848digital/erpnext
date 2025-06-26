@@ -1,0 +1,105 @@
+import frappe
+from frappe.tests.utils import FrappeTestCase
+from erpnext.stock.report.incorrect_balance_qty_after_transaction.incorrect_balance_qty_after_transaction import execute
+from erpnext.stock.doctype.warehouse.test_warehouse import create_warehouse
+from erpnext.stock.doctype.item.test_item import create_item
+from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_company
+from erpnext.accounts.utils import nowdate
+from erpnext.stock.doctype.stock_entry.test_stock_entry import get_or_create_fiscal_year
+from erpnext import is_perpetual_inventory_enabled
+from erpnext.accounts.doctype.sales_invoice.test_sales_invoice import create_territory
+from datetime import date
+from frappe.utils import nowdate, add_days
+
+
+
+
+class TestIncorrectBalanceQtyReport(FrappeTestCase):
+    def setUp(self):
+        # Create company
+        self.company = create_company("_Test Company")
+        self.company = "_Test Company"
+        get_or_create_fiscal_year("_Test Company")
+
+        # Create warehouse
+        self.warehouse = create_warehouse(
+            warehouse_name="_Test Warehouse - _TC",
+            company=self.company
+        )
+
+        # Create item
+        self.item_code = create_item(
+            item_code="_Test Item",
+            valuation_rate=100,
+            warehouse=self.warehouse,
+            company=self.company,
+        )
+
+
+
+    def test_get_data_detects_difference_due_to_stock_reconciliation(self):
+        from erpnext.stock.report.incorrect_balance_qty_after_transaction.incorrect_balance_qty_after_transaction import get_data
+
+        # Step 1: Create regular stock entry
+        stock_entry = frappe.get_doc({
+            "doctype": "Stock Entry",
+            "stock_entry_type": "Material Receipt",
+            "company": self.company,
+            "to_warehouse": self.warehouse,
+            "items": [{
+                "item_code": self.item_code,
+                "qty": 5,
+                "rate": 100,
+                "t_warehouse": self.warehouse,
+                # "batch_no": self.batch.name
+            }]
+        })
+        stock_entry.insert()
+        stock_entry.submit()
+
+        # Step 2: Create Stock Reconciliation with qty mismatch and no batch (to trigger reset)
+        stock_recon = frappe.get_doc({
+            "doctype": "Stock Reconciliation",
+            "company": self.company,
+            "purpose": "Stock Reconciliation",
+            "items": [{
+                "item_code": self.item_code,
+                "warehouse": self.warehouse,
+                "qty": 20,
+                "valuation_rate": 100
+            }],
+            "posting_date": nowdate(),
+            "posting_time": "10:00:00"
+        })
+        stock_recon.insert()
+        stock_recon.submit()
+
+        # Step 3: Manually tamper SLE to simulate incorrect final qty (e.g., 18 instead of 20)
+        sle = frappe.db.get_value(
+            "Stock Ledger Entry",
+            {"voucher_type": "Stock Reconciliation", "voucher_no": stock_recon.name},
+            ["name"],
+        )
+        print("sle",sle)
+        if sle:
+            frappe.db.set_value("Stock Ledger Entry", sle, "qty_after_transaction", 18)
+            frappe.db.set_value("Stock Ledger Entry", sle, "batch_no", "")  # <-- CRUCIAL
+            frappe.db.set_value("Stock Ledger Entry", sle, "posting_date", add_days(nowdate(), 1))
+            frappe.db.set_value("Stock Ledger Entry", sle, "posting_time", "23:59:59")
+            frappe.db.commit()
+
+        # Step 4: Run report
+        data = get_data({
+            "item_code": self.item_code.name,
+            "warehouse": self.warehouse,
+            "company": self.company
+        })
+
+
+        # Step 5: Check for difference > 0.5
+        has_diff = any(
+            isinstance(row, dict) and row.get("differnce") and abs(row.get("differnce", 0)) > 0.5
+            for row in data
+        )
+
+        self.assertTrue(has_diff, "Expected at least one row with incorrect qty due to reconciliation mismatch")

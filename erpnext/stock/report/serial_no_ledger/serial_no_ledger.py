@@ -139,7 +139,7 @@ def get_data(filters):
 				serial_nos.append(
 					{
 						"serial_no": serial_no,
-						"valuation_rate": abs(row.stock_value_difference / row.actual_qty),
+						"valuation_rate": abs(row.stock_value_difference / row.actual_qty) if row.actual_qty else 0,
 					}
 				)
 

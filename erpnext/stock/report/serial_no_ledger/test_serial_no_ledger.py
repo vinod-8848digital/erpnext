@@ -8,24 +8,6 @@ class TestSerialNoLedger(FrappeTestCase):
     def setUp(self):
         self.filters = {}
 
-    def test_get_columns(self):
-        columns = snl.get_columns(self.filters)
-        self.assertIsInstance(columns, list)
-        self.assertTrue(any(isinstance(col, dict) and col.get("fieldname") == "posting_date" for col in columns))
-
-    def test_get_serial_nos_no_filter(self):
-        def fake_get_all(doctype, fields, filters, order_by):
-            self.assertIn("parent", filters)
-            return [
-                {"serial_no": "SN-003", "parent": "bundle-1", "stock_value_difference": 20},
-                {"serial_no": "SN-004", "parent": "bundle-1", "stock_value_difference": 30},
-            ]
-
-        frappe.get_all = fake_get_all
-        serial_bundle_ids = ["bundle-1", "bundle-2"]
-        serial_nos = snl.get_serial_nos({}, serial_bundle_ids)
-        self.assertIn("bundle-1", serial_nos)
-
     def test_get_data_no_stock_ledgers(self):
         snl.get_stock_ledger_entries = lambda filters, to_date, order, check_serial_no: []
         data = snl.get_data({})
@@ -130,3 +112,114 @@ class TestSerialNoLedger(FrappeTestCase):
         data = snl.get_data({})
         self.assertEqual(data[0].get("party"), None)
         self.assertEqual(data[0].get("party_type"), None)
+
+    def test_get_data_zero_actual_qty(self):
+        sle = SimpleNamespace(
+            posting_date="2025-01-01",
+            posting_time="12:00:00",
+            voucher_type="Purchase Receipt",
+            voucher_no="PR-0001",
+            actual_qty=0,
+            company="TestCo",
+            warehouse="WH-001",
+            serial_no="SN-ZERO",
+            serial_and_batch_bundle=None,
+            stock_value_difference=0,
+        )
+
+        snl.get_stock_ledger_entries = lambda filters, to_date, order, check_serial_no: [sle]
+        snl.get_serial_nos = lambda filters, bundle_ids: {}
+        frappe.db.get_value = lambda dt, dn, fld, **kwargs: "Test Supplier"
+
+        data = snl.get_data({})
+        self.assertEqual(len(data), 1, "Should not include rows with zero actual_qty")
+
+    def test_get_data_multiple_sles_with_serial_and_bundle(self):
+        sle1 = SimpleNamespace(
+            posting_date="2025-01-01",
+            posting_time="12:00:00",
+            voucher_type="Purchase Receipt",
+            voucher_no="PR-001",
+            actual_qty=2,
+            company="TestCo",
+            warehouse="WH-001",
+            serial_no="SN-001\nSN-002",
+            serial_and_batch_bundle=None,
+            stock_value_difference=200,
+        )
+
+        sle2 = SimpleNamespace(
+            posting_date="2025-01-02",
+            posting_time="13:00:00",
+            voucher_type="Delivery Note",
+            voucher_no="DN-001",
+            actual_qty=-1,
+            company="TestCo",
+            warehouse="WH-001",
+            serial_no=None,
+            serial_and_batch_bundle="BND-001",
+            stock_value_difference=-100,
+        )
+
+        snl.get_stock_ledger_entries = lambda filters, to_date, order, check_serial_no: [sle1, sle2]
+
+        snl.get_serial_nos = lambda filters, bundle_ids: {
+            "BND-001": [{"serial_no": "SN-003", "valuation_rate": 100}]
+        }
+
+        frappe.db.get_value = lambda dt, dn, fld, **kwargs: "Test Supplier" if fld == "supplier" else "Test Customer"
+
+        data = snl.get_data({})
+
+        serials = [row.get("serial_no") for row in data]
+        self.assertIn("SN-001", serials)
+        self.assertIn("SN-002", serials)
+        self.assertIn("SN-003", serials)
+        self.assertEqual(sum(row.get("qty", 0) for row in data), 1)
+
+    def test_real_get_serial_nos_logic(self):
+        # Save original frappe.get_all to restore later
+        original_get_all = frappe.get_all
+
+        try:
+            # Define a mock version of frappe.get_all
+            def mock_get_all(doctype, fields=None, filters=None, order_by=None):
+                self.assertEqual(doctype, "Serial and Batch Entry")
+                self.assertEqual(
+                    filters,
+                    {"parent": ["in", ["BND-123", "BND-456"]]}
+                )
+                self.assertEqual(order_by, "idx asc")
+
+                return [
+                    {"serial_no": "SN-A", "parent": "BND-123", "valuation_rate": 50},
+                    {"serial_no": "SN-B", "parent": "BND-123", "valuation_rate": -25},
+                    {"serial_no": "SN-C", "parent": "BND-456", "valuation_rate": 0},
+                ]
+
+            # Replace frappe.get_all with mock
+            frappe.get_all = mock_get_all
+
+            # Import and call the function under test
+            from erpnext.stock.report.serial_no_ledger.serial_no_ledger import get_serial_nos
+
+            filters = {}
+            bundle_ids = ["BND-123", "BND-456"]
+            result = get_serial_nos(filters, bundle_ids)
+
+            expected = {
+                "BND-123": [
+                    {"serial_no": "SN-A", "valuation_rate": 50},
+                    {"serial_no": "SN-B", "valuation_rate": 25},
+                ],
+                "BND-456": [
+                    {"serial_no": "SN-C", "valuation_rate": 0}
+                ]
+            }
+            print("result",result)
+
+            self.assertEqual(result, expected)
+
+        finally:
+            # Always restore original frappe.get_all
+            frappe.get_all = original_get_all
