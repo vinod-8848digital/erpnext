@@ -53,10 +53,7 @@ class TestBin(FrappeTestCase):
 			item=item_code, raw_materials=[raw_material_code], rm_qty=2, rate=100, source_warehouse=warehouse
 		)
 
-		# Again fetching item doc beacuse it refresh after making BOM
-		bom_item = frappe.get_doc("Item", bom_item.name)  # Reload latest version
 		bom_item.default_bom = bom.name
-		bom_item.save()
 
 		# Create Bin
 		bin = _create_bin(item_code, warehouse)
