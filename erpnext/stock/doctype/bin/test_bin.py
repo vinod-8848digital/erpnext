@@ -90,8 +90,12 @@ class TestBin(FrappeTestCase):
 		# Run the hook
 		on_doctype_update()
 
-		# Check if the unique index exists in PostgreSQL
-		indexes = frappe.db.sql("SELECT indexname FROM pg_indexes WHERE tablename = 'tabBin'", as_dict=True)
-
-		index_names = [idx["indexname"] for idx in indexes]
-		self.assertIn("unique_item_warehouse", index_names)
+		# Only run the PostgreSQL-specific check if the DB is PostgreSQL
+		if frappe.conf.db_type == "postgres":
+			indexes = frappe.db.sql(
+				"SELECT indexname FROM pg_indexes WHERE tablename = 'tabBin'", as_dict=True
+			)
+			index_names = [idx["indexname"] for idx in indexes]
+			self.assertIn("unique_item_warehouse", index_names)
+		else:
+			self.skipTest("PostgreSQL-specific test: skipping on non-Postgres databases.")
