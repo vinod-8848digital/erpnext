@@ -8462,7 +8462,6 @@ def create_registered_address_for_gst_entities():
 				"links": [
 					{"link_doctype": "Company", "link_name": "_Test Indian Registered Company"},
 					{"link_doctype": "Customer", "link_name": "_Test Registered Customer"},
-					{"link_doctype": "Customer", "link_name": "_Test Registered Composition Customer"},
 				],
 			}
 		)
