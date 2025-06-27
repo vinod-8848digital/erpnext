@@ -6207,17 +6207,6 @@ class TestPurchaseReceipt(FrappeTestCase):
 
 		warehouse = frappe.get_all("Warehouse", filters={"company": company.name}, limit=1)[0].name
 
-		parent_account = ensure_parent_account("Parent Stock Account", company.name, company.abbr)
-		w_account = create_account(
-			account_name="Sub Stock Account",
-			parent_account=parent_account,
-			company=company.name,
-			account_type="Stock",
-			account_currency="INR",
-		)
-
-		frappe.db.set_value("Warehouse", warehouse, "account", w_account)
-
 		# Create PO with 10 qty
 		po = create_purchase_order(
 			item_code=item_code,
@@ -6362,12 +6351,6 @@ class TestPurchaseReceipt(FrappeTestCase):
 		company.save()
 		supplier = create_supplier()
 		create_uom("_Test UOM")
-		create_warehouse("_Test Warehouse 1", {"company": company.name})
-		item = make_item(
-			"_Test GL Item",
-			{"is_stock_item": 1, "valuation_rate": 100, "stock_uom": "Nos"},
-		).name
-		warehouse = create_warehouse("_Test GL Entry WH", company=company.name)
 
 		parent_account = ensure_parent_account("Parent Stock Account", company.name, company.abbr)
 		w_account = create_account(
@@ -6378,7 +6361,12 @@ class TestPurchaseReceipt(FrappeTestCase):
 			account_currency="INR",
 		)
 
-		frappe.db.set_value("Warehouse", warehouse, "account", w_account)
+		create_warehouse("_Test Warehouse 1", {"company": company.name})
+		item = make_item(
+			"_Test GL Item",
+			{"is_stock_item": 1, "valuation_rate": 100, "stock_uom": "Nos"},
+		).name
+		warehouse = create_warehouse("_Test GL Entry WH", {"account": w_account}, company.name)
 
 		po = create_purchase_order(
 			item_code=item,
@@ -6431,7 +6419,6 @@ class TestPurchaseReceipt(FrappeTestCase):
 		company = setup_test_company_defaults()
 		supplier_warehouse = create_warehouse("_Test Warehouse 1", {"company": company.name})
 		supplier = create_supplier()
-		warehouse = create_warehouse("_Test LCV Warehouse", company=company.name)
 
 		parent_account = ensure_parent_account("Parent Stock Account", company.name, company.abbr)
 		w_account = create_account(
@@ -6442,7 +6429,7 @@ class TestPurchaseReceipt(FrappeTestCase):
 			account_currency="INR",
 		)
 
-		frappe.db.set_value("Warehouse", warehouse, "account", w_account)
+		warehouse = create_warehouse("_Test LCV Warehouse", {"account": w_account}, company.name)
 
 		# PR without landed cost
 		pr_no_lcv = make_purchase_receipt(
@@ -6491,8 +6478,6 @@ class TestPurchaseReceipt(FrappeTestCase):
 			"_Test Item BRQ", {"is_stock_item": 1, "valuation_rate": 100, "stock_uom": "Nos"}
 		).name
 		supplier = create_supplier()
-		supplier_warehouse = create_warehouse("_Test Warehouse 1", {"company": company.name})
-		warehouse = create_warehouse("_Test PR Warehouse", company=company.name)
 
 		parent_account = ensure_parent_account("Parent Stock Account", company.name, company.abbr)
 		w_account = create_account(
@@ -6503,7 +6488,8 @@ class TestPurchaseReceipt(FrappeTestCase):
 			account_currency="INR",
 		)
 
-		frappe.db.set_value("Warehouse", warehouse, "account", w_account)
+		supplier_warehouse = create_warehouse("_Test Warehouse 1", {"company": company.name})
+		warehouse = create_warehouse("_Test PR Warehouse", {"account": w_account}, company.name)
 
 		# Create parent account if missing
 		if not frappe.db.exists("Account", f"Expenses - {company.abbr}"):
