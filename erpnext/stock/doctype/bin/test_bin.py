@@ -46,13 +46,17 @@ class TestBin(FrappeTestCase):
 
 		# Create items
 		make_item(raw_material_code, {"is_stock_item": 1})
-		make_item(item_code, {"is_sub_contracted_item": 0, "is_stock_item": 1})
+		bom_item = make_item(item_code, {"is_sub_contracted_item": 0, "is_stock_item": 1})
 
 		# Create BOM
 		bom = make_bom(
 			item=item_code, raw_materials=[raw_material_code], rm_qty=2, rate=100, source_warehouse=warehouse
 		)
-		frappe.db.set_value("Item", item_code, "default_bom", bom.name)
+
+		# Again fetching item doc beacuse it refresh after making BOM
+		bom_item = frappe.get_doc("Item", bom_item.name)  # Reload latest version
+		bom_item.default_bom = bom.name
+		bom_item.save()
 
 		# Create Bin
 		bin = _create_bin(item_code, warehouse)
