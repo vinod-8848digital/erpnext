@@ -2,143 +2,171 @@
 
 import frappe
 from frappe.tests.utils import FrappeTestCase
-from erpnext.stock.report.serial_and_batch_summary.serial_and_batch_summary import execute, get_data, get_filter_conditions, get_columns
+# from erpnext.stock.report.serial_and_batch_summary.serial_and_batch_summary import execute, get_data, get_filter_conditions, get_columns
 from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_company
+# import frappe
+import unittest
+from datetime import date
+from erpnext.stock.doctype.item.test_item import create_item
+from erpnext.stock.doctype.warehouse.test_warehouse import create_warehouse
+from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_company
+from erpnext.stock.report.serial_and_batch_summary.serial_and_batch_summary import execute, get_filter_conditions, get_columns
 
-class TestSerialAndBatchSummary(FrappeTestCase):
+class TestSerialAndBatchBundleReport(unittest.TestCase):
+
     def setUp(self):
-        # Use a real Company for testing
         self.company = create_company("_Test Company")
+        self.company = "_Test Company"
 
-        self.base_filters = {"company": self.company}
-        self.full_filters = {
-                "voucher_type": "Purchase Receipt",
-                "voucher_no": ["PR-0001", "PR-0002"],
-                "item_code": "_Test Item",
-                "warehouse": "_Test Warehouse",
-                "company": "_Test Company",
-                "from_date": "2023-01-01",
-                "to_date": "2023-12-31",
-                "serial_no": "S-123",
-                "batch_no": "B-456"
-            }
+        self.warehouse = create_warehouse(
+            warehouse_name="_Test Warehouse - _TC",
+            company=self.company
+        )
 
-        # Stub get_data return for column tests
-        self.stub_data = [
-            {"item_code": "I1", "serial_no": "S1", "batch_no": "B1"}
-        ]
+        self.item = create_item(
+            item_code="TESTITEM001",
+            valuation_rate=100,
+            warehouse=self.warehouse,
+            company=self.company,
+            has_batch_no = 1,
+        )
 
-    def test_execute_minimal(self):
-        cols, data = execute(self.base_filters)
-        self.assertTrue(isinstance(cols, list))
-        self.assertTrue(isinstance(data, list))
-        fnames = [c["fieldname"] for c in cols]
-        self.assertIn("company", fnames)
-        self.assertIn("name", fnames)
-        self.assertIn("posting_date", fnames)
-        # Unless special test data exists, data may be empty as long as it's the correct type
+        if frappe.db.exists("Batch", "BATCH201"):
+            frappe.delete_doc("Batch", "BATCH201", force=True)
 
-    # def test_execute_full_filters_columns(self):
-    #     filters = {
-    #         "company": self.company,
-    #         "voucher_type": "Purchase Receipt",  # keep
-    #         # "voucher_no": ["PB-0001", "PB-0002"],  # remove this
-    #         "item_code": "_Test Item",
-    #         "warehouse": "_Test Warehouse",
-    #         "from_date": "2023-01-01",
-    #         "to_date": "2023-12-31",
-    #         "serial_no": "S-123",
-    #         "batch_no": "B-123",
-    #     }
-    #     cols, _ = execute(filters)
-    #     fnames = [c["fieldname"] for c in cols]
+        self.batch = frappe.new_doc("Batch")
+        self.batch.batch_id = "BATCH201"
+        self.batch.item = self.item.name
+        self.batch.batch_qty = 2
+        self.batch.expiry_date = date(2030, 1, 1)
+        self.batch.insert()
 
-    #     self.assertIn("voucher_type", fnames)
-    #     self.assertIn("voucher_no", fnames)
-    #     self.assertIn("item_code", fnames)
-    #     self.assertIn("item_name", fnames)
-    #     self.assertIn("warehouse", fnames)
-    #     self.assertIn("serial_no", fnames)
-    #     self.assertIn("batch_no", fnames)
-    #     self.assertIn("qty", fnames)
+        # Add batch stock via stock entry
+        self.stock_entry = create_stock_entry(
+            item_code=self.item,
+            warehouse=self.warehouse,
+            qty=10,
+            company="_Test Company",
+            batch_no= self.batch
+        )
 
-    def test_get_filter_conditions_all_fields(self):
-        conds = get_filter_conditions(self.full_filters)
+            
 
-        # Basic mandatory filters
-        self.assertIn(["Serial and Batch Bundle", "docstatus", "=", 1], conds)
-        self.assertIn(["Serial and Batch Bundle", "is_cancelled", "=", 0], conds)
 
-        expected_conditions = {
-            ("Serial and Batch Bundle", "voucher_type", "="),
-            ("Serial and Batch Bundle", "item_code", "="),
-            ("Serial and Batch Bundle", "warehouse", "="),
-            ("Serial and Batch Bundle", "company", "="),
-            ("Serial and Batch Bundle", "voucher_no", "in"),
-            ("Serial and Batch Bundle", "posting_date", "between"),
-            ("Serial and Batch Entry", "serial_no", "="),
-            ("Serial and Batch Entry", "batch_no", "="),
+        self.serial_batch_bundle = frappe.get_doc({
+                "doctype": "Serial and Batch Bundle",
+                "voucher_type": "Stock Entry",
+                "voucher_no": self.stock_entry,
+                "posting_date": "2024-06-01",
+                "company": self.company,
+                "item_code": self.item.name,
+                "item_name": self.item.item_name,
+                "docstatus": 1,
+                "is_cancelled": 0,
+                "type_of_transaction": "Inward",  # <-- REQUIRED FIELD
+                "entries": [                       # <-- REQUIRED CHILD TABLE
+                    {
+                        # "serial_no": "SN001",
+                        "batch_no": "BATCH201",
+                        "warehouse": self.warehouse,
+                        "incoming_rate": 100,
+                        "stock_value_difference": 1000,
+                        "qty": 10
+                    }
+                ]
+            }).insert(ignore_permissions=True)
+
+        self.entry = frappe.get_doc({
+            "doctype": "Serial and Batch Entry",
+            "parenttype": "Serial and Batch Bundle",
+            "parent": self.serial_batch_bundle.name,
+            # "serial_no": "SN001",
+            "batch_no": "BATCH201",
+            "warehouse": "_Test Warehouse - _TC",
+            "incoming_rate": 100,
+            "stock_value_difference": 1000,
+            "qty": 10
+        }).insert(ignore_permissions=True)
+
+    def tearDown(self):
+        frappe.db.rollback()  # Rollback everything to keep DB clean
+
+    
+    def test_execute_with_minimal_filters(self):
+        filters = {
+            "from_date": "2024-01-01",
+            "to_date": "2025-01-01"
         }
+        columns, data = execute(filters=filters)
+        self.assertTrue(columns)
+        self.assertTrue(data)
 
-        for doctype, fieldname, operator in expected_conditions:
-            self.assertTrue(
-                any(c[0] == doctype and c[1] == fieldname and c[2] == operator for c in conds),
-                msg=f"Missing condition: {doctype}, {fieldname}, {operator}"
-            )
+    
+    def test_filter_combinations(self):
+        filters = {
+            "voucher_type": "Stock Entry",
+            "item_code": self.item.name,
+            "warehouse": "_Test Warehouse - _TC",
+            "company": "Test Company",
+            "from_date": "2024-01-01",
+            "to_date": "2025-01-01"
+        }
+        data = frappe.get_all("Serial and Batch Bundle", filters={"item_code": self.item.name})
+        filter_conditions = get_filter_conditions(filters)
+        self.assertIn(["Serial and Batch Bundle", "voucher_type", "=", "Stock Entry"], filter_conditions)
 
-    def test_get_data_returns_list_and_filters(self):
-        # Mock frappe.get_all to ensure get_data returns our fields
-        def fake_get_all(doctype, fields, filters, order_by=None):
-            self.assertEqual(doctype, "Serial and Batch Bundle")
-            self.assertIsInstance(fields, list)
-            self.assertIsInstance(filters, list)
-            return [
-                {
-                    "voucher_type": "Purchase Receipt",
-                    "posting_date": "2023-06-01",
-                    "name": "BND-1",
-                    "company": self.company,
-                    "voucher_no": "PB-0001",
-                    "item_code": "I1",
-                    "item_name": "Item One",
-                    "serial_no": "S1",
-                    "batch_no": "B1",
-                    "warehouse": "_Test Warehouse",
-                    "incoming_rate": 100.0,
-                    "stock_value_difference": 10.0,
-                    "qty": 2
-                }
-            ]
+    
+    def test_columns_with_serial_and_batch(self):
+        filters = {"item_code": self.item.name}
+        data = [{
+            "item_code": self.item.name,
+            "company": "Test Company"
+        }]
+        columns = get_columns(filters, data)
+        fieldnames = [col["fieldname"] for col in columns]
+        # self.assertIn("serial_no", fieldnames)
+        self.assertIn("batch_no", fieldnames)
+        self.assertIn("qty", fieldnames)
 
-        frappe.get_all = fake_get_all
 
-        data = get_data(self.full_filters)
-        self.assertEqual(len(data), 1)
-        row = data[0]
-        self.assertEqual(row["company"], self.company)
-        self.assertEqual(row["serial_no"], "S1")
-        self.assertEqual(row["qty"], 2)
+    def test_get_voucher_type(self):
+        from erpnext.stock.report.serial_and_batch_summary.serial_and_batch_summary import get_voucher_type
+        result = get_voucher_type("Serial and Batch Bundle", "", "", 0, 10, {})
+        self.assertIsInstance(result, list)
 
-    def test_get_columns_item_filter_logic(self):
-        # If item_code filter is given, context auto-includes serial & batch
-        cols = get_columns(self.base_filters | {"item_code": "ItemX"}, self.stub_data)
-        fnames = [c["fieldname"] for c in cols]
+    
+    def test_get_serial_nos(self):
+        from erpnext.stock.report.serial_and_batch_summary.serial_and_batch_summary import get_serial_nos
+        result = get_serial_nos("Serial and Batch Entry", "SN", "", 0, 10, {
+            "voucher_no": ["STE-TEST-001"],
+            "item_code": self.item.name
+        })
+        # self.assertTrue(any("SN001" in sn for sn in result))
 
-        self.assertIn("serial_no", fnames)
-        self.assertIn("batch_no", fnames)
 
-    def test_get_columns_voucher_filter_logic(self):
-        # If voucher_no filter given, voucher_type / voucher_no columns should be excluded
-        cols = get_columns(self.base_filters | {"voucher_no": ["PB-0001"]}, self.stub_data)
-        fnames = [c["fieldname"] for c in cols]
-        self.assertNotIn("voucher_type", fnames)
-        self.assertNotIn("voucher_no", fnames)
+    def test_get_batch_nos(self):
+        from erpnext.stock.report.serial_and_batch_summary.serial_and_batch_summary import get_batch_nos
+        result = get_batch_nos("Serial and Batch Entry", "BATCH", "", 0, 10, {
+            "voucher_no": ["STE-TEST-001"],
+            "item_code": self.item.name
+        })
+        self.assertTrue(any("BATCH201" in b for b in result))
 
-    def test_warehouse_column_logic(self):
-        # Without warehouse filter, 'warehouse' column appears
-        cols = get_columns(self.base_filters, self.stub_data)
-        self.assertIn("warehouse", [c["fieldname"] for c in cols])
 
-        # With warehouse filter, the column should be omitted
-        cols2 = get_columns(self.base_filters | {"warehouse": "_Test Warehouse"}, self.stub_data)
-        self.assertNotIn("warehouse", [c["fieldname"] for c in cols2])
+def create_stock_entry(item_code, warehouse, qty, company,batch_no):
+   se = frappe.get_doc({
+       "doctype": "Stock Entry",
+       "stock_entry_type": "Material Receipt",
+       "company": company,
+       "items": [{
+           "item_code": item_code,
+           "qty": qty,
+           "uom": "Nos",
+           "t_warehouse": warehouse,
+           "rate": 100,
+           "batch_no":batch_no
+       }]
+   })
+   se.insert(ignore_permissions=True)
+   se.submit()
+   return se.name

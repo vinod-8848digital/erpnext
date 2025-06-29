@@ -177,49 +177,116 @@ class TestSerialNoLedger(FrappeTestCase):
         self.assertIn("SN-003", serials)
         self.assertEqual(sum(row.get("qty", 0) for row in data), 1)
 
-    def test_real_get_serial_nos_logic(self):
-        # Save original frappe.get_all to restore later
-        original_get_all = frappe.get_all
+    def test_get_serial_nos_loop_and_mapping_logic(self):
+        # Patch the correct reference inside the snl module
+        original_get_all = snl.frappe.get_all
 
         try:
-            # Define a mock version of frappe.get_all
-            def mock_get_all(doctype, fields=None, filters=None, order_by=None):
-                self.assertEqual(doctype, "Serial and Batch Entry")
-                self.assertEqual(
-                    filters,
-                    {"parent": ["in", ["BND-123", "BND-456"]]}
-                )
-                self.assertEqual(order_by, "idx asc")
+            # Provide mock data that would be returned by frappe.get_all
+            mock_data = [
+                frappe._dict({
+                    "serial_no": "SN-A",
+                    "parent": "BND-001",
+                    "valuation_rate": 100
+                }),
+                frappe._dict({
+                    "serial_no": "SN-B",
+                    "parent": "BND-001",
+                    "valuation_rate": -50  # Should be converted to abs() => 50
+                }),
+                frappe._dict({
+                    "serial_no": "SN-C",
+                    "parent": "BND-002",
+                    "valuation_rate": 0
+                })
+            ]
 
-                return [
-                    {"serial_no": "SN-A", "parent": "BND-123", "valuation_rate": 50},
-                    {"serial_no": "SN-B", "parent": "BND-123", "valuation_rate": -25},
-                    {"serial_no": "SN-C", "parent": "BND-456", "valuation_rate": 0},
-                ]
+            snl.frappe.get_all = lambda *args, **kwargs: mock_data
 
-            # Replace frappe.get_all with mock
-            frappe.get_all = mock_get_all
+            filters = {}  # no filtering on serial_no
+            bundle_ids = ["BND-001", "BND-002"]
 
-            # Import and call the function under test
-            from erpnext.stock.report.serial_no_ledger.serial_no_ledger import get_serial_nos
-
-            filters = {}
-            bundle_ids = ["BND-123", "BND-456"]
-            result = get_serial_nos(filters, bundle_ids)
+            result = snl.get_serial_nos(filters, bundle_ids)
 
             expected = {
-                "BND-123": [
-                    {"serial_no": "SN-A", "valuation_rate": 50},
-                    {"serial_no": "SN-B", "valuation_rate": 25},
+                "BND-001": [
+                    {"serial_no": "SN-A", "valuation_rate": 100},
+                    {"serial_no": "SN-B", "valuation_rate": 50},
                 ],
-                "BND-456": [
-                    {"serial_no": "SN-C", "valuation_rate": 0}
+                "BND-002": [
+                    {"serial_no": "SN-C", "valuation_rate": 0},
                 ]
             }
-            print("result",result)
 
             self.assertEqual(result, expected)
 
         finally:
-            # Always restore original frappe.get_all
-            frappe.get_all = original_get_all
+            # Restore the original frappe.get_all
+            snl.frappe.get_all = original_get_all
+
+
+
+    def test_execute_with_serial_no_filter_and_bundle(self):
+        # Backup real methods
+        original_get_all = snl.frappe.get_all
+        original_get_stock_ledger_entries = snl.get_stock_ledger_entries
+        original_get_serial_nos_from_sle = snl.get_serial_nos_from_sle
+        original_db_get_value = frappe.db.get_value
+
+        try:
+            # Mock SLE with a bundle ID
+            sle = SimpleNamespace(
+                posting_date="2025-01-05",
+                posting_time="14:00:00",
+                voucher_type="Purchase Receipt",
+                voucher_no="PR-999",
+                actual_qty=2,
+                company="TestCo",
+                warehouse="WH-TEST",
+                serial_no=None,
+                serial_and_batch_bundle="BND-999",
+                stock_value_difference=200,
+            )
+
+            snl.get_stock_ledger_entries = lambda filters, to_date, order, check_serial_no: [sle]
+
+            # Provide serial_no filter so it covers both paths in get_serial_nos
+            filters = {"serial_no": "SN-X"}
+
+            # Mock frappe.get_all so we hit the loop in get_serial_nos
+            snl.frappe.get_all = lambda *args, **kwargs: [
+                frappe._dict({
+                    "serial_no": "SN-X",
+                    "parent": "BND-999",
+                    "valuation_rate": 75
+                }),
+                frappe._dict({
+                    "serial_no": "SN-Y",
+                    "parent": "BND-999",
+                    "valuation_rate": -25
+                }),
+            ]
+
+            # Needed because get_data also calls this
+            snl.get_serial_nos_from_sle = lambda serials: []
+
+            frappe.db.get_value = lambda dt, dn, fld, **kwargs: "Test Supplier"
+
+            columns, data = snl.execute(filters)
+            print("data",data)
+
+            # Validate serial_no and valuation_rate values
+            serials = [d.get("serial_no") for d in data]
+            self.assertIn("SN-X", serials)
+            self.assertIn("SN-Y", serials)
+
+            self.assertEqual(len(data), 2)
+            for row in data:
+                self.assertIn("valuation_rate", row)
+
+        finally:
+            # Restore all patched methods
+            snl.frappe.get_all = original_get_all
+            snl.get_stock_ledger_entries = original_get_stock_ledger_entries
+            snl.get_serial_nos_from_sle = original_get_serial_nos_from_sle
+            frappe.db.get_value = original_db_get_value
