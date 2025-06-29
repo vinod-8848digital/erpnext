@@ -482,8 +482,10 @@ class TestSerialNo(FrappeTestCase):
 		if default_inventory_account != account.name:
 			frappe.db.set_value("Company", company, "default_inventory_account", account.name)
    
-		frappe.db.set_value("Company", company, "enable_perpetual_inventory", 0)
-  
+		frappe.db.set_value("Company", company, {
+			"enable_provisional_accounting_for_non_stock_items": 0,
+			"enable_perpetual_inventory": 0
+		})
 		item = make_item("_Test Serial Item Auto", {
 			"has_serial_no": 1,
 			"serial_no_series": "AUTO-SERIAL-.###",
@@ -491,7 +493,8 @@ class TestSerialNo(FrappeTestCase):
 			"has_batch_no": 1,
 			"create_new_batch": 1,
 			"batch_no_series": "AUTO-BATCH-.###",
-			"valuation_rate": 100
+			"valuation_rate": 100,
+			"is_fixed_asset":False
 		})
 
 		se = make_stock_entry(
