@@ -481,7 +481,9 @@ class TestSerialNo(FrappeTestCase):
 
 		if default_inventory_account != account.name:
 			frappe.db.set_value("Company", company, "default_inventory_account", account.name)
-
+   
+		frappe.db.set_value("Company", company, "enable_perpetual_inventory", 0)
+  
 		item = make_item("_Test Serial Item Auto", {
 			"has_serial_no": 1,
 			"serial_no_series": "AUTO-SERIAL-.###",
