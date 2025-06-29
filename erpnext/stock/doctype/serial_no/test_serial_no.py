@@ -476,6 +476,13 @@ class TestSerialNo(FrappeTestCase):
 		})
 		account.insert(ignore_permissions=True)
 		frappe.db.set_value("Warehouse", warehouse, "account", account.name)
+  
+		company = "_Test Company"
+		default_inventory_account = frappe.db.get_value("Company", company, "default_inventory_account")
+
+		if not default_inventory_account:
+			frappe.db.set_value("Company", company, "default_inventory_account", account.name)
+
 		item = make_item("_Test Serial Item Auto", {
 			"has_serial_no": 1,
 			"serial_no_series": "AUTO-SERIAL-.###",
