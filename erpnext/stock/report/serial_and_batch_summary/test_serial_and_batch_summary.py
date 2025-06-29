@@ -81,7 +81,7 @@ class TestSerialAndBatchBundleReport(unittest.TestCase):
             "parenttype": "Serial and Batch Bundle",
             "parent": self.serial_batch_bundle.name,
             # "serial_no": "SN001",
-            "batch_no": "BATCH001",
+            "batch_no": "BATCH201",
             "warehouse": "_Test Warehouse - _TC",
             "incoming_rate": 100,
             "stock_value_difference": 1000,
@@ -150,7 +150,7 @@ class TestSerialAndBatchBundleReport(unittest.TestCase):
             "voucher_no": ["STE-TEST-001"],
             "item_code": self.item.name
         })
-        self.assertTrue(any("BATCH001" in b for b in result))
+        self.assertTrue(any("BATCH201" in b for b in result))
 
 
 def create_stock_entry(item_code, warehouse, qty, company,batch_no):
