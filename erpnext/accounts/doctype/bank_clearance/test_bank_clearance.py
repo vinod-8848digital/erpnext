@@ -5,13 +5,16 @@ import unittest
 
 import frappe
 from frappe.utils import add_months, getdate
+
 from erpnext.accounts.doctype.cost_center.test_cost_center import create_cost_center
 from erpnext.accounts.doctype.payment_entry.test_payment_entry import get_payment_entry
 from erpnext.accounts.doctype.purchase_invoice.test_purchase_invoice import make_purchase_invoice
-from erpnext.tests.utils import if_lending_app_installed, if_lending_app_not_installed
 from erpnext.accounts.doctype.sales_invoice.test_sales_invoice import create_sales_invoice
 from erpnext.stock.doctype.item.test_item import create_item
+from erpnext.stock.doctype.purchase_receipt.test_purchase_receipt import setup_fy_gls_cost_center
 from erpnext.stock.doctype.warehouse.test_warehouse import create_warehouse
+from erpnext.tests.utils import if_lending_app_installed, if_lending_app_not_installed
+
 
 class TestBankClearance(unittest.TestCase):
 	@classmethod
@@ -93,7 +96,7 @@ class TestBankClearance(unittest.TestCase):
 		bank_clearance.to_date = getdate()
 		bank_clearance.get_payment_entries()
 		self.assertEqual(len(bank_clearance.payment_entries), 3)
-	
+
 	def test_update_clearance_date_on_si(self):
 		sales_invoice = make_pos_sales_invoice()
 		date = getdate()
@@ -114,6 +117,49 @@ class TestBankClearance(unittest.TestCase):
 			"clearance_date",
 		)
 		self.assertEqual(si_clearance_date, date)
+
+	def test_pk(self):
+		self.bank_account = create_bank_account()
+		bank_clearance = frappe.get_doc(
+			{
+				"doctype": "Bank Clearance",
+				"account": self.bank_account,
+				"from_date": "2023-01-01",
+				"to_date": "2023-01-31",
+			}
+		)
+		bank_clearance.from_date = None
+		bank_clearance.to_date = None
+
+		with self.assertRaises(frappe.ValidationError) as cm:
+			bank_clearance.get_payment_entries()
+
+		self.assertEqual(str(cm.exception), "From Date and To Date are Mandatory")
+
+		bank_clearance.from_date = "2023-01-01"
+		bank_clearance.to_date = "2023-01-31"
+		bank_clearance.account = None
+
+		with self.assertRaises(frappe.ValidationError) as cm:
+			bank_clearance.get_payment_entries()
+
+		self.assertEqual(str(cm.exception), "Account is mandatory to get payment entries")
+
+
+def create_bank_account():
+	"""Utility function to create a test bank account"""
+	if not frappe.db.exists("Account", "_Test Bank Account - _TC"):
+		acc = frappe.get_doc(
+			{
+				"doctype": "Account",
+				"account_name": "_Test Bank Account",
+				"parent_account": "Bank Accounts - _TC",
+				"company": "_Test Company",
+				"account_type": "Bank",
+			}
+		).insert()
+		return acc.name
+	return "_Test Bank Account - _TC"
 
 
 def clear_payment_entries():
@@ -152,7 +198,9 @@ def add_transactions():
 
 def make_payment_entry():
 	from erpnext.buying.doctype.supplier.test_supplier import create_supplier
+
 	supplier = create_supplier(supplier_name="_Test Supplier")
+	fiscal_year, expense_account, cost_center = setup_fy_gls_cost_center()
 	pi = make_purchase_invoice(
 		supplier=supplier,
 		supplier_warehouse="_Test Warehouse - _TC",
@@ -167,10 +215,12 @@ def make_payment_entry():
 	pe.insert(ignore_permissions=True)
 	pe.submit()
 
+
 def make_pos_sales_invoice():
 	from erpnext.accounts.doctype.opening_invoice_creation_tool.test_opening_invoice_creation_tool import (
 		make_customer,
 	)
+
 	mode_of_payment = frappe.get_doc({"doctype": "Mode of Payment", "name": "Cash"})
 	if not frappe.db.get_value("Mode of Payment Account", {"company": "_Test Company", "parent": "Cash"}):
 		mode_of_payment.append(
