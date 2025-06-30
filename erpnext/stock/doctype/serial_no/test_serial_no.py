@@ -457,12 +457,27 @@ class TestSerialNo(FrappeTestCase):
 
 	def test_auto_fetch_serial_number_basic_TC_SCK_438(self):
 		from erpnext.stock.doctype.warehouse.test_warehouse import create_warehouse
-		from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_company
+		from erpnext.accounts.doctype.payment_entry.test_payment_entry import (
+			create_company,
+		)
 		from erpnext.stock.doctype.item.test_item import make_item
 		from erpnext.buying.doctype.purchase_order.test_purchase_order import validate_fiscal_year
 
 		create_company("_Test Company")
 		validate_fiscal_year("_Test Company")
+
+		if not frappe.db.exists("Supplier", "_Test Supplier Auto Fetch"):
+			frappe.get_doc({
+				"doctype": "Supplier",
+				"supplier_name": "_Test Supplier Auto Fetch",
+				"company": "_Test Company"
+			}).insert(ignore_mandatory=True,ignore_permissions=True,ignore_links=True)
+		if not frappe.db.exists("UOM", "_Test UOM"):
+			frappe.get_doc({
+				"doctype": "UOM",
+				"uom_name": "_Test UOM",
+				"company": "_Test Company"
+			}).insert(ignore_mandatory=True,ignore_permissions=True,ignore_links=True)
 		warehouse = create_warehouse("_Test Warehouse Auto Fetch", company="_Test Company")
 
 		account = frappe.get_doc({
@@ -497,16 +512,16 @@ class TestSerialNo(FrappeTestCase):
 			"is_fixed_asset":False
 		})
 
-		se = make_stock_entry(
+		pe = make_purchase_receipt(
 			item_code=item.name,
 			qty=2,
-			to_warehouse=warehouse,
-			company="_Test Company",
-			purpose="Material Receipt",
-			expense_account=account.name
+			supplier_warehouse=warehouse,
+			company=company,
+			supplier="_Test Supplier Auto Fetch",
+			warehouse=warehouse
 		)
-		se.submit()
-		batch = frappe.get_all("Batch", {"item": item.name, "reference_name": se.name})
+		pe.submit()
+		batch = frappe.get_all("Batch", {"item": item.name, "reference_name": pe.name})
 		exclude_sr_nos = ["AUTO-SERIAL-001", "AUTO-SERIAL-002"]
 		batch_nos = [d.name for d in batch]
 
@@ -516,7 +531,7 @@ class TestSerialNo(FrappeTestCase):
 			item_code=item.name,
 			warehouse=warehouse,
 			exclude_sr_nos=exclude_sr_nos,
-			batch_nos=batch_nos
+			batch_nos=batch_nos,
 		)
 
 		assert isinstance(sr_nos, list)
