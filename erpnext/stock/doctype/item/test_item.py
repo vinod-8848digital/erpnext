@@ -1221,7 +1221,7 @@ class TestItem(FrappeTestCase):
 		item = make_item("_Test Book", item_fields)
 		self.assertEqual(item.name, "_Test Book")
 		self.assertEqual(item.valuation_method, "FIFO")
-	def test_validate_customer_provided_part_valuation_rate_TC_SCK_391(self):
+	def test_validate_customer_provided_part_valuation_rate_TC_SCK_425(self):
 		item_fields = {
 			"is_stock_item": 1,
 			"is_customer_provided_item": 1,
@@ -1234,7 +1234,7 @@ class TestItem(FrappeTestCase):
 
 		self.assertIn(msg, str(e.exception))
 	
-	def test_validate_customer_provided_part_is_purchase_item_TC_SCK_392(self):
+	def test_validate_customer_provided_part_is_purchase_item_TC_SCK_426(self):
 		item_fields = {
 			"is_stock_item": 1,
 			"is_customer_provided_item": 1,
@@ -1246,7 +1246,7 @@ class TestItem(FrappeTestCase):
 
 		self.assertIn(msg, str(e.exception))
 
-	def test_validate_set_opening_stock_TC_SCK_393(self):
+	def test_validate_set_opening_stock_TC_SCK_427(self):
 		item_fields = {
 			"is_stock_item": 1,
 			"is_customer_provided_item": 0,
@@ -1262,7 +1262,7 @@ class TestItem(FrappeTestCase):
 
 		self.assertIn(msg, str(e.exception))
 		
-	def test_validate_naming_series_for_dot_TC_SCK_394(self):
+	def test_validate_naming_series_for_dot_TC_SCK_428(self):
 		item_fields = {
 			"is_stock_item": 1,
 			"serial_no_series": "SRS###",
@@ -1274,7 +1274,7 @@ class TestItem(FrappeTestCase):
 
 		self.assertIn(msg, str(e.exception))
 	
-	def test_validate_naming_series_for_hash_TC_SCK_395(self):
+	def test_validate_naming_series_for_hash_TC_SCK_429(self):
 		item_fields = {
 			"is_stock_item": 1,
 			"serial_no_series": "SRS. ###", 
@@ -1285,7 +1285,7 @@ class TestItem(FrappeTestCase):
 
 		self.assertIn(msg, str(e.exception))
 	
-	def test_update_bom_item_description_TC_SCK_396(self):
+	def test_update_bom_item_description_TC_SCK_430(self):
 		item = make_item("_test-item-for-bom", {"is_stock_item": 1})
 		item.description = "Initial Description"
 		item.save()
@@ -1319,7 +1319,7 @@ class TestItem(FrappeTestCase):
 		self.assertEqual(bom_item_desc, "Updated BOM Description")
 		self.assertEqual(explosion_desc, "Updated BOM Description")
 	
-	def test_deleted_attribute_in_template_raises_error_TC_SCK_397(self):
+	def test_deleted_attribute_in_template_raises_error_TC_SCK_431(self):
 		create_attribute("Color", ["Red", "Blue"])
 		create_attribute("Size", ["S", "M", "L"])
 		
@@ -1361,7 +1361,7 @@ class TestItem(FrappeTestCase):
 			template.save()
 		self.assertIn(msg, str(cm.exception))
    
-	def test_item_autoname_with_naming_series_TC_SCK_398(self):
+	def test_item_autoname_with_naming_series_TC_SCK_432(self):
 		frappe.db.set_default("item_naming_by", "Naming Series")
 		template = frappe.get_doc({
 			"doctype": "Item",
@@ -1398,7 +1398,7 @@ class TestItem(FrappeTestCase):
   		#set name as item code 
 		self.assertEqual(variant.name, "Variant Without Item Code")
   
-	def test_update_template_tables_TC_SCK_399(self):
+	def test_update_template_tables_TC_SCK_433(self):
 		create_tax_accounts()
 		frappe.db.set_default("item_naming_by", "Naming Series")
 
@@ -1471,7 +1471,8 @@ class TestItem(FrappeTestCase):
 		self.assertEqual(item.taxes[0].maximum_net_rate, 9)
 		self.assertEqual(len(item.reorder_levels), 1)
 		self.assertEqual(item.reorder_levels[0].warehouse_reorder_qty, 25)
-	def test_after_rename_with_merge_TC_SCK_400(self):
+  
+	def test_after_rename_with_merge_TC_SCK_434(self):
 		old_item = make_item("_test_old_item", {"stock_uom": "Nos"})
 
 		new_item = make_item("_test_new_item", {"stock_uom": "Nos"})
@@ -1515,7 +1516,7 @@ class TestItem(FrappeTestCase):
 		assert frappe.db.get_value("Item", new_item.name, "item_code") == new_item.name
 
 
-	def test_validate_properties_before_merge_TC_SCK_401(self):
+	def test_validate_properties_before_merge_fail_TC_SCK_435(self):
 
 		item_1 = make_item("_test_item_merge_1", {
 			"stock_uom": "Nos",
@@ -1534,7 +1535,7 @@ class TestItem(FrappeTestCase):
 			item_1.validate_properties_before_merge(item_2.name)
 		self.assertIn("To merge, following properties must be same for both items", str(e.exception))
 	
-	def test_validate_duplicate_product_bundles_before_merge_pass_TC_SCK_402(self):
+	def test_validate_duplicate_product_bundles_before_merge_pass_TC_SCK_436(self):
 		from erpnext.stock.doctype.item.test_item import make_item
 
 		item_1 = make_item("_test_item_bundle_1", {"stock_uom": "Nos", "is_stock_item": 0})
@@ -1559,7 +1560,7 @@ class TestItem(FrappeTestCase):
 			item_1.validate_duplicate_product_bundles_before_merge(item_1.name, item_2.name)
 		self.assertIn("Please delete Product Bundle", str(e.exception))
 	
-	def test_update_variants_TC_SCK_403(self):
+	def test_update_variants_TC_SCK_437(self):
 		from erpnext.stock.doctype.item.item import update_variants
 		create_attribute("Color", ["Red", "Blue"])
 		create_attribute("Size", ["S", "M", "L"])
