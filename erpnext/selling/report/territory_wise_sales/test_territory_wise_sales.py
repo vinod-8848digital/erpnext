@@ -29,15 +29,21 @@ class TestTerritoryWiseSales(FrappeTestCase):
 
 		qo = make_quotation(op.name)
 		qo.items[0].warehouse = "_Test Warehouse - _TC"
+		qo.taxes_and_charges = ""
+		qo.taxes = []
 		qo.insert(ignore_permissions=True)
 		qo.submit()
 
 		so = make_sales_order(qo.name)
 		so.delivery_date = add_days(today(), 2)
+		so.taxes_and_charges = ""
+		so.taxes = []
 		so.insert(ignore_permissions=True)
 		so.submit()
 
 		si = make_sales_invoice(so.name)
+		si.taxes_and_charges = ""
+		si.taxes = []
 		si.insert(ignore_permissions=True)
 		si.submit()
 		filters = frappe._dict(
