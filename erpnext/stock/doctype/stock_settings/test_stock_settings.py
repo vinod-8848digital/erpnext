@@ -94,8 +94,9 @@ class TestStockSettings(FrappeTestCase):
 
 		if has_reserved_stock:
 			msg = "As there are reserved stock, you cannot disable Stock Reservation."
-			with self.assertRaises(frappe.ValidationError, msg=msg):
+			with self.assertRaises(frappe.ValidationError) as context:
 				settings.save()
+			self.assertEqual(str(context.exception), msg)
 		else:
 			settings.save()
 			self.assertEqual(settings.enable_stock_reservation, 0)
