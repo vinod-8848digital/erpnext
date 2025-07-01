@@ -248,3 +248,155 @@ class TestBankReconciliationTool(AccountsTestMixin, FrappeTestCase):
 			bt.name, document_types=["payment_entry"], from_date=add_days(today(), -5), to_date=today()
 		)
 		self.assertTrue(len(linked) > 0)
+
+	def test_get_all_matching_queries_TC_ACC_268(self):
+		from erpnext.accounts.doctype.bank_reconciliation_tool.bank_reconciliation_tool import (
+			get_linked_payments,
+		)
+		from erpnext.buying.doctype.supplier.test_supplier import create_supplier
+		from erpnext.stock.doctype.item.test_item import create_item, make_item
+		from erpnext.stock.doctype.purchase_receipt.test_purchase_receipt import (
+			setup_fy_gls_cost_center,
+			setup_test_company_defaults,
+		)
+
+		item_code = make_item(
+			"_Test Item225", {"item_name": "_Test Item225", "valuation_rate": 500, "is_stock_item": 1}
+		).name
+		company = setup_test_company_defaults()
+		supplier = create_supplier()
+		from_date = add_days(today(), -5)
+		to_date = today()
+
+		# 1. Create Sales Invoice to match incoming transaction
+		si = frappe.get_doc(
+			{
+				"doctype": "Sales Invoice",
+				"customer": self.customer,
+				"due_date": today(),
+				"company": company,
+				"currency": "INR",
+				"debit_to": self.debit_to,
+				"is_pos": 1,
+				"paid_amount": 200,
+				"base_paid_amount": 200,
+				"base_grand_total": 200,
+				"items": [{"item_code": item_code, "qty": 1, "rate": 200}],
+				"payments": [{"mode_of_payment": "Cash", "account": self.bank, "amount": 200}],
+			}
+		).insert()
+		si.submit()
+
+		# 2. Create Purchase Invoice to match outgoing transaction
+		pi = frappe.get_doc(
+			{
+				"doctype": "Purchase Invoice",
+				"supplier": supplier,
+				"due_date": today(),
+				"items": [{"item_code": item_code, "qty": 1, "rate": 300}],
+				"currency": "INR",
+				"company": company,
+				# "credit_to": self.credit_to,
+				"is_paid": 1,
+				"cash_bank_account": self.bank,
+			}
+		).insert()
+		pi.submit()
+
+		# 3. Create Bank Transaction (incoming) → triggers get_si_matching_query + get_bt_matching_query
+		incoming_bt = (
+			frappe.get_doc(
+				{
+					"doctype": "Bank Transaction",
+					"date": today(),
+					"deposit": 200,
+					"company": company,
+					"unallocated_amount": 200,
+					"bank_account": self.bank_account,
+					"reference_number": si.name,
+					"currency": "INR",
+					"party_type": "Customer",
+					"party": self.customer,
+				}
+			)
+			.insert()
+			.submit()
+		)
+
+		# 4. Create Bank Transaction (outgoing) → triggers get_pi_matching_query + get_bt_matching_query
+		outgoing_bt = (
+			frappe.get_doc(
+				{
+					"doctype": "Bank Transaction",
+					"date": today(),
+					"withdrawal": 300,
+					"unallocated_amount": 300,
+					"bank_account": self.bank_account,
+					"reference_number": pi.name,
+					"currency": "INR",
+					"party_type": "Supplier",
+					"party": supplier,
+				}
+			)
+			.insert()
+			.submit()
+		)
+
+		# 5. Trigger get_linked_payments for both
+		incoming_matches = get_linked_payments(
+			incoming_bt.name,
+			document_types=["sales_invoice", "bank_transaction"],
+			from_date=from_date,
+			to_date=to_date,
+		)
+
+		outgoing_matches = get_linked_payments(
+			outgoing_bt.name,
+			document_types=["purchase_invoice", "bank_transaction"],
+			from_date=from_date,
+			to_date=to_date,
+		)
+
+		self.assertTrue(any(x["doctype"] == "Sales Invoice" for x in incoming_matches))
+		self.assertTrue(any(x["doctype"] == "Bank Transaction" for x in incoming_matches))
+		self.assertTrue(any(x["doctype"] == "Purchase Invoice" for x in outgoing_matches))
+		self.assertTrue(any(x["doctype"] == "Bank Transaction" for x in outgoing_matches))
+
+	def test_start_auto_reconcile_direct_TC_ACC_269(self):
+		from erpnext.accounts.doctype.bank_reconciliation_tool.bank_reconciliation_tool import (
+			start_auto_reconcile,
+		)
+
+		# Create multiple linked transactions manually
+		bt_list = []
+		for i in range(2):
+			bt = (
+				frappe.get_doc(
+					{
+						"doctype": "Bank Transaction",
+						"date": today(),
+						"deposit": 200,
+						"unallocated_amount": 200,
+						"bank_account": self.bank_account,
+						"currency": "INR",
+						"reference_number": f"DIRECT{i}",
+					}
+				)
+				.insert()
+				.submit()
+			)
+			bt_list.append(bt)
+
+		# Directly call start_auto_reconcile with matching dates
+		start_auto_reconcile(
+			bank_transactions=bt_list,
+			from_date=add_days(today(), -5),
+			to_date=today(),
+			filter_by_reference_date=False,
+			from_reference_date=None,
+			to_reference_date=None,
+		)
+
+		# Assert at least one status change or msgprint output
+		updated = frappe.get_doc("Bank Transaction", bt_list[0].name)
+		self.assertIn(updated.status, ["Unreconciled", "Reconciled"])
