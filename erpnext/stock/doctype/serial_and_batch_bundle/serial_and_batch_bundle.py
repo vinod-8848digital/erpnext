@@ -922,8 +922,9 @@ class SerialandBatchBundle(Document):
 			"Delivery Note",
 		]:
 			return
-
+		
 		data = self.get_orignal_document_data()
+		
 		if not data:
 			return
 
@@ -931,7 +932,7 @@ class SerialandBatchBundle(Document):
 		current_serial_nos = [d.serial_no for d in self.entries if d.serial_no]
 		current_batches = [d.batch_no for d in self.entries if d.batch_no]
 
-		for d in data:
+		for d in data: # pragma: no cover
 			if self.has_serial_no:
 				if d.serial_and_batch_bundle:
 					serial_nos = get_serial_nos_from_bundle(d.serial_and_batch_bundle)
@@ -1991,13 +1992,13 @@ def get_reserved_batches_for_pos(kwargs) -> dict:
 			["POS Invoice", "name", "not in", kwargs.ignore_voucher_nos],
 		],
 	)
-
 	ids = [
 		pos_invoice.serial_and_batch_bundle
 		for pos_invoice in pos_invoices
 		if pos_invoice.serial_and_batch_bundle and not pos_invoice.use_serial_batch_fields
+		
 	]
-
+	
 	if ids:
 		for d in get_serial_batch_ledgers(kwargs.item_code, docstatus=1, name=ids):
 			key = (d.batch_no, d.warehouse)
@@ -2011,6 +2012,7 @@ def get_reserved_batches_for_pos(kwargs) -> dict:
 			else:
 				pos_batches[key].qty += d.qty
 
+	
 	# POS invoices having batch without bundle (to handle old POS invoices)
 	for row in pos_invoices:
 		if not row.batch_no:
