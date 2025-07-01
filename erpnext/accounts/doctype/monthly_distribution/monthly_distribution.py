@@ -14,7 +14,7 @@ class MonthlyDistribution(Document):
 
 	from typing import TYPE_CHECKING
 
-	if TYPE_CHECKING:
+	if TYPE_CHECKING: # pragma: no cover
 		from frappe.types import DF
 
 		from erpnext.accounts.doctype.monthly_distribution_percentage.monthly_distribution_percentage import (
@@ -52,7 +52,6 @@ class MonthlyDistribution(Document):
 
 	def validate(self):
 		total = sum(flt(d.percentage_allocation) for d in self.get("percentages"))
-
 		if flt(total, 2) != 100.0:
 			frappe.throw(_("Percentage Allocation should be equal to 100%") + f" ({flt(total, 2)!s}%)")
 
@@ -66,7 +65,7 @@ def get_periodwise_distribution_data(distribution_id, period_list, periodicity):
 
 	for d in period_list:
 		period_dict[d.key] = get_percentage(doc, d.from_date, months_to_add)
-
+  
 	return period_dict
 
 
@@ -80,5 +79,5 @@ def get_percentage(doc, start_date, period):
 	for d in doc.percentages:
 		if d.month in months:
 			percentage += d.percentage_allocation
-
+   
 	return percentage
