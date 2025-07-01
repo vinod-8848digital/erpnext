@@ -174,7 +174,7 @@ class TestDelayedOrderReport(FrappeTestCase):
 		)
 		print("sales_invoice_list", sales_invoice_list)
 
-	def test_get_data_returns_unique_sales_orders_T_DOR_001(self):
+	def test_get_data_returns_unique_sales_orders_TC_SCK_509(self):
 		filters = {
 			"based_on": "Sales Invoice",
 			"from_date": add_days(nowdate(), -30),
