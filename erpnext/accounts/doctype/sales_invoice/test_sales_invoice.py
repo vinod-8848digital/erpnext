@@ -12,6 +12,9 @@ from frappe.utils import add_days, flt, format_date, getdate, nowdate, today
 
 import erpnext
 from erpnext.accounts.doctype.account.test_account import create_account, get_inventory_account
+from erpnext.accounts.doctype.mode_of_payment.test_mode_of_payment import (
+	set_default_account_for_mode_of_payment,
+)
 from erpnext.accounts.doctype.payment_entry.payment_entry import get_payment_entry
 from erpnext.accounts.doctype.pos_profile.test_pos_profile import make_pos_profile
 from erpnext.accounts.doctype.purchase_invoice.purchase_invoice import WarehouseMissingError
@@ -49,6 +52,11 @@ class TestSalesInvoice(FrappeTestCase):
 		create_items(["_Test Internal Transfer Item"], uoms=[{"uom": "Box", "conversion_factor": 10}])
 		create_internal_parties()
 		setup_accounts()
+		mode_of_payment = frappe.get_doc("Mode of Payment", "Bank Draft")
+		set_default_account_for_mode_of_payment(mode_of_payment, "_Test Company", "_Test Bank - _TC")
+		set_default_account_for_mode_of_payment(
+			mode_of_payment, "_Test Company with perpetual inventory", "_Test Bank - TCP1"
+		)
 		frappe.db.set_single_value("Accounts Settings", "acc_frozen_upto", None)
 
 	def tearDown(self):
@@ -961,10 +969,8 @@ class TestSalesInvoice(FrappeTestCase):
 		pos.is_pos = 1
 		pos.update_stock = 1
 
-		pos.append(
-			"payments", {"mode_of_payment": "Bank Draft", "account": "_Test Bank - TCP1", "amount": 50}
-		)
-		pos.append("payments", {"mode_of_payment": "Cash", "account": "Cash - TCP1", "amount": 50})
+		pos.append("payments", {"mode_of_payment": "Bank Draft", "amount": 50})
+		pos.append("payments", {"mode_of_payment": "Cash", "amount": 50})
 
 		taxes = get_taxes_and_charges()
 		pos.taxes = []
@@ -993,10 +999,8 @@ class TestSalesInvoice(FrappeTestCase):
 		pos.is_pos = 1
 		pos.pos_profile = pos_profile.name
 
-		pos.append(
-			"payments", {"mode_of_payment": "Bank Draft", "account": "_Test Bank - _TC", "amount": 500}
-		)
-		pos.append("payments", {"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": 500})
+		pos.append("payments", {"mode_of_payment": "Bank Draft", "amount": 500})
+		pos.append("payments", {"mode_of_payment": "Cash", "amount": 500})
 		pos.insert()
 		pos.submit()
 
@@ -1301,10 +1305,8 @@ class TestSalesInvoice(FrappeTestCase):
 		pos.is_pos = 1
 		pos.update_stock = 1
 
-		pos.append(
-			"payments", {"mode_of_payment": "Bank Draft", "account": "_Test Bank - TCP1", "amount": 50}
-		)
-		pos.append("payments", {"mode_of_payment": "Cash", "account": "Cash - TCP1", "amount": 60})
+		pos.append("payments", {"mode_of_payment": "Bank Draft", "amount": 50})
+		pos.append("payments", {"mode_of_payment": "Cash", "amount": 60})
 
 		pos.write_off_outstanding_amount_automatically = 1
 		pos.insert()
@@ -1344,10 +1346,8 @@ class TestSalesInvoice(FrappeTestCase):
 		pos.is_pos = 1
 		pos.update_stock = 1
 
-		pos.append(
-			"payments", {"mode_of_payment": "Bank Draft", "account": "_Test Bank - TCP1", "amount": 50}
-		)
-		pos.append("payments", {"mode_of_payment": "Cash", "account": "Cash - TCP1", "amount": 40})
+		pos.append("payments", {"mode_of_payment": "Bank Draft", "amount": 50})
+		pos.append("payments", {"mode_of_payment": "Cash", "amount": 40})
 
 		pos.write_off_outstanding_amount_automatically = 1
 		pos.insert()
@@ -1361,7 +1361,7 @@ class TestSalesInvoice(FrappeTestCase):
 
 		pos = create_sales_invoice(do_not_save=True)
 		pos.is_pos = 1
-		pos.append("payments", {"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": 100})
+		pos.append("payments", {"mode_of_payment": "Cash", "amount": 100})
 		pos.save().submit()
 		self.assertEqual(pos.outstanding_amount, 0.0)
 		self.assertEqual(pos.status, "Paid")
@@ -1433,10 +1433,8 @@ class TestSalesInvoice(FrappeTestCase):
 		for tax in taxes:
 			pos.append("taxes", tax)
 
-		pos.append(
-			"payments", {"mode_of_payment": "Bank Draft", "account": "_Test Bank - TCP1", "amount": 50}
-		)
-		pos.append("payments", {"mode_of_payment": "Cash", "account": "Cash - TCP1", "amount": 60})
+		pos.append("payments", {"mode_of_payment": "Bank Draft", "amount": 50})
+		pos.append("payments", {"mode_of_payment": "Cash", "amount": 60})
 
 		pos.insert()
 		pos.submit()
@@ -4044,10 +4042,8 @@ class TestSalesInvoice(FrappeTestCase):
 		pos = create_sales_invoice(qty=10, do_not_save=True)
 		pos.is_pos = 1
 		pos.pos_profile = pos_profile.name
-		pos.append(
-			"payments", {"mode_of_payment": "Bank Draft", "account": "_Test Bank - _TC", "amount": 500}
-		)
-		pos.append("payments", {"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": 500})
+		pos.append("payments", {"mode_of_payment": "Bank Draft", "amount": 500})
+		pos.append("payments", {"mode_of_payment": "Cash", "amount": 500})
 		pos.save().submit()
 
 		pos_return = make_sales_return(pos.name)
@@ -5684,7 +5680,7 @@ class TestSalesInvoice(FrappeTestCase):
 		pos.is_pos = 1
 		pos.pos_profile = pos_profile.name
 		pos.debit_to = "_Test Receivable USD - _TC"
-		pos.append("payments", {"mode_of_payment": "Cash", "account": "_Test Bank - _TC", "amount": 20.35})
+		pos.append("payments", {"mode_of_payment": "Cash", "amount": 20.35})
 		pos.save().submit()
 		pos_return = make_sales_return(pos.name)
 		self.assertEqual(abs(pos_return.payments[0].amount), pos.payments[0].amount)
@@ -7288,6 +7284,341 @@ class TestSalesInvoice(FrappeTestCase):
 			customer.tax_withholding_category = ""
 			customer.save()
 
+	def test_set_indicators_TC_ACC_241(self):
+		from .sales_invoice import make_sales_return
+
+		si = create_sales_invoice()
+		si.set_indicator()
+		self.assertEqual(si.docstatus, 1)
+		self.assertEqual(si.status, "Unpaid")
+
+		r_si = make_sales_return(si.name)
+		r_si.insert()
+		r_si.submit()
+		r_si.set_indicator()
+		self.assertEqual(r_si.docstatus, 1)
+		self.assertEqual(r_si.status, "Return")
+
+		si_1 = create_sales_invoice()
+		pe = get_payment_entry(si_1.doctype, si_1.name)
+		pe.insert(ignore_permissions=1)
+		pe.submit()
+
+		si_1.load_from_db()
+		si_1.set_indicator()
+
+		self.assertEqual(si_1.docstatus, 1)
+		self.assertEqual(si_1.status, "Paid")
+
+	def test_validate_serial_against_delivery_note_TC_ACC_242(self):
+		from erpnext.stock.doctype.delivery_note.delivery_note import make_sales_invoice
+		from erpnext.stock.doctype.delivery_note.test_delivery_note import create_delivery_note
+
+		dn = create_delivery_note(do_not_save=True)
+		dn.insert(ignore_permissions=True)
+		dn.submit()
+		self.assertEqual(dn.docstatus, 1)
+		self.assertEqual(dn.status, "To Bill")
+
+		si = make_sales_invoice(dn.name)
+		si.insert(ignore_permissions=True)
+		si.validate_serial_against_delivery_note()
+		si.submit()
+		self.assertEqual(si.docstatus, 1)
+		self.assertEqual(si.status, "Unpaid")
+
+	def test_loyalty_programs_TC_ACC_243(self):
+		from erpnext.selling.doctype.customer.test_customer import get_customer_dict
+
+		from .sales_invoice import get_loyalty_programs
+
+		customer = frappe.get_doc(get_customer_dict("__Test Loyalty Customer 1")).insert(
+			ignore_permissions=True
+		)
+		customer.loyalty_program = create_loyalty_program()
+		customer.save()
+
+		loyalty_program = get_loyalty_programs(customer.name)
+		self.assertEqual(loyalty_program[0], "__Test Single Loyalty 1")
+
+		l1_program = frappe.get_doc("Loyalty Program", create_loyalty_program())
+		l1_program.auto_opt_in = 1
+		l1_program.save()
+
+	def test_create_invoice_discounting_TC_ACC_244(self):
+		from .sales_invoice import create_invoice_discounting
+
+		si = create_sales_invoice()
+
+		self.assertEqual(si.docstatus, 1)
+		self.assertEqual(si.status, "Unpaid")
+
+		accounts = create_discounting_accounts()
+
+		invoice_discounting = create_invoice_discounting(si.name)
+		invoice_discounting.loan_start_date = today()
+		invoice_discounting.loan_period = 100
+		invoice_discounting.short_term_loan = accounts.get("short_term_loan")
+		invoice_discounting.bank_account = accounts.get("bank_account")
+		invoice_discounting.bank_charges_account = accounts.get("bank_charges_account")
+		invoice_discounting.accounts_receivable_credit = accounts.get("ar_credit")
+		invoice_discounting.accounts_receivable_discounted = accounts.get("ar_discounted")
+		invoice_discounting.accounts_receivable_unpaid = accounts.get("ar_unpaid")
+		invoice_discounting.insert(ignore_permissions=True)
+		invoice_discounting.submit()
+
+		self.assertEqual(invoice_discounting.docstatus, 1)
+		self.assertEqual(invoice_discounting.status, "Sanctioned")
+
+	def test_get_warehouse_TC_ACC_245(self):
+		si = create_sales_invoice(do_not_save=1)
+		si.insert(ignore_permissions=True)
+
+		with self.assertRaises(frappe.ValidationError) as cm:
+			si.get_warehouse()
+		self.assertIn("POS Profile required to make POS Entry", str(cm.exception))
+
+	def test_validate_warehouse_TC_ACC_246(self):
+		si = create_sales_invoice(do_not_save=1)
+		si.update_stock = 1
+		si.items[0].warehouse = ""
+
+		with self.assertRaises(frappe.ValidationError) as cm:
+			si.insert(ignore_permissions=True)
+		self.assertIn(f"Warehouse required for stock Item {si.items[0].item_code}", str(cm.exception))
+
+	@change_settings("Selling Settings", {"so_required": "Yes"})
+	def test_so_required_in_si_TC_ACC_247(self):
+		si = create_sales_invoice(do_not_save=1)
+
+		with self.assertRaises(frappe.ValidationError) as cm:
+			si.insert(ignore_permissions=True)
+		self.assertIn(f"Sales Order is mandatory for Item {si.items[0].item_code}", str(cm.exception))
+
+	def test_validate_item_cost_centers_TC_ACC_248(self):
+		si = create_sales_invoice(do_not_save=1)
+		si.items[0].cost_center = "Main - _TC1"
+
+		with self.assertRaises(frappe.ValidationError) as cm:
+			si.insert()
+		self.assertIn(
+			f"Row #{si.items[0].idx}: Cost Center {si.items[0].cost_center} does not belong to company {si.company}",
+			str(cm.exception),
+		)
+
+	def test_get_list_context_TC_ACC_249(self):
+		from .sales_invoice import get_list_context
+
+		data = get_list_context()
+		self.assertTrue(data.get("title"), "Invoices")
+		self.assertTrue(data.get("no_breadcrumbs"), True)
+		self.assertTrue(data.get("show_sidebar"), True)
+		self.assertTrue(data.get("show_search"), True)
+
+	def test_set_pos_fields_TC_ACC_250(self):
+		from erpnext.accounts.doctype.pos_profile.test_pos_profile import make_pos_profile
+
+		pos = make_pos_profile(do_not_insert=1)
+		pos.account_for_change_amount = "Cash - _TC"
+		pos.insert(ignore_permissions=True)
+		si = create_sales_invoice(do_not_save=1)
+		si.is_pos = 1
+		si.pos_profile = pos.name
+		si.set_pos_fields()
+		si.insert()
+		si.submit()
+		company_abbr = si.get_company_abbr()
+
+		self.assertEqual(si.docstatus, 1)
+		self.assertEqual(si.status, "Unpaid")
+		self.assertEqual(company_abbr, "_TC")
+
+	def test_validate_delivery_note_TC_ACC_251(self):
+		from erpnext.stock.doctype.delivery_note.delivery_note import make_sales_invoice
+		from erpnext.stock.doctype.delivery_note.test_delivery_note import create_delivery_note
+
+		dn = create_delivery_note(do_not_save=1)
+		dn.insert(ignore_permissions=True)
+		dn.submit()
+
+		si = make_sales_invoice(dn.name)
+		si.update_stock = 1
+
+		with self.assertRaises(frappe.ValidationError) as cm:
+			si.insert(ignore_permissions=1)
+
+		self.assertIn(f"Stock cannot be updated against Delivery Note {dn.name}", str(cm.exception))
+
+	def test_allow_write_off_only_on_pos_TC_ACC_252(self):
+		si = create_sales_invoice(do_not_save=1)
+		si.write_off_account = "Sales - _TC"
+		si.insert(ignore_permissions=True)
+
+		si.load_from_db()
+		self.assertIsNone(si.write_off_account)
+
+	def test_validate_dropship_item_TC_ACC_253(self):
+		from erpnext.selling.doctype.sales_order.test_sales_order import make_sales_invoice, make_sales_order
+
+		so = make_sales_order(do_not_save=True)
+		so.items[0].delivered_by_supplier = 1
+		so.items[0].supplier = "_Test Supplier"
+		so.insert()
+		so.submit()
+
+		si = make_sales_invoice(so.name)
+		si.update_stock = 1
+		with self.assertRaises(frappe.ValidationError) as cm:
+			si.insert()
+		self.assertIn("Could not update stock, invoice contains drop shipping item.", str(cm.exception))
+
+	def test_enable_discount_accounting_TC_ACC_254(self):
+		si = create_sales_invoice(do_not_save=1)
+		si.insert(ignore_permissions=True)
+		discounting = si.enable_discount_accounting
+		self.assertEqual(
+			discounting, frappe.db.get_single_value("Selling Settings", "enable_discount_accounting")
+		)
+
+	def test_validate_receivable_to_acc_TC_ACC_255(self):
+		si = create_sales_invoice(do_not_save=1)
+		si.debit_to = create_account(
+			account_name="__Test Re Account__",
+			parent_account="Accounts Receivable - _TC",
+			company="_Test Company",
+			account_type="Cash",
+			report_type="Balance Sheet",
+		)
+		with self.assertRaises(frappe.ValidationError) as cm:
+			si.insert(ignore_permissions=True)
+		self.assertIn(
+			"Please ensure Debit To account __Test Re Account__ - _TC is a Receivable account. Change the account type to Receivable or select a different account.",
+			str(cm.exception),
+		)
+
+	def test_validate_debit_to_acc_TC_ACC_256(self):
+		account = create_discounting_accounts()
+		si = create_sales_invoice(do_not_save=1)
+		si.debit_to = account.get("report_account")
+		with self.assertRaises(frappe.ValidationError) as cm:
+			si.insert(ignore_permissions=True)
+		self.assertIn(
+			"Please ensure Debit To account is a Balance Sheet account. You can change the parent account to a Balance Sheet account or select a different account.",
+			str(cm.exception),
+		)
+
+	def test_on_recurring_TC_ACC_257(self):
+		reference_si = create_sales_invoice(do_not_save=1)
+		reference_si.insert(ignore_permissions=True)
+		reference_si.submit()
+		self.assertEqual(reference_si.docstatus, 1)
+		self.assertEqual(reference_si.status, "Unpaid")
+
+		auto_repeat = frappe.get_doc(
+			{
+				"doctype": "Auto Repeat",
+				"reference_doctype": "Sales Invoice",
+				"reference_document": reference_si.name,
+				"frequency": "Monthly",
+				"next_schedule_date": add_days(today(), 30),
+			}
+		)
+		auto_repeat.insert(ignore_permissions=True)
+
+		new_si = create_sales_invoice(do_not_save=1)
+		new_si.insert(ignore_permissions=True)
+		new_si.submit()
+		new_si.on_recurring(reference_doc=reference_si, auto_repeat_doc=auto_repeat)
+
+		self.assertEqual(new_si.docstatus, 1)
+		self.assertIsNone(new_si.due_date)
+
+	def test_make_maintenance_schedule_from_si_TC_ACC_258(self):
+		from .sales_invoice import make_maintenance_schedule
+
+		si = create_sales_invoice(do_not_save=1)
+		si.insert(ignore_permissions=True)
+		si.submit()
+
+		self.assertEqual(si.docstatus, 1)
+		self.assertEqual(si.status, "Unpaid")
+
+		ms = make_maintenance_schedule(si.name)
+		ms.transaction_date = today()
+		ms.items[0].start_date = today()
+		ms.items[0].end_date = add_days(today(), 1)
+		ms.items[0].no_of_visits = 2
+		ms.insert(ignore_permissions=True)
+		ms.submit()
+
+		self.assertEqual(ms.docstatus, 1)
+
+	def test_validate_pos_TC_ACC_259(self):
+		from erpnext.accounts.doctype.pos_profile.test_pos_profile import make_pos_profile
+
+		pos = make_pos_profile(do_not_insert=1)
+		pos.account_for_change_amount = "Cash - _TC"
+		pos.insert(ignore_permissions=True)
+
+		si = create_sales_invoice(do_not_save=1)
+		si.is_pos = 1
+		si.pos_profile = pos.name
+		si.write_off_amount = 1000
+		si.is_return = 1
+		si.taxes_and_charges = ""
+		si.taxes = []
+		si.items[0].qty = -1
+
+		with self.assertRaises(frappe.ValidationError) as cm:
+			si.insert(ignore_permissions=True)
+		self.assertIn("Paid amount + Write Off Amount can not be greater than Grand Total", str(cm.exception))
+
+	def test_get_all_mode_of_payments_TC_ACC_260(self):
+		from .sales_invoice import get_all_mode_of_payments, get_mode_of_payment_info
+
+		si = create_sales_invoice()
+		mode_of_pmt = get_all_mode_of_payments(si)
+		if mode_of_pmt:
+			self.assertEqual(mode_of_pmt[0].get("default_account"), "Cash - _TC")
+
+		pmt_info = get_mode_of_payment_info("Cash", si.company)
+		if pmt_info:
+			self.assertEqual(pmt_info[0].get("default_account"), "Cash - _TC")
+
+	@change_settings("Accounts Settings", {"unlink_payment_on_cancellation_of_invoice": 1})
+	def test_check_if_return_invoice_linked_with_payment_entry_TC_ACC_261(self):
+		si = create_sales_invoice(rate=1000, do_not_save=True)
+		si.insert(ignore_permissions=True)
+		si.submit()
+
+		return_si = create_sales_invoice(rate=200, do_not_save=True)
+		return_si.is_return = 1
+		# return_si.return_against = si.name
+		return_si.items[0].qty = -1
+		return_si.insert(ignore_permissions=True)
+		return_si.submit()
+
+		pe = get_payment_entry(si.doctype, si.name)
+		pe.append(
+			"references",
+			{
+				"reference_doctype": return_si.doctype,
+				"reference_name": return_si.name,
+				"allocated_amount": -200,
+			},
+		)
+		pe.insert(ignore_permissions=True)
+		pe.submit()
+
+		return_si.load_from_db()
+
+		with self.assertRaises(frappe.ValidationError) as cm:
+			return_si.cancel()
+		self.assertIn(
+			f"Please cancel and amend the Payment Entry {pe.name} to unallocate the amount of this Return Invoice before cancelling it.",
+			str(cm.exception),
+		)
+
 
 def set_advance_flag(company, flag, default_account):
 	frappe.db.set_value(
@@ -8122,3 +8453,91 @@ def create_fiscal_year(company):
 		fiscal_year.company = company  # Required to avoid overlap error
 		fiscal_year.append("companies", {"company": company})
 		fiscal_year.save()
+
+
+def create_discounting_accounts():
+	ar_credit = create_account(
+		account_name="_Test Accounts Receivable Credit",
+		parent_account="Accounts Receivable - _TC",
+		company="_Test Company",
+	)
+	ar_discounted = create_account(
+		account_name="_Test Accounts Receivable Discounted",
+		parent_account="Accounts Receivable - _TC",
+		company="_Test Company",
+	)
+	ar_unpaid = create_account(
+		account_name="_Test Accounts Receivable Unpaid",
+		parent_account="Accounts Receivable - _TC",
+		company="_Test Company",
+	)
+	short_term_loan = create_account(
+		account_name="_Test Short Term Loan",
+		parent_account="Source of Funds (Liabilities) - _TC",
+		company="_Test Company",
+	)
+	bank_account = create_account(
+		account_name="_Test Bank 2", parent_account="Bank Accounts - _TC", company="_Test Company"
+	)
+	bank_charges_account = create_account(
+		account_name="_Test Bank Charges Account",
+		parent_account="Expenses - _TC",
+		company="_Test Company",
+	)
+	report_account = create_account(
+		account_name="_Test Report Account_",
+		parent_account="Expenses - _TC",
+		company="_Test Company",
+		report_type="Profit and Loss",
+		account_type="Cash",
+	)
+
+	return {
+		"ar_credit": ar_credit,
+		"ar_discounted": ar_discounted,
+		"ar_unpaid": ar_unpaid,
+		"short_term_loan": short_term_loan,
+		"bank_account": bank_account,
+		"bank_charges_account": bank_charges_account,
+		"report_account": report_account,
+	}
+
+
+def create_loyalty_program():
+	from erpnext.buying.doctype.purchase_order.test_purchase_order import create_company
+
+	create_company()
+	loyality_program = "__Test Single Loyalty 1"
+	# create a new loyalty Account
+	if not frappe.db.exists("Account", "Loyalty - _TC"):
+		frappe.get_doc(
+			{
+				"doctype": "Account",
+				"account_name": "Loyalty",
+				"parent_account": "Direct Expenses - _TC",
+				"company": "_Test Company",
+				"is_group": 0,
+				"account_type": "Expense Account",
+			}
+		).insert()
+
+	# create a new loyalty program Single tier
+	if not frappe.db.exists("Loyalty Program", loyality_program):
+		frappe.get_doc(
+			{
+				"doctype": "Loyalty Program",
+				"loyalty_program_name": "__Test Single Loyalty 1",
+				"auto_opt_in": 0,
+				"from_date": today(),
+				"to_date": today(),
+				"loyalty_program_type": "Single Tier Program",
+				"conversion_factor": 1,
+				"expiry_duration": 10,
+				"company": "_Test Company",
+				"cost_center": "Main - _TC",
+				"expense_account": "Loyalty - _TC",
+				"collection_rules": [{"tier_name": "Silver", "collection_factor": 1000, "min_spent": 1000}],
+			}
+		).insert()
+
+	return {loyality_program}
