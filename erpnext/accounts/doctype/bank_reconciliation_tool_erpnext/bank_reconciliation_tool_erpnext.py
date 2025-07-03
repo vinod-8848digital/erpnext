@@ -15,7 +15,7 @@ class BankReconciliationToolERPNext(Document):
 
     from typing import TYPE_CHECKING
 
-    if TYPE_CHECKING:
+    if TYPE_CHECKING: # pragma: no cover
         from erpnext.accounts.doctype.bank_statement.bank_statement import BankStatement
         from erpnext.accounts.doctype.erp_transaction.erp_transaction import ERPTransaction
         from erpnext.accounts.doctype.matching_table.matching_table import MatchingTable
