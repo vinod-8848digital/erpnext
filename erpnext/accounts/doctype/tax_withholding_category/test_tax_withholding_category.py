@@ -9,6 +9,7 @@ from frappe.custom.doctype.custom_field.custom_field import create_custom_fields
 from frappe.tests.utils import FrappeTestCase, change_settings
 from frappe.utils import add_days, add_months, today
 
+from erpnext.accounts.doctype.account.test_account import create_account
 from erpnext.accounts.doctype.payment_entry.payment_entry import get_payment_entry
 from erpnext.accounts.utils import get_fiscal_year
 from erpnext.buying.doctype.purchase_order.purchase_order import make_purchase_invoice
@@ -662,7 +663,7 @@ class TestTaxWithholdingCategory(FrappeTestCase):
 				"pan": "ABCTY1234D",
 			},
 		)
- 
+
 		fiscal_year = get_fiscal_year(today(), company="_Test Company")
 		valid_from = fiscal_year[1]
 		valid_upto = add_months(valid_from, 1)
@@ -823,6 +824,156 @@ class TestTaxWithholdingCategory(FrappeTestCase):
 		self.assertEqual(payment.taxes[0].tax_amount, 6000)
 		self.assertEqual(payment.taxes[0].allocated_amount, 6000)
 
+	def test_validate_dates_TC_ACC_232(self):
+		category = get_tax_withholding_category(
+			category_name="__Test Cumulative Threshold TDS",
+			rate=10,
+			from_date=add_days(today(), 1),
+			to_date=today(),
+			account=get_account(),
+			single_threshold=0,
+			cumulative_threshold=30000.00,
+		)
+		with self.assertRaises(frappe.ValidationError) as cm:
+			category.insert(ignore_permissions=True)
+		self.assertIn("Row #1: From Date cannot be before To Date", str(cm.exception))
+
+		category_1 = get_tax_withholding_category(
+			category_name="__Test Cumulative Threshold TDS 1",
+			rate=10,
+			from_date=today(),
+			to_date=add_days(today(), 2),
+			account=get_account(),
+			single_threshold=0,
+			cumulative_threshold=30000.00,
+		)
+		category_1.append(
+			"rates",
+			{
+				"from_date": add_days(today(), 1),
+				"to_date": add_days(today(), 3),
+				"tax_withholding_rate": 10,
+				"single_threshold": 0,
+				"cumulative_threshold": 1000.00,
+			},
+		)
+
+		with self.assertRaises(frappe.ValidationError) as cm:
+			category_1.insert(ignore_permissions=True)
+		self.assertIn("Row #2: Dates overlapping with other row", str(cm.exception))
+
+	def test_validate_companies_and_accounts_TC_ACC_233(self):
+		category = get_tax_withholding_category(
+			category_name="__Test Cumulative Threshold TDS 1",
+			rate=10,
+			from_date=today(),
+			to_date=add_days(today(), 2),
+			account=get_account(),
+			single_threshold=0,
+			cumulative_threshold=30000.00,
+		)
+		category.append("accounts", {"company": "_Test Company", "account": "Cash - _TC"})
+		with self.assertRaises(frappe.ValidationError) as cm:
+			category.insert()
+		self.assertIn("Company _Test Company added multiple times", str(cm.exception))
+
+		category_1 = get_tax_withholding_category(
+			category_name="__Test Cumulative Threshold TDS 1",
+			rate=10,
+			from_date=today(),
+			to_date=add_days(today(), 2),
+			account=get_account(),
+			single_threshold=0,
+			cumulative_threshold=30000.00,
+		)
+		category_1.append("accounts", {"company": "_Test Company 1", "account": get_account()})
+		with self.assertRaises(frappe.ValidationError) as cm:
+			category_1.insert()
+		self.assertIn(f"Account {get_account()} added multiple times", str(cm.exception))
+
+	def test_validate_thresholds_TC_ACC_234(self):
+		category = get_tax_withholding_category(
+			category_name="__Test Cumulative Threshold TDS 1",
+			rate=10,
+			from_date=today(),
+			to_date=add_days(today(), 2),
+			account=get_account(),
+			single_threshold=30000.00,
+			cumulative_threshold=20000.00,
+		)
+		with self.assertRaises(frappe.ValidationError) as cm:
+			category.insert()
+		self.assertIn(
+			f"{category.rates[0].idx}: Cumulative threshold cannot be less than Single Transaction threshold",
+			str(cm.exception),
+		)
+
+	def test_get_tax_withholding_rates_TC_ACC_235(self):
+		from .tax_withholding_category import get_tax_withholding_rates
+
+		category = get_tax_withholding_category(
+			category_name="__Test Cumulative Threshold TDS",
+			rate=10,
+			from_date=today(),
+			to_date=add_days(today(), 1),
+			account=get_account(),
+			single_threshold=0,
+			cumulative_threshold=30000.00,
+		)
+		category.insert(ignore_permissions=True)
+		with self.assertRaises(frappe.ValidationError) as cm:
+			get_tax_withholding_rates(category, add_days(today(), -1))
+		self.assertIn("No Tax Withholding data found for the current posting date.", str(cm.exception))
+
+	def test_get_lower_deduction_amount_TC_ACC_236(self):
+		from .tax_withholding_category import get_lower_deduction_amount, get_tax_withholding_details
+
+		category = get_tax_withholding_category(
+			category_name="__Test Cumulative Threshold TDS",
+			rate=10,
+			from_date=today(),
+			to_date=add_days(today(), 1),
+			account=get_account(),
+			single_threshold=0,
+			cumulative_threshold=30000.00,
+		)
+		category.insert(ignore_permissions=True)
+
+		tax_details = get_tax_withholding_details(category.name, today(), category.accounts[0].company)
+		deduction_amount = get_lower_deduction_amount(200, 200, 1000, 2, tax_details=tax_details)
+		self.assertEqual(deduction_amount, 4.0)
+
+		deduction_amount_1 = get_lower_deduction_amount(200, 200, 100, 2, tax_details=tax_details)
+		self.assertEqual(deduction_amount_1, 28.0)
+
+	def test_is_valid_certificate_TC_ACC_237(self):
+		from .tax_withholding_category import is_valid_certificate, normal_round
+
+		category = get_tax_withholding_category(
+			category_name="__Test Cumulative Threshold TDS",
+			rate=10,
+			from_date=today(),
+			to_date=add_days(today(), 1),
+			account=get_account(),
+			single_threshold=0,
+			cumulative_threshold=30000.00,
+		)
+		category.insert(ignore_permissions=True)
+
+		create_lower_deduction_certificate(
+			supplier="Test LDC Supplier",
+			certificate_no="1AE0423AAJ",
+			tax_withholding_category=category.name,
+			tax_rate=2,
+			limit=50000,
+		)
+		lds = frappe.get_last_doc("Lower Deduction Certificate")
+		self.assertTrue(is_valid_certificate(lds, today(), 1000))
+		self.assertFalse(is_valid_certificate(lds, add_days(today(), -5), 50000))
+
+		self.assertEqual(normal_round(2.36), 2)
+		self.assertEqual(normal_round(2.6), 3)
+
 
 def cancel_invoices():
 	purchase_invoices = frappe.get_all(
@@ -854,7 +1005,7 @@ def create_purchase_invoice(**args):
 		{
 			"doctype": "Purchase Invoice",
 			"set_posting_time": args.set_posting_time or False,
- 			"posting_date": args.posting_date or today(),
+			"posting_date": args.posting_date or today(),
 			"apply_tds": 0 if args.do_not_apply_tds else 1,
 			"supplier": args.supplier,
 			"company": "_Test Company",
@@ -1004,28 +1155,31 @@ def create_records():
 			{"customer_group": "_Test Customer Group", "customer_name": name, "doctype": "Customer"}
 		).insert()
 
-	# create item
+	has_gst_hsn_code = frappe.db.has_column("Item", "gst_hsn_code")
+
 	if not frappe.db.exists("Item", "TDS Item"):
-		frappe.get_doc(
-			{
-				"doctype": "Item",
-				"item_code": "TDS Item",
-				"item_name": "TDS Item",
-				"item_group": "All Item Groups",
-				"is_stock_item": 0,
-			}
-		).insert()
+		tds_item_data = {
+			"doctype": "Item",
+			"item_code": "TDS Item",
+			"item_name": "TDS Item",
+			"item_group": "All Item Groups",
+			"is_stock_item": 0,
+		}
+		if has_gst_hsn_code:
+			tds_item_data["gst_hsn_code"] = "01011010"
+		frappe.get_doc(tds_item_data).insert()
 
 	if not frappe.db.exists("Item", "TCS Item"):
-		frappe.get_doc(
-			{
-				"doctype": "Item",
-				"item_code": "TCS Item",
-				"item_name": "TCS Item",
-				"item_group": "All Item Groups",
-				"is_stock_item": 1,
-			}
-		).insert()
+		tcs_item_data = {
+			"doctype": "Item",
+			"item_code": "TCS Item",
+			"item_name": "TCS Item",
+			"item_group": "All Item Groups",
+			"is_stock_item": 1,
+		}
+		if has_gst_hsn_code:
+			tcs_item_data["gst_hsn_code"] = "01011010"
+		frappe.get_doc(tcs_item_data).insert()
 
 	# create tds account
 	if not frappe.db.exists("Account", "TDS - _TC"):
@@ -1181,16 +1335,17 @@ def create_tax_withholding_category(
 			}
 		).insert(ignore_permissions=True)
 	elif frappe.db.exists("Tax Withholding Category", category_name):
-		doc = frappe.get_doc("Tax Withholding Category",category_name)
+		doc = frappe.get_doc("Tax Withholding Category", category_name)
 		if doc.accounts:
-			child=frappe.get_doc("Tax Withholding Account",doc.accounts[0].name)
+			child = frappe.get_doc("Tax Withholding Account", doc.accounts[0].name)
 			if child.account != account:
-				child.account=account
+				child.account = account
 				child.save()
 
+
 def create_lower_deduction_certificate(
- 	supplier, tax_withholding_category, tax_rate, certificate_no, limit, valid_from=None, valid_upto=None
- ):
+	supplier, tax_withholding_category, tax_rate, certificate_no, limit, valid_from=None, valid_upto=None
+):
 	fiscal_year = get_fiscal_year(today(), company="_Test Company")
 	if not frappe.db.exists("Lower Deduction Certificate", certificate_no):
 		frappe.get_doc(
@@ -1202,11 +1357,11 @@ def create_lower_deduction_certificate(
 				"tax_withholding_category": tax_withholding_category,
 				"fiscal_year": fiscal_year[0],
 				"valid_from": valid_from or fiscal_year[1],
- 				"valid_upto": valid_upto or fiscal_year[2],
+				"valid_upto": valid_upto or fiscal_year[2],
 				"rate": tax_rate,
 				"certificate_limit": limit,
 			}
-		).insert()
+		).insert(ignore_mandatory=1)
 
 
 def make_pan_no_field():
@@ -1222,3 +1377,50 @@ def make_pan_no_field():
 	}
 
 	create_custom_fields(pan_field, update=1)
+
+
+def get_tax_withholding_category(
+	category_name,
+	rate,
+	from_date,
+	to_date,
+	account,
+	single_threshold=0,
+	cumulative_threshold=0,
+	round_off_tax_amount=0,
+	consider_party_ledger_amount=0,
+	tax_on_excess_amount=0,
+):
+	if not frappe.db.exists("Tax Withholding Category", category_name):
+		doc = frappe.get_doc(
+			{
+				"doctype": "Tax Withholding Category",
+				"name": category_name,
+				"category_name": category_name,
+				"round_off_tax_amount": round_off_tax_amount,
+				"consider_party_ledger_amount": consider_party_ledger_amount,
+				"tax_on_excess_amount": tax_on_excess_amount,
+				"rates": [
+					{
+						"from_date": from_date,
+						"to_date": to_date,
+						"tax_withholding_rate": rate,
+						"single_threshold": single_threshold,
+						"cumulative_threshold": cumulative_threshold,
+					}
+				],
+				"accounts": [{"company": "_Test Company", "account": account}],
+			}
+		)
+		return doc
+	return category_name
+
+
+def get_account():
+	return create_account(
+		account_name="_Test Cash",
+		parent_account="Cash In Hand - _TC",
+		company="_Test Company",
+		account_currency="INR",
+		account_type="Cash",
+	)
