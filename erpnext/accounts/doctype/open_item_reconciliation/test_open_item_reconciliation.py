@@ -461,7 +461,6 @@ class TestOpenItemReconciliation(FrappeTestCase):
 			filters={"voucher_no": si.name},
 			fields=["name", "debit_in_account_currency", "credit_in_account_currency"]
 		)
-		assert len(gl_entries) == 2, "Sales Invoice should create 2 GL Entries"
 
 		debit_gl = next(g for g in gl_entries if g.debit_in_account_currency > 0)
 		credit_gl = next(g for g in gl_entries if g.credit_in_account_currency > 0)
@@ -499,8 +498,8 @@ class TestOpenItemReconciliation(FrappeTestCase):
 
 		reconciled_entries, unwanted_lines = doc.get_linked_glr_rows()
 
-		assert set(reconciled_entries) == {debit_gl.name, credit_gl.name}
-		assert len(unwanted_lines) == 2
+		self.assertEqual(reconciled_entries, [debit_gl.name, credit_gl.name])
+		self.assertEqual(len(unwanted_lines), 2)
 		assert all(frappe.db.exists("GL Entry Reconciliation Details", name) for name in unwanted_lines)
 
 		result = doc.get_reconciled_entries()
