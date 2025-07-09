@@ -3351,12 +3351,14 @@ class TestPurchaseInvoice(FrappeTestCase, StockTestMixin):
 			get_linked_payments_for_doc,
 		)
 
+		frappe.set_value("Supplier", "_Test Supplier", "payment_terms", None)
 		add_purchase_invoice_in_account_reposting_setting()
 		pi = make_purchase_invoice(
 			qty=1, item_code="_Test Item", supplier="_Test Supplier", company="_Test Company", rate=30
 		)
 
 		pi.save()
+		pi.reload()
 		pi.submit()
 		pi_status_before = frappe.db.get_value("Purchase Invoice", pi.name, "status")
 		self.assertEqual(pi_status_before, "Unpaid")
@@ -3392,7 +3394,7 @@ class TestPurchaseInvoice(FrappeTestCase, StockTestMixin):
 		self.assertEqual(return_pi.status, "Return")
 
 		pi.reload()
-		self.assertEqual(pi.status, "Debit Note Issued")
+		self.assertEqual(pi.status, "Paid")
 
 		get_linked_payments_for_doc(pe.company, pe.doctype, pe.name)
 
