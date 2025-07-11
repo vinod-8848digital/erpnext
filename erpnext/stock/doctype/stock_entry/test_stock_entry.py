@@ -4,12 +4,14 @@
 
 from datetime import date, datetime
 
+import frappe.utils
 from frappe.desk.query_report import run
 from frappe.permissions import add_user_permission, remove_user_permission
 from frappe.tests.utils import FrappeTestCase, change_settings
 from frappe.utils import add_days, cstr, flt, get_time, getdate, nowtime, today
 
 from erpnext.accounts.doctype.account.test_account import get_inventory_account
+from erpnext.controllers.accounts_controller import InvalidQtyError
 from erpnext.stock.doctype.item.test_item import (
 	create_item,
 	make_item,
@@ -42,7 +44,6 @@ from erpnext.stock.doctype.stock_reconciliation.test_stock_reconciliation import
 from erpnext.stock.doctype.warehouse.test_warehouse import create_warehouse
 from erpnext.stock.serial_batch_bundle import SerialBatchCreation
 from erpnext.stock.stock_ledger import NegativeStockError, get_previous_sle
-import frappe.utils
 
 
 def get_sle(**args):
@@ -65,9 +66,22 @@ class TestStockEntry(FrappeTestCase):
 	@classmethod
 	def setUpClass(self):
 		setup_defaults_data()
+
 	def tearDown(self):
 		frappe.db.rollback()
 		frappe.set_user("Administrator")
+
+	def test_stock_entry_qty(self):
+		item_code = "_Test Item 2"
+		warehouse = "_Test Warehouse - _TC"
+		se = make_stock_entry(item_code=item_code, target=warehouse, qty=0, do_not_save=True)
+		with self.assertRaises(InvalidQtyError):
+			se.save()
+
+		# No error with qty=1
+		se.items[0].qty = 1
+		se.save()
+		self.assertEqual(se.items[0].qty, 1)
 
 	def test_fifo(self):
 		frappe.db.set_single_value("Stock Settings", "allow_negative_stock", 1)
@@ -2001,26 +2015,27 @@ class TestStockEntry(FrappeTestCase):
 		self.assertEqual(se.items[0].basic_rate, 300)
 
 	def test_create_partial_material_transfer_stock_entry_and_TC_SCK_048(self):
+		from erpnext.accounts.doctype.cost_center.test_cost_center import create_cost_center
+		from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_company
+		from erpnext.stock.doctype.item.test_item import make_item
 		from erpnext.stock.doctype.material_request.material_request import (
 			make_stock_entry as _make_stock_entry,
 		)
 		from erpnext.stock.doctype.material_request.test_material_request import make_material_request
 		from erpnext.stock.doctype.stock_entry.stock_entry_utils import make_stock_entry as __make_stock_entry
-		from erpnext.stock.doctype.item.test_item import make_item
-		from erpnext.accounts.doctype.cost_center.test_cost_center import create_cost_center
-		from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_company
 
 		create_company("_Test Company")
 		make_item("_Test Item", {"is_stock_item": 1})
-		create_cost_center(cost_center_name="_Test Cost Center",company = "_Test Company")
+		create_cost_center(cost_center_name="_Test Cost Center", company="_Test Company")
 		source_warehouse = create_warehouse(
 			"_Test Source Warehouse", properties=None, company="_Test Company"
 		)
 
-		frappe.db.set_value("Company", "_Test Company", {
-			"enable_provisional_accounting_for_non_stock_items": 0,
-			"enable_perpetual_inventory":0
-		})
+		frappe.db.set_value(
+			"Company",
+			"_Test Company",
+			{"enable_provisional_accounting_for_non_stock_items": 0, "enable_perpetual_inventory": 0},
+		)
 		company_doc = frappe.get_doc("Company", "_Test Company")
 		frappe.local.enable_perpetual_inventory = {}
 		frappe.local.enable_perpetual_inventory[company_doc.name] = 0
@@ -2277,15 +2292,15 @@ class TestStockEntry(FrappeTestCase):
 		self.create_stock_repack_via_bom()
 
 	def test_create_and_cancel_stock_repack_via_bom_TC_SCK_065(self):
-		from erpnext.stock.doctype.warehouse.test_warehouse import create_warehouse
 		from erpnext.buying.doctype.supplier.test_supplier import create_supplier
+		from erpnext.stock.doctype.warehouse.test_warehouse import create_warehouse
 
 		warehouse = ["_Test Warehouse", "_Test Target Warehouse", "_Test Warehouse 1"]
 		create_supplier(supplier_name="_Test Supplier", default_currency="INR")
 
 		for w in warehouse:
 			create_warehouse(warehouse_name=w, company="_Test Company")
-   
+
 		company_doc = frappe.get_doc("Company", "_Test Company")
 		frappe.local.enable_perpetual_inventory = {}
 		frappe.local.enable_perpetual_inventory[company_doc.name] = 0
@@ -2311,12 +2326,13 @@ class TestStockEntry(FrappeTestCase):
 
 	def test_create_stock_entry_TC_SCK_231(self):
 		from erpnext.accounts.doctype.account.test_account import create_account
-		account 	= create_account(
+
+		account = create_account(
 			account_name="_Test Account Tax Assets",
 			account_type="Fixed Asset",
 			company="_Test Company",
 			is_group=1,
-			parent_account = "Fixed Assets - _TC",
+			parent_account="Fixed Assets - _TC",
 			do_not_save=True,
 		)
 		account.root_type = "Asset"
@@ -2326,10 +2342,11 @@ class TestStockEntry(FrappeTestCase):
 			company.company_name = "_Test Company"
 			company.default_currency = "INR"
 			company.insert()
-		frappe.db.set_value("Company", "_Test Company", {
-			"enable_provisional_accounting_for_non_stock_items": 0,
-			"enable_perpetual_inventory":0
-		})
+		frappe.db.set_value(
+			"Company",
+			"_Test Company",
+			{"enable_provisional_accounting_for_non_stock_items": 0, "enable_perpetual_inventory": 0},
+		)
 		company_doc = frappe.get_doc("Company", "_Test Company")
 		frappe.local.enable_perpetual_inventory = {}
 		frappe.local.enable_perpetual_inventory[company_doc.name] = 0
@@ -2563,9 +2580,9 @@ class TestStockEntry(FrappeTestCase):
 
 	def create_stock_repack_via_bom(self):
 		from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_company
-		from erpnext.stock.doctype.warehouse.test_warehouse import create_warehouse
 		from erpnext.buying.doctype.supplier.test_supplier import create_supplier
-	
+		from erpnext.stock.doctype.warehouse.test_warehouse import create_warehouse
+
 		create_company()
 		create_warehouse(warehouse_name="_Test Warehouse 1", company="_Test Company")
 		create_supplier(supplier_name="_Test Supplier", default_currency="INR")
@@ -3882,18 +3899,19 @@ class TestStockEntry(FrappeTestCase):
 		)
 
 	def test_partial_material_transfer_TC_SCK_207(self):
+		from erpnext.accounts.doctype.account.test_account import create_account
 		from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_company, create_customer
 		from erpnext.buying.doctype.purchase_order.test_purchase_order import get_or_create_fiscal_year
-		from erpnext.stock.doctype.material_request.test_material_request import make_material_request
-		from erpnext.accounts.doctype.account.test_account import create_account
 		from erpnext.stock import get_warehouse_account_map
+		from erpnext.stock.doctype.material_request.test_material_request import make_material_request
+
 		create_company()
 		create_account(
 			account_name="Stocks Assets",
 			account_type="Fixed Asset",
 			company="_Test Company",
 			is_group=1,
-			parent_account = "Fixed Assets - _TC",
+			parent_account="Fixed Assets - _TC",
 		)
 		company_doc = frappe.get_doc("Company", "_Test Company")
 		frappe._set_document_in_cache("Company", company_doc)
@@ -3989,8 +4007,9 @@ class TestStockEntry(FrappeTestCase):
 	def test_partial_material_transfer_TC_SCK_208(self):
 		from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_company, create_customer
 		from erpnext.buying.doctype.purchase_order.test_purchase_order import get_or_create_fiscal_year
-		from erpnext.stock.doctype.material_request.test_material_request import make_material_request
 		from erpnext.stock import get_warehouse_account_map
+		from erpnext.stock.doctype.material_request.test_material_request import make_material_request
+
 		create_company()
 		company = "_Test Company"
 
@@ -4022,7 +4041,7 @@ class TestStockEntry(FrappeTestCase):
 			properties={"parent_warehouse": "All Warehouses - _TC", "account": "Cost of Goods Sold - _TC"},
 			company=company,
 		)
-		qty = 10	
+		qty = 10
 		get_warehouse_account_map(company)
 		# Stock Receipt
 		make_stock_entry(
@@ -4670,8 +4689,9 @@ class TestStockEntry(FrappeTestCase):
 		self.assertTrue(q[0] == avail_qty)
 
 	def test_inactive_sales_items_TC_SCK_228(self):
-		from erpnext.accounts.report.inactive_sales_items.inactive_sales_items import execute
 		from erpnext.accounts.doctype.cost_center.test_cost_center import create_cost_center
+		from erpnext.accounts.report.inactive_sales_items.inactive_sales_items import execute
+
 		company = "_Test Company"
 
 		# Ensure company exists
@@ -4760,6 +4780,7 @@ class TestStockEntry(FrappeTestCase):
 			qty=25,
 		)
 		from erpnext.accounts.doctype.sales_invoice.test_sales_invoice import create_sales_invoice
+
 		frappe.db.set_value("Customer", "_Test Customer", "default_currency", "INR")
 		create_sales_invoice(
 			customer="_Test Customer",
@@ -6513,17 +6534,19 @@ def custom_create_serial_and_batch_bundle():
 	sbb.insert()
 	return sbb.name
 
+
 def setup_defaults_data():
-	from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_company
 	from erpnext.accounts.doctype.account.test_account import create_account
+	from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_company
 	from erpnext.stock import get_warehouse_account_map
+
 	create_company()
 	acc = create_account(
 		account_name="Stock Assets",
 		account_type="Stock",
 		company="_Test Company",
 		is_group=1,
-		parent_account = "Current Assets - _TC",
+		parent_account="Current Assets - _TC",
 		account_currency="INR",
 		do_not_save=True,
 	)

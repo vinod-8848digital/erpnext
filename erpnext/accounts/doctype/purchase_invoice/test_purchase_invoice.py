@@ -24,7 +24,7 @@ from erpnext.accounts.doctype.payment_entry.payment_entry import get_payment_ent
 from erpnext.buying.doctype.purchase_order.purchase_order import get_mapped_purchase_invoice
 from erpnext.buying.doctype.purchase_order.purchase_order import make_purchase_invoice as make_pi_from_po
 from erpnext.buying.doctype.supplier.test_supplier import create_supplier
-from erpnext.controllers.accounts_controller import get_payment_terms
+from erpnext.controllers.accounts_controller import InvalidQtyError, get_payment_terms
 from erpnext.controllers.buying_controller import QtyMismatchError
 from erpnext.exceptions import InvalidCurrency
 from erpnext.stock.doctype.item.test_item import create_item
@@ -62,6 +62,16 @@ class TestPurchaseInvoice(FrappeTestCase, StockTestMixin):
 
 	def tearDown(self):
 		frappe.db.rollback()
+
+	def test_purchase_invoice_qty(self):
+		pi = make_purchase_invoice(qty=0, do_not_save=True)
+		with self.assertRaises(InvalidQtyError):
+			pi.save()
+
+		# No error with qty=1
+		pi.items[0].qty = 1
+		pi.save()
+		self.assertEqual(pi.items[0].qty, 1)
 
 	def test_purchase_invoice_received_qty(self):
 		"""
@@ -1548,6 +1558,9 @@ class TestPurchaseInvoice(FrappeTestCase, StockTestMixin):
 
 		# Configure Buying Settings to allow rate change
 		frappe.db.set_single_value("Buying Settings", "maintain_same_rate", 0)
+
+		# Configure Accounts Settings to allow 300% over billingAdd commentMore actions
+		frappe.db.set_single_value("Accounts Settings", "over_billing_allowance", 300)
 
 		# Create PR: rate = 1000, qty = 5
 		pr = make_purchase_receipt(
@@ -5225,6 +5238,43 @@ class TestPurchaseInvoice(FrappeTestCase, StockTestMixin):
 
 		self.assertEqual(invoice.grand_total, 300)
 
+	def test_pr_pi_over_billing(self):
+		from erpnext.stock.doctype.purchase_receipt.purchase_receipt import (
+			make_purchase_invoice as make_purchase_invoice_from_pr,
+		)
+
+		# Configure Buying Settings to allow rate change
+		frappe.db.set_single_value("Buying Settings", "maintain_same_rate", 0)
+
+		pr = make_purchase_receipt(qty=10, rate=10)
+		pi = make_purchase_invoice_from_pr(pr.name)
+
+		pi.items[0].rate = 12
+
+		# Test 1 - This will fail because over billing is not allowed
+		self.assertRaises(frappe.ValidationError, pi.submit)
+
+		frappe.db.set_single_value("Buying Settings", "set_landed_cost_based_on_purchase_invoice_rate", 1)
+		# Test 2 - This will now submit because over billing allowance is ignored when set_landed_cost_based_on_purchase_invoice_rate is checked
+		pi.submit()
+
+		frappe.db.set_single_value("Buying Settings", "set_landed_cost_based_on_purchase_invoice_rate", 0)
+		frappe.db.set_single_value("Accounts Settings", "over_billing_allowance", 20)
+		pi.cancel()
+		pi = make_purchase_invoice_from_pr(pr.name)
+		pi.items[0].rate = 12
+
+		# Test 3 - This will now submit because over billing is allowed upto 20%
+		pi.submit()
+
+		pi.reload()
+		pi.cancel()
+		pi = make_purchase_invoice_from_pr(pr.name)
+		pi.items[0].rate = 13
+
+		# Test 4 - Since this PI is overbilled by 130% and only 120% is allowed, it will fail
+		self.assertRaises(frappe.ValidationError, pi.submit)
+
 	@if_app_installed("projects")
 	def test_validate_available_budget_TC_ACC_292(self):
 		from unittest.mock import patch
@@ -5706,7 +5756,7 @@ def make_purchase_invoice(**args):
 	bundle_id = None
 	if not args.use_serial_batch_fields and (args.get("batch_no") or args.get("serial_no")):
 		batches = {}
-		qty = args.qty or 5
+		qty = args.qty if args.qty is not None else 5
 		item_code = args.item or args.item_code or "_Test Item"
 		if args.get("batch_no"):
 			batches = frappe._dict({args.batch_no: qty})
@@ -5735,7 +5785,7 @@ def make_purchase_invoice(**args):
 			"item_code": args.item or args.item_code or "_Test Item",
 			"item_name": args.item_name,
 			"warehouse": args.warehouse or "_Test Warehouse - _TC",
-			"qty": args.qty or 5,
+			"qty": args.qty if args.qty is not None else 5,
 			"received_qty": args.received_qty or 0,
 			"rejected_qty": args.rejected_qty or 0,
 			"rate": args.rate or 50,

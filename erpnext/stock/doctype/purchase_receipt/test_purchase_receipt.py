@@ -10,6 +10,7 @@ from pypika import functions as fn
 
 import erpnext
 from erpnext.accounts.doctype.account.test_account import create_account, get_inventory_account
+from erpnext.controllers.accounts_controller import InvalidQtyError
 from erpnext.buying.doctype.supplier.test_supplier import create_supplier
 from erpnext.controllers.buying_controller import QtyMismatchError
 from erpnext.controllers.stock_controller import get_stock_ledger_preview
@@ -44,6 +45,23 @@ class TestPurchaseReceipt(FrappeTestCase):
 		)
 		create_uom("_Test UOM")
 		frappe.db.set_single_value("Buying Settings", "allow_multiple_items", 1)
+
+	def test_purchase_receipt_qty(self):
+		pr = make_purchase_receipt(qty=0, rejected_qty=0, do_not_save=True)
+		with self.assertRaises(InvalidQtyError):
+			pr.save()
+
+		# No error with qty=1
+		pr.items[0].qty = 1
+		pr.save()
+		self.assertEqual(pr.items[0].qty, 1)
+
+		# No error with rejected_qty=1
+		pr.items[0].rejected_warehouse = "_Test Rejected Warehouse - _TC"
+		pr.items[0].rejected_qty = 1
+		pr.items[0].qty = 0
+		pr.save()
+		self.assertEqual(pr.items[0].rejected_qty, 1)
 
 	def test_purchase_receipt_received_qty(self):
 		"""
@@ -3310,7 +3328,6 @@ class TestPurchaseReceipt(FrappeTestCase):
 		self.assertEqual(pr.status, "Completed")
 
 	def test_internal_transfer_for_batch_items_with_cancel(self):
-		from erpnext.controllers.sales_and_purchase_return import make_return_doc
 		from erpnext.stock.doctype.delivery_note.delivery_note import make_inter_company_purchase_receipt
 		from erpnext.stock.doctype.delivery_note.test_delivery_note import create_delivery_note
 
@@ -3426,7 +3443,6 @@ class TestPurchaseReceipt(FrappeTestCase):
 		frappe.db.set_single_value("Stock Settings", "use_serial_batch_fields", 1)
 
 	def test_internal_transfer_for_batch_items_with_cancel_use_serial_batch_fields(self):
-		from erpnext.controllers.sales_and_purchase_return import make_return_doc
 		from erpnext.stock.doctype.delivery_note.delivery_note import make_inter_company_purchase_receipt
 		from erpnext.stock.doctype.delivery_note.test_delivery_note import create_delivery_note
 
@@ -3937,7 +3953,6 @@ class TestPurchaseReceipt(FrappeTestCase):
 			make_purchase_receipt as _make_purchase_receipt,
 		)
 		from erpnext.buying.doctype.purchase_order.test_purchase_order import (
-			create_pr_against_po,
 			create_purchase_order,
 		)
 
@@ -7107,7 +7122,7 @@ def make_purchase_receipt(**args):
 	pr.apply_putaway_rule = args.apply_putaway_rule
 	pr.additional_discount_percentage = args.additional_discount_percentage or None
 	pr.apply_discount_on = args.apply_discount_on or None
-	qty = args.qty or 5
+	qty = args.qty if args.qty is not None else 5
 	rejected_qty = args.rejected_qty or 0
 	received_qty = args.received_qty or flt(rejected_qty) + flt(qty)
 
