@@ -26,7 +26,7 @@ from erpnext.accounts.doctype.sales_invoice.sales_invoice import (
 	make_inter_company_transaction,
 )
 from erpnext.accounts.utils import PaymentEntryUnlinkError
-from erpnext.controllers.accounts_controller import update_invoice_status
+from erpnext.controllers.accounts_controller import InvalidQtyError, update_invoice_status
 from erpnext.controllers.taxes_and_totals import get_itemised_tax_breakup_data
 from erpnext.exceptions import InvalidAccountCurrency, InvalidCurrency
 from erpnext.selling.doctype.customer.test_customer import get_customer_dict
@@ -78,6 +78,16 @@ class TestSalesInvoice(FrappeTestCase):
 	@classmethod
 	def tearDownClass(self):
 		unlink_payment_on_cancel_of_invoice(0)
+
+	def test_sales_invoice_qty(self):
+		si = create_sales_invoice(qty=0, do_not_save=True)
+		with self.assertRaises(InvalidQtyError):
+			si.save()
+
+		# No error with qty=1
+		si.items[0].qty = 1
+		si.save()
+		self.assertEqual(si.items[0].qty, 1)
 
 	def test_timestamp_change(self):
 		w = frappe.copy_doc(test_records[0])
@@ -7511,6 +7521,7 @@ class TestSalesInvoice(FrappeTestCase):
 		)
 
 	def test_on_recurring_TC_ACC_257(self):
+		frappe.flags.in_test = True
 		reference_si = create_sales_invoice(do_not_save=1)
 		reference_si.insert(ignore_permissions=True)
 		reference_si.submit()
@@ -7582,11 +7593,15 @@ class TestSalesInvoice(FrappeTestCase):
 		si = create_sales_invoice()
 		mode_of_pmt = get_all_mode_of_payments(si)
 		if mode_of_pmt:
-			self.assertEqual(mode_of_pmt[0].get("default_account"), "Cash - _TC")
+			for row in mode_of_pmt:
+				if row.get("parent") == "Cash":
+					self.assertEqual(row.get("default_account"), "Cash - _TC")
 
 		pmt_info = get_mode_of_payment_info("Cash", si.company)
 		if pmt_info:
-			self.assertEqual(pmt_info[0].get("default_account"), "Cash - _TC")
+			for row_1 in pmt_info:
+				if row_1.get("parent") == "Cash":
+					self.assertEqual(row_1.get("default_account"), "Cash - _TC")
 
 	@change_settings("Accounts Settings", {"unlink_payment_on_cancellation_of_invoice": 1})
 	def test_check_if_return_invoice_linked_with_payment_entry_TC_ACC_261(self):
@@ -7682,7 +7697,7 @@ def create_sales_invoice(**args):
 	bundle_id = None
 	if si.update_stock and (args.get("batch_no") or args.get("serial_no")):
 		batches = {}
-		qty = args.qty or 1
+		qty = args.qty if args.qty is not None else 1
 		item_code = args.item or args.item_code or "_Test Item"
 		if args.get("batch_no"):
 			batches = frappe._dict({args.batch_no: qty})
@@ -7719,7 +7734,7 @@ def create_sales_invoice(**args):
 				"description": args.description or "_Test Item",
 				"warehouse": args.warehouse or "_Test Warehouse - _TC",
 				"target_warehouse": args.target_warehouse,
-				"qty": args.qty or 1,
+				"qty": args.qty if args.qty is not None else 1,
 				"uom": args.uom or "Nos",
 				"stock_uom": args.uom or "Nos",
 				"rate": args.rate if args.get("rate") is not None else 100,
