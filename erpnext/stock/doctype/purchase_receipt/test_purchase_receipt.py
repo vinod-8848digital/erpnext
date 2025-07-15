@@ -10,8 +10,8 @@ from pypika import functions as fn
 
 import erpnext
 from erpnext.accounts.doctype.account.test_account import create_account, get_inventory_account
-from erpnext.controllers.accounts_controller import InvalidQtyError
 from erpnext.buying.doctype.supplier.test_supplier import create_supplier
+from erpnext.controllers.accounts_controller import InvalidQtyError
 from erpnext.controllers.buying_controller import QtyMismatchError
 from erpnext.controllers.stock_controller import get_stock_ledger_preview
 from erpnext.stock import get_warehouse_account_map
@@ -6341,6 +6341,15 @@ class TestPurchaseReceipt(FrappeTestCase):
 			item.purchase_receipt = pr.name
 			item.pr_detail = pr.items[0].name
 		pi.save().submit()
+
+		pr.submit_rv = frappe.db.sql(
+			"""SELECT t1.name
+			FROM `tabPurchase Invoice` t1, `tabPurchase Invoice Item` t2
+			WHERE t1.name = t2.parent
+			AND t2.purchase_receipt = %s
+			AND t1.docstatus = 1""",
+			(pr.name,),
+		)
 
 		# This should now raise ValidationError due to linked submitted PI
 		with self.assertRaises(frappe.ValidationError) as cm:
