@@ -598,11 +598,13 @@ class TestAccount(unittest.TestCase):
 			account.save(ignore_permissions=True)
 
 	def test_validate_frozen_accounts_modifier_TC_ACC_180(self):
+		frappe.set_user("Guest")
 		make_company(company_name="_Test Company")
 		account = frappe.get_doc("Account", "Current Assets - _TC")
 		account.freeze_account = "Yes"
 		with self.assertRaises(frappe.ValidationError, msg="You are not authorized to set Frozen value"):
 			account.save(ignore_permissions=True)
+		frappe.set_user("Administrator")
 
 	def test_validate_balance_must_be_credit_TC_ACC_181(self):
 		make_company(company_name="_Test Company")
