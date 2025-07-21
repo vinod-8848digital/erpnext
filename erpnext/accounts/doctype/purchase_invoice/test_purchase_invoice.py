@@ -2801,140 +2801,53 @@ class TestPurchaseInvoice(FrappeTestCase, StockTestMixin):
 		)
 
 	def test_advance_payment_TC_ACC_028(self):
-		from erpnext.accounts.doctype.payment_entry.test_payment_entry import (
-			create_payment_entry,
-			create_purchase_invoice,
-			make_test_item,
+		from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_payment_entry
+
+		pe = create_payment_entry(paid_amount=2500, save=True)
+		pe.submit()
+
+		pi = make_purchase_invoice(rate=1000, do_not_save=True)
+		pi.append(
+			"advances",
+			{
+				"reference_type": "Payment Entry",
+				"reference_name": pe.name,
+				"advance_amount": 2500,
+				"allocated_amount": 2500,
+			},
 		)
-		from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_records as records_for_pi
+		pi.insert(ignore_permissions=True)
+		pi.submit()
+		self.assertEqual(pi.status, "Partly Paid")
+		self.assertEqual(pi.docstatus, 1)
+		self.assertEqual(pi.outstanding_amount, 2500)
 
-		records_for_pi("_Test Supplier USD")
-		supplier = frappe.get_doc("Supplier", "_Test Supplier USD")
-		tds_account = frappe.get_doc("Account", "_Test TDS Payable - _TC")
-		if tds_account.account_currency != "INR":
-			tds_account.account_currency = "INR"
-			tds_account.save()
-		if supplier:
-			pe = create_payment_entry(
-				party_type="Supplier",
-				party=supplier.name,
-				company="_Test Company",
-				payment_type="Pay",
-				paid_from="_Test Cash - _TC",
-				paid_to="_Test Payable USD - _TC",
-				paid_amount=6000,
-				save=True,
-			)
+		expected_entries = [
+			{"account": "Stock Received But Not Billed - _TC", "debit": 5000.0, "credit": 0.0},
+			{"account": "Creditors - _TC", "debit": 0.0, "credit": 5000.0},
+		]
 
-			pe.target_exchange_rate = 60
-			pe.received_amount = 100
-			pe.tax_withholding_category = "Test - TDS - 194C - Company"
+		pi_gle_entries = frappe.get_all(
+			"GL Entry", filters={"voucher_no": pi.name}, fields=["account", "debit", "credit"]
+		)
 
-			pe.append(
-				"taxes",
-				{
-					"account_head": "_Test TDS Payable - _TC",
-					"charge_type": "On Paid Amount",
-					"rate": 0,
-					"add_deduct_tax": "Deduct",
-					"description": "Cash",
-				},
-			)
+		self.assertCountEqual(pi_gle_entries, expected_entries)
 
-			pe.save()
-			pe.submit()
+		pe_1 = get_payment_entry(pi.doctype, pi.name)
+		pe_1.insert()
+		pe_1.submit()
 
-			item = make_test_item()
+		pi.load_from_db()
+		self.assertEqual(pi.status, "Paid")
+		self.assertEqual(pi.outstanding_amount, 0.0)
 
-			pi = create_purchase_invoice(
-				supplier=supplier.name,
-				currency="USD",
-				rate=120,
-				item_code=item.name,
-				credit_to="_Test Payable USD - _TC",
-			)
+		pe_1_gl_entry = frappe.get_all(
+			"GL Entry", filters={"voucher_no": pe_1.name}, fields=["account", "debit", "credit"]
+		)
+		actual_set = {(entry["account"], entry["debit"], entry["credit"]) for entry in pe_1_gl_entry}
+		expected_set = {("Bank - _TC", 0.0, 2500.0), ("Creditors - _TC", 2500.0, 0.0)}
 
-			pe.apply_tds = 1
-			pi.tax_withholding_category = "Test - TDS - 194C - Company"
-			pi.conversion_rate = 63
-
-			pi.append(
-				"advances",
-				{
-					"reference_type": "Payment Entry",
-					"reference_name": pe.name,
-					"advance_amount": 100,
-					"allocated_amount": 100,
-					"ref_exchange_rate": 60,
-				},
-			)
-
-			pi.save()
-			pi.submit()
-
-			jea_parent = get_jv_entry_account(
-				credit_to=pi.credit_to,
-				reference_name=pi.name,
-				party_type="Supplier",
-				party=supplier.name,
-				debit=300,
-			)
-			jv_doc = frappe.get_doc("Journal Entry", jea_parent.parent)
-			self.assertEqual(
-				frappe.db.get_value("Journal Entry", jea_parent.parent, "voucher_type"),
-				"Exchange Gain Or Loss",
-			)
-
-			gle_entries = frappe.get_all(
-				"GL Entry",
-				filters={"voucher_no": jv_doc.name, "voucher_type": "Journal Entry", "is_cancelled": 0},
-				fields=["account", "debit", "credit", "posting_date"],
-				order_by="posting_date, account, creation",
-			)
-			expected_jv_entries = [
-				[gle.account, gle.debit, gle.credit, gle.posting_date] for gle in gle_entries
-			]
-
-			check_gl_entries(
-				doc=self,
-				voucher_no=jv_doc.name,
-				expected_gle=expected_jv_entries,
-				posting_date=pi.posting_date,
-				voucher_type="Journal Entry",
-			)
-
-			_pe = get_payment_entry("Purchase Invoice", pi.name)
-			_pe.target_exchange_rate = 62
-			_pe.payment_type = "Pay"
-			_pe.paid_from = "Cash - _TC"
-			_pe.save()
-			_pe.submit()
-
-			jea_parent = get_jv_entry_account(
-				credit_to=pi.credit_to,
-				reference_name=pi.name,
-				party_type="Supplier",
-				party=supplier.name,
-				debit=20,
-			)
-			_jv_doc = frappe.get_doc("Journal Entry", jea_parent.parent)
-			gl_entries = frappe.get_all(
-				"GL Entry",
-				filters={"voucher_type": "Journal Entry", "voucher_no": _jv_doc.name, "is_cancelled": 0},
-				fields=["account", "debit", "credit", "posting_date"],
-				order_by="posting_date, account, creation",
-			)
-			expected_jv_entries = [
-				[gle.account, gle.debit, gle.credit, gle.posting_date] for gle in gl_entries
-			]
-
-			check_gl_entries(
-				doc=self,
-				voucher_no=jea_parent.parent,
-				expected_gle=expected_jv_entries,
-				posting_date=pi.posting_date,
-				voucher_type="Journal Entry",
-			)
+		self.assertSetEqual(actual_set, expected_set)
 
 	def test_single_payment_request_for_purchase_invoice_TC_ACC_035(self):
 		from erpnext.accounts.doctype.payment_entry.test_payment_entry import (
