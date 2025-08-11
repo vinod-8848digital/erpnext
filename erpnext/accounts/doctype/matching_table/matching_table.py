@@ -12,6 +12,7 @@ class MatchingTable(Document):
 	from typing import TYPE_CHECKING
 
 	if TYPE_CHECKING: # pragma: no cover
+		
 		from frappe.types import DF
 
 		bank_transaction_id: DF.Link | None

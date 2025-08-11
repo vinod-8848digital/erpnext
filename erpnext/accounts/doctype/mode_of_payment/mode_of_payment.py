@@ -13,7 +13,7 @@ class ModeofPayment(Document):
 
 	from typing import TYPE_CHECKING
 
-	if TYPE_CHECKING:
+	if TYPE_CHECKING: # pragma: no cover
 		from frappe.types import DF
 
 		from erpnext.accounts.doctype.mode_of_payment_account.mode_of_payment_account import (
