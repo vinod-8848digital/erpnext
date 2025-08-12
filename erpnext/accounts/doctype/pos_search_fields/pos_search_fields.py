@@ -3,7 +3,7 @@
 
 
 # import frappe
-from frappe.model.document import Document  # pragma: no cover
+from frappe.model.document import Document
 
 
 class POSSearchFields(Document):  # pragma: no cover

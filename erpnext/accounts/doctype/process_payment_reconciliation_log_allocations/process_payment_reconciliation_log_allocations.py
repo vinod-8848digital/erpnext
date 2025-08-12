@@ -2,7 +2,7 @@
 # For license information, please see license.txt
 
 # import frappe
-from frappe.model.document import Document  # pragma: no cover
+from frappe.model.document import Document
 
 
 class ProcessPaymentReconciliationLogAllocations(Document):  # pragma: no cover
