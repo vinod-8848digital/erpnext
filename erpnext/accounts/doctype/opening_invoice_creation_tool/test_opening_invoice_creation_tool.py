@@ -166,6 +166,10 @@ class TestOpeningInvoiceCreationTool(FrappeTestCase):
 		}
 		self.check_expected_values(invoices, expected_value, invoice_type="Sales")
 		
+	def test_temporary_opening_account_without_company_TC_ACC_325(self):
+		temporary_account_response = get_temporary_opening_account("_Test Company")
+		self.assertEqual(temporary_account_response, None)
+	
 	def tearDown(self):
 		disable_dimension()
 
