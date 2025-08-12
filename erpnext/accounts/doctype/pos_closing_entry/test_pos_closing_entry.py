@@ -293,16 +293,6 @@ class TestPOSClosingEntry(unittest.TestCase):
 
 
 def init_user_and_profile(**args):
-	if not frappe.db.exists("User", "test@example.com"):
-		frappe.get_doc({
-			"doctype": "User",
-			"email": "test@example.com",
-			"first_name": "Test",
-			"last_name": "User",
-			"enabled": 1,
-			"send_welcome_email": 0
-		}).insert(ignore_permissions=True)
-		
 	user = "test@example.com"
 	test_user = frappe.get_doc("User", user)
 
