@@ -170,6 +170,99 @@ class TestOpeningInvoiceCreationTool(FrappeTestCase):
 		temporary_account_response = get_temporary_opening_account("_Test Company")
 		self.assertEqual(temporary_account_response, None)
 	
+	def test_onload_sets_summary_and_temporary_account_TC_ACC_326(self):
+		self.company = "_Test Opening Invoice Company"
+
+		if not frappe.db.exists("Item", "Test Item"):
+			frappe.get_doc({
+				"doctype": "Item",
+				"item_code": "Test Item",
+				"item_name": "Test Item",
+				"stock_uom": "Nos",
+				"is_sales_item": 1,
+				"is_purchase_item": 1,
+				"item_group": "Products"
+			}).insert(ignore_permissions=True)
+
+		# Insert a dummy Sales Invoice for testing
+		if not frappe.db.exists("Sales Invoice", {"customer": "_Test Customer"}):
+			customer = frappe.get_doc({
+				"doctype": "Customer",
+				"customer_name": "_Test Customer",
+				"customer_group": "Commercial",
+				"territory": "All Territories"
+			}).insert(ignore_permissions=True)
+
+			
+			# Create a Balance Sheet parent if not exists
+			if not frappe.db.exists("Account", "Temporary Accounts - _TOIC"):
+				frappe.get_doc({
+					"doctype": "Account",
+					"account_name": "Temporary Accounts",
+					"company": self.company,
+					"root_type": "Asset",
+					"account_type": "",
+					"is_group": 1,
+					"report_type": "Balance Sheet"
+				}).insert(ignore_permissions=True)
+
+			# Create your temporary opening account under it
+			income_account = frappe.get_doc({
+				"doctype": "Account",
+				"account_name": "Temporary Opening Income",
+				"parent_account": "Temporary Accounts - _TOIC",
+				"company": self.company,
+				"root_type": "Asset",
+				"is_group": 0,
+				"report_type": "Balance Sheet"
+			}).insert(ignore_permissions=True)
+
+
+			# Insert Sales Invoice
+			frappe.get_doc({
+				"doctype": "Sales Invoice",
+				"customer": customer.name,
+				"company": self.company,
+				"is_opening": "Yes",
+				"docstatus": 1,
+				"outstanding_amount": 100.0,
+				"paid_amount": 50.0,
+				"grand_total": 150.0,
+				"base_grand_total": 150.0,
+				"base_write_off_amount": 0.0,
+				"items": [
+					{
+						"item_code": "Test Item",
+						"qty": 1,
+						"rate": 150.0,
+						"amount": 150.0,
+						"income_account": income_account.name  # ✅ Use temp account here
+					}
+				],
+				"debit_to": "Debtors - _TOIC"
+			}).insert(ignore_permissions=True)
+
+
+		# Create the Opening Invoice Creation Tool doc
+		doc = frappe.get_doc({
+			"doctype": "Opening Invoice Creation Tool",
+			"company": self.company
+		})
+
+		# Call onload explicitly
+		doc.onload()
+
+		# Check if summary is set onload
+		summary = doc.get_onload("opening_invoices_summary")
+		max_count = doc.get_onload("max_count")
+		temp_account = doc.get_onload("temporary_opening_account")
+
+		# Assertions
+		self.assertIsInstance(summary, dict)
+		self.assertIsInstance(max_count, dict)
+		self.assertIsInstance(temp_account, str)
+		self.assertTrue(temp_account.startswith("ACC") or temp_account.startswith("Temp"))
+
 	def tearDown(self):
 		disable_dimension()
 
