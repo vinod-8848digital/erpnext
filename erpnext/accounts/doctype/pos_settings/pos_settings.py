@@ -2,7 +2,7 @@
 # For license information, please see license.txt
 
 
-from frappe.model.document import Document
+from frappe.model.document import Document  # pragma: no cover
 
 
 class POSSettings(Document):
