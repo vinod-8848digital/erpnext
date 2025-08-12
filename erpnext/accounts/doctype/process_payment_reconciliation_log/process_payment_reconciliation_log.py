@@ -2,10 +2,10 @@
 # For license information, please see license.txt
 
 # import frappe
-from frappe.model.document import Document
+from frappe.model.document import Document  # pragma: no cover
 
 
-class ProcessPaymentReconciliationLog(Document):  # pragma: no cover
+class ProcessPaymentReconciliationLog(Document):
 	# begin: auto-generated types
 	# This code is auto-generated. Do not modify anything in this block.
 

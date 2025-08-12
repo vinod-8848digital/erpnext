@@ -28,7 +28,7 @@ class ProcessStatementOfAccounts(Document):
 
 	from typing import TYPE_CHECKING
 
-	if TYPE_CHECKING:
+	if TYPE_CHECKING:  # pragma: no cover
 		from erpnext.accounts.doctype.process_statement_of_accounts_cc.process_statement_of_accounts_cc import ProcessStatementOfAccountsCC
 		from erpnext.accounts.doctype.process_statement_of_accounts_customer.process_statement_of_accounts_customer import ProcessStatementOfAccountsCustomer
 		from erpnext.accounts.doctype.psoa_cost_center.psoa_cost_center import PSOACostCenter
