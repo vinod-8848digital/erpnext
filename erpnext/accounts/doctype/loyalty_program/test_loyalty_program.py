@@ -391,9 +391,3 @@ def create_records():
 				"price_list_rate": 10000,
 			}
 		).insert()
-
-
-@frappe.whitelist()
-def call_methods():
-	obj_1 = TestLoyaltyProgram()
-	obj_1.test_get_redeemption_factor_TC_ACC_327()
