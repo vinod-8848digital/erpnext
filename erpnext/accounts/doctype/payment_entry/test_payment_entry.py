@@ -2379,7 +2379,7 @@ def create_company(
     currency="INR",
     abbr="_TC"
     ):
-	if not frappe.db.exists("Company", "_Test Company"):
+	if not frappe.db.exists("Company",  company_name or "_Test Company" ):
 		frappe.get_doc({
 			"doctype": "Company",
 			"company_name": company_name,
