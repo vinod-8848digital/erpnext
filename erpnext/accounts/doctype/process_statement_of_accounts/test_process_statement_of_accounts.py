@@ -18,6 +18,7 @@ from erpnext.accounts.test.accounts_mixin import AccountsTestMixin
 
 class TestProcessStatementOfAccounts(AccountsTestMixin, FrappeTestCase):
 	def setUp(self):
+		frappe.set_user("Administrator")
 		self.create_company()
 		self.create_customer()
 		self.create_customer(customer_name="Other Customer")
