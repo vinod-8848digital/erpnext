@@ -376,19 +376,10 @@ def create_records():
 		).insert()
 
 	# create an item
-	if not frappe.db.exists("Item", "Loyal Item"):
-		frappe.get_doc(
-			{
-				"doctype": "Item",
-				"item_code": "Loyal Item",
-				"item_name": "Loyal Item",
-				"item_group": "All Item Groups",
-				"company": "_Test Company",
-				"is_stock_item": 1,
-				"opening_stock": 100,
-				"valuation_rate": 10000,
-			}
-		).insert()
+	item_code = "Loyal Item"
+	if not frappe.db.exists("Item", item_code):
+			from erpnext.accounts.doctype.payment_entry.test_payment_entry import make_test_item
+			make_test_item(item_code)
 
 	# create item price
 	if not frappe.db.exists("Item Price", {"price_list": "Standard Selling", "item_code": "Loyal Item"}):
@@ -400,9 +391,3 @@ def create_records():
 				"price_list_rate": 10000,
 			}
 		).insert()
-
-
-@frappe.whitelist()
-def call_methods():
-	obj_1 = TestLoyaltyProgram()
-	obj_1.test_loyalty_program_details_with_silent_TC_ACC_328()
