@@ -172,19 +172,22 @@ class TestOpeningInvoiceCreationTool(FrappeTestCase):
 	
 	def test_onload_sets_summary_and_temporary_account_TC_ACC_326(self):
 		self.company = "_Test Opening Invoice Company"
+		
 		item_code = "Test Item"
 		if not frappe.db.exists("Item", item_code):
+			item_group = frappe.new_doc("Item Group")
+			item_group.update({
+				"item_group_name": "Products",
+				"is_group": 1,
+			})
+			item_group.insert()
 			from erpnext.accounts.doctype.payment_entry.test_payment_entry import make_test_item
 			item = make_test_item(item_code)
-			frappe.get_doc({
-				"doctype": "Item",
-				"item_code": "Test Item",
-				"item_name": "Test Item",
-				"stock_uom": "Nos",
+			item.update({
 				"is_sales_item": 1,
 				"is_purchase_item": 1,
-				"item_group": "Products"
-			}).insert(ignore_permissions=True)
+			})
+			item.save(ignore_permissions=True)
 
 		# Insert a dummy Sales Invoice for testing
 		if not frappe.db.exists("Sales Invoice", {"customer": "_Test Customer"}):
@@ -234,11 +237,11 @@ class TestOpeningInvoiceCreationTool(FrappeTestCase):
 				"base_write_off_amount": 0.0,
 				"items": [
 					{
-						"item_code": item.item_code,
+						"item_code": item_code,
 						"qty": 1,
 						"rate": 150.0,
 						"amount": 150.0,
-						"income_account": income_account.name  # ✅ Use temp account here
+						"income_account": income_account.name
 					}
 				],
 				"debit_to": "Debtors - _TOIC"
@@ -336,9 +339,3 @@ def make_customer(customer=None):
 		return customer.name
 	else:
 		return frappe.db.exists("Customer", customer_name)
-
-@frappe.whitelist()
-def call_method():
-	obj_1 = TestOpeningInvoiceCreationTool()
-	obj_1.test_onload_sets_summary_and_temporary_account_TC_ACC_326()
-	return
