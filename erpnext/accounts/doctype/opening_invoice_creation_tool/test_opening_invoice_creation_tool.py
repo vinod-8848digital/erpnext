@@ -172,8 +172,10 @@ class TestOpeningInvoiceCreationTool(FrappeTestCase):
 	
 	def test_onload_sets_summary_and_temporary_account_TC_ACC_326(self):
 		self.company = "_Test Opening Invoice Company"
-
-		if not frappe.db.exists("Item", "Test Item"):
+		item_code = "Test Item"
+		if not frappe.db.exists("Item", item_code):
+			from erpnext.accounts.doctype.payment_entry.test_payment_entry import make_test_item
+			item = make_test_item(item_code)
 			frappe.get_doc({
 				"doctype": "Item",
 				"item_code": "Test Item",
@@ -232,7 +234,7 @@ class TestOpeningInvoiceCreationTool(FrappeTestCase):
 				"base_write_off_amount": 0.0,
 				"items": [
 					{
-						"item_code": "Test Item",
+						"item_code": item.item_code,
 						"qty": 1,
 						"rate": 150.0,
 						"amount": 150.0,
@@ -338,5 +340,5 @@ def make_customer(customer=None):
 @frappe.whitelist()
 def call_method():
 	obj_1 = TestOpeningInvoiceCreationTool()
-	obj_1.test_temporary_opening_account_without_company_TC_ACC_325()
+	obj_1.test_onload_sets_summary_and_temporary_account_TC_ACC_326()
 	return
