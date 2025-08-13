@@ -4,9 +4,11 @@
 
 import frappe
 from frappe.tests.utils import FrappeTestCase
-from frappe.utils import add_days, getdate, today
+from frappe.utils import add_days, format_date, getdate, today
 
 from erpnext.accounts.doctype.process_statement_of_accounts.process_statement_of_accounts import (
+	get_context,
+	get_report_pdf,
 	get_statement_dict,
 	send_emails,
 )
@@ -156,6 +158,66 @@ class TestProcessStatementOfAccounts(AccountsTestMixin, FrappeTestCase):
 		self.assertIsInstance(customers_list, list)
 		self.assertTrue(any(cust["name"] == customer.name for cust in customers_list))
 		self.assertEqual(customers_list[0]["primary_email"], "customer@example.com")
+
+	def test_download_statements(self):
+		from erpnext.accounts.doctype.process_statement_of_accounts.process_statement_of_accounts import (
+			download_statements,
+		)
+
+		posa_01 = create_process_soa(
+			name="_Test POSA 01",
+		)
+
+		doc = frappe.get_doc("Process Statement Of Accounts", posa_01.name)
+
+		download_statements(doc.name)
+		report = get_report_pdf(doc)
+
+		self.assertEqual(frappe.local.response.filename, f"{doc.name}.pdf")
+		self.assertEqual(frappe.local.response.type, "download")
+		self.assertEqual(frappe.local.response.filecontent, report)
+
+	def test_get_context(self):
+		# Create test customer
+		customer = frappe.get_doc(
+			{
+				"doctype": "Customer",
+				"customer_name": "Test Customer for Context",
+				"customer_group": "All Customer Groups",
+				"territory": "All Territories",
+			}
+		).insert(ignore_permissions=True)
+
+		# Create Process Statement of Accounts document with dates
+		from_date = "2023-01-01"
+		to_date = "2023-12-31"
+		template_doc = frappe.get_doc(
+			{
+				"doctype": "Process Statement Of Accounts",
+				"from_date": from_date,
+				"to_date": to_date,
+				"customers": [{"customer": customer.name}],
+			}
+		)
+
+		context = get_context(customer.name, template_doc)
+
+		self.assertIsInstance(context, dict)
+		self.assertIn("doc", context)
+		self.assertIn("customer", context)
+		self.assertIn("frappe", context)
+
+		self.assertNotEqual(id(context["doc"]), id(template_doc))
+
+		self.assertFalse(hasattr(context["doc"], "customers"))
+
+		self.assertEqual(context["doc"].from_date, format_date(from_date))
+		self.assertEqual(context["doc"].to_date, format_date(to_date))
+
+		self.assertEqual(context["customer"].name, customer.name)
+		self.assertIsNotNone(context["frappe"])
+
+		customer.delete(ignore_permissions=True)
 
 	def tearDown(self):
 		frappe.db.rollback()
