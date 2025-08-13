@@ -167,7 +167,7 @@ class TestOpeningInvoiceCreationTool(FrappeTestCase):
 		self.check_expected_values(invoices, expected_value, invoice_type="Sales")
 		
 	def test_temporary_opening_account_without_company_TC_ACC_325(self):
-		temporary_account_response = get_temporary_opening_account("_Test Company")
+		temporary_account_response = get_temporary_opening_account()
 		self.assertEqual(temporary_account_response, None)
 	
 	def test_onload_sets_summary_and_temporary_account_TC_ACC_326(self):
@@ -334,3 +334,9 @@ def make_customer(customer=None):
 		return customer.name
 	else:
 		return frappe.db.exists("Customer", customer_name)
+
+@frappe.whitelist()
+def call_method():
+	obj_1 = TestOpeningInvoiceCreationTool()
+	obj_1.test_temporary_opening_account_without_company_TC_ACC_325()
+	return
