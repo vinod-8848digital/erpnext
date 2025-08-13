@@ -2146,6 +2146,28 @@ class TestPaymentEntry(FrappeTestCase):
 
 		self.assertEqual(pe.cost_center, "Main - _TC")
 
+	def test_pe_party_type_TC_ACC_346(self):
+		# Create a new Payment Entry document
+		pe = frappe.new_doc("Payment Entry")
+		pe.payment_type = "Receive"
+		pe.company = "_Test Company"
+		pe.party_type = "User"
+		pe.party = "test@example.com"
+		pe.mode_of_payment = "Cash"
+		pe.paid_to = "_Test Bank - _TC"
+		pe.paid_amount = 100
+		pe.received_amount = 100
+		pe.posting_date = frappe.utils.nowdate()
+		pe.paid_from = "Debtors - _TC"
+		pe.paid_to = "_Test Bank - _TC"
+		pe.reference_no = "Test Reference No"
+		pe.reference_date = frappe.utils.nowdate()
+		pe.cost_center = "_Test Cost Center - _TC"
+		pe.insert()
+
+		self.assertNotIn(pe.party_type, ["Customer", "Supplier"])
+		self.assertEqual(pe.docstatus, 0)
+
 
 def create_payment_entry(**args):
 	payment_entry = frappe.new_doc("Payment Entry")
@@ -2460,4 +2482,4 @@ def create_company(company_name="_Test Company", country="India", currency="INR"
 @frappe.whitelist()
 def call_method():
 	obj_1 = TestPaymentEntry()
-	obj_1.test_on_update_after_submit_TC_ACC_345()
+	obj_1.test_pe_party_type_TC_ACC_346()
