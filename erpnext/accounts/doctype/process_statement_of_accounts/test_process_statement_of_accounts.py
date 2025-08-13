@@ -4,7 +4,7 @@
 
 import frappe
 from frappe.tests.utils import FrappeTestCase
-from frappe.utils import add_days, getdate, today, add_months
+from frappe.utils import add_days, getdate, today
 
 from erpnext.accounts.doctype.process_statement_of_accounts.process_statement_of_accounts import (
 	get_statement_dict,
@@ -83,7 +83,80 @@ class TestProcessStatementOfAccounts(AccountsTestMixin, FrappeTestCase):
 	def check_ageing_summary(self, ageing, expected_ageing):
 		for age_range in expected_ageing:
 			self.assertEqual(expected_ageing[age_range], ageing.get(age_range))
-	
+
+	def test_send_auto_email(self):
+		from erpnext.accounts.doctype.process_statement_of_accounts.process_statement_of_accounts import (
+			send_auto_email,
+		)
+
+		posa1 = create_process_soa(
+			name="_Test POSA SEND 1",
+			enable_auto_email=1,
+			from_date=getdate(today()),
+			to_date=getdate(today()),
+		)
+
+		posa2 = create_process_soa(
+			name="_Test POSA SEND 2", enable_auto_email=1, posting_date=getdate(today())
+		)
+
+		posa3 = create_process_soa(
+			name="_Test POSA SEND 3", enable_auto_email=1, to_date=add_days(getdate(today()), -1)
+		)
+
+		posa4 = create_process_soa(name="_Test POSA SEND 4", enable_auto_email=0, to_date=getdate(today()))
+
+		result = send_auto_email()
+		self.assertTrue(result)
+
+		selected_names = {
+			d.name
+			for d in frappe.get_list(
+				"Process Statement Of Accounts",
+				filters={"enable_auto_email": 1},
+				or_filters={"to_date": today(), "posting_date": today()},
+				fields=["name"],
+			)
+		}
+
+		self.assertIn(posa1.name, selected_names)
+		self.assertIn(posa2.name, selected_names)
+		self.assertIn(posa3.name, selected_names)
+		self.assertNotIn(posa4.name, selected_names)
+
+	def test_fetch_customers_sales_partner(self):
+		from erpnext.accounts.doctype.process_statement_of_accounts.process_statement_of_accounts import (
+			fetch_customers,
+		)
+
+		# Create a Sales Partner
+		sales_partner = frappe.get_doc(
+			{
+				"doctype": "Sales Partner",
+				"partner_name": "_Test Sales Partner Fetch",
+				"commission_rate": "100",
+			}
+		).insert(ignore_permissions=True)
+
+		# Create a Customer linked to that Sales Partner
+		customer = frappe.get_doc(
+			{
+				"doctype": "Customer",
+				"customer_name": "_Test Customer Fetch",
+				"customer_type": "Company",
+				"email_id": "customer@example.com",
+				"default_sales_partner": sales_partner.name,
+			}
+		).insert(ignore_permissions=True)
+
+		customers_list = fetch_customers(
+			customer_collection="Sales Partner", collection_name=sales_partner.name, primary_mandatory=1
+		)
+
+		self.assertIsInstance(customers_list, list)
+		self.assertTrue(any(cust["name"] == customer.name for cust in customers_list))
+		self.assertEqual(customers_list[0]["primary_email"], "customer@example.com")
+
 	def tearDown(self):
 		frappe.db.rollback()
 
