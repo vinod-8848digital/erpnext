@@ -2168,6 +2168,139 @@ class TestPaymentEntry(FrappeTestCase):
 		self.assertNotIn(pe.party_type, ["Customer", "Supplier"])
 		self.assertEqual(pe.docstatus, 0)
 
+	def test_bank_account_link_with_supplier_TC_AC_353(self):
+		from erpnext.accounts.doctype.purchase_invoice.test_purchase_invoice import (
+			create_tax_witholding_category,
+		)
+
+		create_records("_Test Supplier TDS")
+
+		# Update Company Default Account && Create Bank Account if not exists
+		company_doc = frappe.get_doc("Company", "_Test Company")
+		company_doc.default_bank_account = ""
+		company_doc.default_cash_account = ""
+		company_doc.save()
+
+		# Check and Create If Bank not Exists
+		bank_name = "Test Bank-123"
+		if not frappe.db.exists("Bank", bank_name):
+			frappe.get_doc(
+				{
+					"doctype": "Bank",
+					"bank_name": bank_name,
+				}
+			).insert()
+
+		bank_account_name = "Test Bank Account - _Test Supplier TDS - _TC"
+		if not frappe.db.exists("Bank Account", bank_account_name):
+			frappe.get_doc(
+				{
+					"doctype": "Bank Account",
+					"bank": bank_name,
+					"account_name": bank_account_name,
+					"party_type": "Supplier",
+					"party": "_Test Supplier TDS",
+					"is_default": 1,
+					"disabled": 0,
+				}
+			).insert()
+
+		supplier = frappe.get_doc("Supplier", "_Test Supplier TDS")
+		if supplier:
+			self.assertEqual(supplier.tax_withholding_category, "Test - TDS - 194C - Company")
+
+			tax_withholding_category = create_tax_witholding_category(
+				category_name="Test - TDS - 194C - Company", company="_Test Company", account="Cash - _TC"
+			)
+
+			if len(tax_withholding_category.accounts) > 0:
+				self.assertEqual(tax_withholding_category.accounts[0].account, "Cash - _TC")
+
+			payment_entry = create_payment_entry(
+				party_type="Supplier",
+				party=supplier.name,
+				payment_type="Pay",
+				paid_from="Cash - _TC",
+				paid_to="Creditors - _TC",
+				save=True,
+			)
+			payment_entry.apply_tax_withholding_amount = 1
+			payment_entry.tax_withholding_category = tax_withholding_category.name
+			payment_entry.paid_amount = 80000
+			payment_entry.append(
+				"taxes",
+				{
+					"account_head": "_Test TDS Payable - _TC",
+					"charge_type": "On Paid Amount",
+					"rate": 0,
+					"add_deduct_tax": "Deduct",
+					"description": "Cash",
+				},
+			)
+
+			payment_entry.save()
+			payment_entry.submit()
+			item = make_test_item()
+			pi = create_purchase_invoice(supplier=supplier.name, item_code=item.name)
+
+			pi.apply_tds = 1
+			pi.tax_withholding_category = tax_withholding_category.name
+			pi.append(
+				"advances",
+				{
+					"reference_type": "Payment Entry",
+					"reference_name": payment_entry.name,
+					"advance_amount": 80000,
+					"allocated_amount": 80000,
+				},
+			)
+			pi.exchange_rate = 1
+			pi.source_exchange_rate = 1
+			pi.save()
+			pi.submit()
+			self.voucher_no = pi.name
+			self.expected_gle = [
+				{"account": "_Test TDS Payable - _TC", "debit": 0.0, "credit": 1000.0},
+				{"account": "Stock Received But Not Billed - _TC", "debit": 90000.0, "credit": 0.0},
+				{"account": "Creditors - _TC", "debit": 1000.0, "credit": 0.0},
+				{"account": "Creditors - _TC", "debit": 0.0, "credit": 90000.0},
+			]
+			self.check_gl_entries()
+
+			pe = get_payment_entry("Purchase Invoice", pi.name)
+			pe.payment_type = "Pay"
+			pe.paid_from = "Cash - _TC"
+			pe.paid_from_account_currency = "INR"
+			pe.paid_to = "Creditors - _TC"
+			pe.paid_to_account_currency = "INR"
+
+			pe.exchange_rate = 1
+			pe.source_exchange_rate = 1
+			pe.save()
+			pe.submit()
+			self.expected_gle = [
+				{"account": "Creditors - _TC", "debit": 9000.0, "credit": 0.0},
+				{"account": "Cash - _TC", "debit": 0.0, "credit": 9000.0},
+			]
+			self.voucher_no = pe.name
+			self.check_gl_entries()
+
+			self.assertEqual(pe.docstatus, 1, "Payment Entry should be submitted.")
+
+			# Assert paid amounts are correct
+			self.assertEqual(pe.paid_amount, 9000.0, "Paid amount should be 9000.0")
+			self.assertEqual(pe.received_amount, 9000.0, "Received amount should be 9000.0")
+
+			# Assert bank account linked is correct
+			bank_account_doc = frappe.get_doc("Bank Account", {"account_name": bank_account_name})
+			self.assertEqual(
+				bank_account_doc.account_name, bank_account_name, "Bank Account name should match."
+			)
+			self.assertEqual(
+				bank_account_doc.bank, bank_name, "Bank Account should be linked to correct bank."
+			)
+			return
+
 
 def create_payment_entry(**args):
 	payment_entry = frappe.new_doc("Payment Entry")
@@ -2476,21 +2609,3 @@ def create_company(company_name="_Test Company", country="India", currency="INR"
 				"abbr": abbr,
 			}
 		).insert()
-
-def create_company(
-    company_name="_Test Company", 
-    country="India", 
-    currency="INR",
-    abbr="_TC"
-    ):
-	if not frappe.db.exists("Company",  company_name or "_Test Company" ):
-		frappe.get_doc({
-			"doctype": "Company",
-			"company_name": company_name,
-			"company_type": "Company",
-			"default_currency": currency,
-			"country": country,
-			"company_email": "test@example.com",
-			"abbr": abbr
-		}).insert()
-		
