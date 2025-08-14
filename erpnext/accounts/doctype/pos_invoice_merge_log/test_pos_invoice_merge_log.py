@@ -469,7 +469,7 @@ class TestPOSInvoiceMergeLog(unittest.TestCase):
 			frappe.db.sql("delete from `tabPOS Profile`")
 			frappe.db.sql("delete from `tabPOS Invoice`")
 
-	def test_check_scheduler_status(self):
+	def test_check_scheduler_status_TC_ACC_340(self):
 		frappe.flags.in_test = False
 
 		try:

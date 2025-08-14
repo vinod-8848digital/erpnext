@@ -87,7 +87,7 @@ class TestProcessStatementOfAccounts(AccountsTestMixin, FrappeTestCase):
 		for age_range in expected_ageing:
 			self.assertEqual(expected_ageing[age_range], ageing.get(age_range))
 
-	def test_send_auto_email(self):
+	def test_send_auto_email_TC_ACC_341(self):
 		from erpnext.accounts.doctype.process_statement_of_accounts.process_statement_of_accounts import (
 			send_auto_email,
 		)
@@ -127,7 +127,7 @@ class TestProcessStatementOfAccounts(AccountsTestMixin, FrappeTestCase):
 		self.assertIn(posa3.name, selected_names)
 		self.assertNotIn(posa4.name, selected_names)
 
-	def test_fetch_customers_sales_partner(self):
+	def test_fetch_customers_sales_partner_TC_ACC_342(self):
 		from erpnext.accounts.doctype.process_statement_of_accounts.process_statement_of_accounts import (
 			fetch_customers,
 		)
@@ -160,7 +160,7 @@ class TestProcessStatementOfAccounts(AccountsTestMixin, FrappeTestCase):
 		self.assertTrue(any(cust["name"] == customer.name for cust in customers_list))
 		self.assertEqual(customers_list[0]["primary_email"], "customer@example.com")
 
-	def test_download_statements(self):
+	def test_download_statements_TC_ACC_343(self):
 		from erpnext.accounts.doctype.process_statement_of_accounts.process_statement_of_accounts import (
 			download_statements,
 		)
@@ -178,7 +178,7 @@ class TestProcessStatementOfAccounts(AccountsTestMixin, FrappeTestCase):
 		self.assertEqual(frappe.local.response.type, "download")
 		self.assertEqual(frappe.local.response.filecontent, report)
 
-	def test_get_context(self):
+	def test_get_context_TC_ACC_344(self):
 		# Create test customer
 		customer = frappe.get_doc(
 			{
