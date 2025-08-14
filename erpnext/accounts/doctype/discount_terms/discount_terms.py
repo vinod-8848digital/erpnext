@@ -5,7 +5,7 @@ import frappe # pragma: no cover
 from frappe.model.document import Document # pragma: no cover
 
 
-class DiscountTerms(Document): # pragma: no cover
+class DiscountTerms(Document):
 	# begin: auto-generated types
 	# This code is auto-generated. Do not modify anything in this block.
 
