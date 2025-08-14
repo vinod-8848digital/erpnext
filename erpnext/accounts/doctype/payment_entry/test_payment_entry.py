@@ -2463,7 +2463,6 @@ def create_purchase_invoice(**args):
 	pi.save()
 	return pi
 
-
 def create_company(company_name="_Test Company", country="India", currency="INR", abbr="_TC"):
 	if not frappe.db.exists("Company", "_Test Company"):
 		frappe.get_doc(
@@ -2478,8 +2477,20 @@ def create_company(company_name="_Test Company", country="India", currency="INR"
 			}
 		).insert()
 
-
-@frappe.whitelist()
-def call_method():
-	obj_1 = TestPaymentEntry()
-	obj_1.test_pe_party_type_TC_ACC_346()
+def create_company(
+    company_name="_Test Company", 
+    country="India", 
+    currency="INR",
+    abbr="_TC"
+    ):
+	if not frappe.db.exists("Company",  company_name or "_Test Company" ):
+		frappe.get_doc({
+			"doctype": "Company",
+			"company_name": company_name,
+			"company_type": "Company",
+			"default_currency": currency,
+			"country": country,
+			"company_email": "test@example.com",
+			"abbr": abbr
+		}).insert()
+		

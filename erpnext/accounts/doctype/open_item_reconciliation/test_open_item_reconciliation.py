@@ -10,7 +10,7 @@ class TestOpenItemReconciliation(FrappeTestCase):
 		super().tearDown()
 		frappe.db.rollback()
   
-	def test_fetch_unreconciled_gl_entries_with_real_gl_TC_SCK_438(self):
+	def test_fetch_unreconciled_gl_entries_with_real_gl_TC_ACC_329(self):
 		from erpnext.accounts.doctype.payment_entry.test_payment_entry import (
 			create_company,
 			create_customer,
@@ -121,7 +121,7 @@ class TestOpenItemReconciliation(FrappeTestCase):
 		self.assertEqual(recon.debit_amount[0].voucher_type, "Payment Entry")
 		self.assertEqual(recon.debit_amount[0].voucher_no, pe.name)
 		
-	def test_remove_current_glr_row_TC_SCK_439(self):
+	def test_remove_current_glr_row_TC_ACC_330(self):
 		from erpnext.accounts.doctype.payment_entry.test_payment_entry import (
 			create_company,
 			create_customer,
@@ -230,7 +230,7 @@ class TestOpenItemReconciliation(FrappeTestCase):
 		self.assertEqual(gle_credit.unreconciled_amount, 1000.0)
 		self.assertEqual(gle_credit.is_reconciled, 0)
   
-	def test_reconcile_allocated_entries_with_sales_invoice_TC_SCK_440(self):
+	def test_reconcile_allocated_entries_with_sales_invoice_TC_ACC_331(self):
 		from erpnext.accounts.doctype.payment_entry.test_payment_entry import (
 			create_company,
 			create_customer,
@@ -309,7 +309,7 @@ class TestOpenItemReconciliation(FrappeTestCase):
 			assert gle.gl_entry_reconciliation_details[0].gl_entry in [debit_gle["name"], credit_gle["name"]]
 
 
-	def test_allocate_entries_using_real_gl_entries_TC_SCK_441(self):
+	def test_allocate_entries_using_real_gl_entries_TC_ACC_332(self):
 		from erpnext.accounts.doctype.payment_entry.test_payment_entry import (
 			create_company,
 			create_customer,
@@ -415,7 +415,7 @@ class TestOpenItemReconciliation(FrappeTestCase):
 		for row in debit_gls + credit_gls:
 			assert row["outstanding_amount"] == 0
    
-	def test_get_linked_glr_rows_with_real_gl_entries_TC_SCK_442(self):
+	def test_get_linked_glr_rows_with_real_gl_entries_TC_ACC_333(self):
 		from erpnext.accounts.doctype.payment_entry.test_payment_entry import (
 			create_company,
 			create_customer,

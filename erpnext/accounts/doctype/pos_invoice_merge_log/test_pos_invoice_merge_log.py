@@ -11,6 +11,7 @@ from erpnext.accounts.doctype.pos_closing_entry.test_pos_closing_entry import in
 from erpnext.accounts.doctype.pos_invoice.pos_invoice import make_sales_return
 from erpnext.accounts.doctype.pos_invoice.test_pos_invoice import create_pos_invoice
 from erpnext.accounts.doctype.pos_invoice_merge_log.pos_invoice_merge_log import (
+	check_scheduler_status,
 	consolidate_pos_invoices,
 )
 from erpnext.stock.doctype.serial_and_batch_bundle.test_serial_and_batch_bundle import (
@@ -41,6 +42,7 @@ class TestPOSInvoiceMergeLog(unittest.TestCase):
 			pos_inv3.save()
 			pos_inv3.submit()
 
+			frappe.flags.in_test = True
 			consolidate_pos_invoices()
 
 			pos_inv.load_from_db()
@@ -52,6 +54,7 @@ class TestPOSInvoiceMergeLog(unittest.TestCase):
 			self.assertFalse(pos_inv.consolidated_invoice == pos_inv3.consolidated_invoice)
 
 		finally:
+			frappe.flags.in_test = False
 			frappe.set_user("Administrator")
 			frappe.db.sql("delete from `tabPOS Profile`")
 			frappe.db.sql("delete from `tabPOS Invoice`")
@@ -87,6 +90,7 @@ class TestPOSInvoiceMergeLog(unittest.TestCase):
 			)
 			pos_inv_cn.paid_amount = -300
 			pos_inv_cn.submit()
+			frappe.flags.in_test = True
 
 			consolidate_pos_invoices()
 
@@ -106,6 +110,7 @@ class TestPOSInvoiceMergeLog(unittest.TestCase):
 			self.assertEqual(consolidated_credit_note.payments[1].amount, -200)
 
 		finally:
+			frappe.flags.in_test = False
 			frappe.set_user("Administrator")
 			frappe.db.sql("delete from `tabPOS Profile`")
 			frappe.db.sql("delete from `tabPOS Invoice`")
@@ -150,6 +155,7 @@ class TestPOSInvoiceMergeLog(unittest.TestCase):
 			inv2.save()
 			inv2.submit()
 
+			frappe.flags.in_test = True
 			consolidate_pos_invoices()
 			inv.load_from_db()
 
@@ -164,6 +170,7 @@ class TestPOSInvoiceMergeLog(unittest.TestCase):
 			self.assertEqual(tax_rate2, 5)
 			self.assertEqual(amount2, 5)
 		finally:
+			frappe.flags.in_test = False
 			frappe.set_user("Administrator")
 			frappe.db.sql("delete from `tabPOS Profile`")
 			frappe.db.sql("delete from `tabPOS Invoice`")
@@ -219,6 +226,7 @@ class TestPOSInvoiceMergeLog(unittest.TestCase):
 			inv2.insert()
 			inv2.submit()
 
+			frappe.flags.in_test = True
 			consolidate_pos_invoices()
 
 			inv.load_from_db()
@@ -227,6 +235,7 @@ class TestPOSInvoiceMergeLog(unittest.TestCase):
 			self.assertEqual(consolidated_invoice.status, "Paid")
 
 		finally:
+			frappe.flags.in_test = False
 			frappe.set_user("Administrator")
 			frappe.db.sql("delete from `tabPOS Profile`")
 			frappe.db.sql("delete from `tabPOS Invoice`")
@@ -285,7 +294,7 @@ class TestPOSInvoiceMergeLog(unittest.TestCase):
 			inv3.append("payments", {"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": 1800})
 			inv3.insert()
 			inv3.submit()
-
+			frappe.flags.in_test = True
 			consolidate_pos_invoices()
 
 			inv.load_from_db()
@@ -294,6 +303,7 @@ class TestPOSInvoiceMergeLog(unittest.TestCase):
 			self.assertEqual(consolidated_invoice.status, "Paid")
 
 		finally:
+			frappe.flags.in_test = False
 			frappe.set_user("Administrator")
 			frappe.db.sql("delete from `tabPOS Profile`")
 			frappe.db.sql("delete from `tabPOS Invoice`")
@@ -347,7 +357,7 @@ class TestPOSInvoiceMergeLog(unittest.TestCase):
 				inv.paid_amount = -157
 				inv.save()
 				inv.submit()
-
+			frappe.flags.in_test = True
 			consolidate_pos_invoices()
 
 			inv.load_from_db()
@@ -356,6 +366,7 @@ class TestPOSInvoiceMergeLog(unittest.TestCase):
 			self.assertEqual(consolidated_invoice.rounding_adjustment, -0.002)
 
 		finally:
+			frappe.flags.in_test = False
 			frappe.set_user("Administrator")
 			frappe.db.sql("delete from `tabPOS Profile`")
 			frappe.db.sql("delete from `tabPOS Invoice`")
@@ -385,7 +396,7 @@ class TestPOSInvoiceMergeLog(unittest.TestCase):
 			inv2.append("payments", {"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": 60})
 			inv2.insert()
 			inv2.submit()
-
+			frappe.flags.in_test = True
 			consolidate_pos_invoices()
 
 			inv.load_from_db()
@@ -393,6 +404,7 @@ class TestPOSInvoiceMergeLog(unittest.TestCase):
 			self.assertEqual(consolidated_invoice.rounding_adjustment, 1)
 
 		finally:
+			frappe.flags.in_test = False
 			frappe.set_user("Administrator")
 			frappe.db.sql("delete from `tabPOS Profile`")
 			frappe.db.sql("delete from `tabPOS Invoice`")
@@ -443,7 +455,7 @@ class TestPOSInvoiceMergeLog(unittest.TestCase):
 			pos_inv2.append("payments", {"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": 100})
 			pos_inv2.save()
 			pos_inv2.submit()
-
+			frappe.flags.in_test = True
 			consolidate_pos_invoices()
 
 			pos_inv.load_from_db()
@@ -452,6 +464,20 @@ class TestPOSInvoiceMergeLog(unittest.TestCase):
 			self.assertNotEqual(pos_inv.consolidated_invoice, pos_inv2.consolidated_invoice)
 
 		finally:
+			frappe.flags.in_test = False
 			frappe.set_user("Administrator")
 			frappe.db.sql("delete from `tabPOS Profile`")
 			frappe.db.sql("delete from `tabPOS Invoice`")
+
+	def test_check_scheduler_status(self):
+		frappe.flags.in_test = False
+
+		try:
+			frappe.db.set_single_value("System Settings", "enable_scheduler", 0)
+			with self.assertRaises(frappe.ValidationError) as err:
+				check_scheduler_status()
+
+			self.assertIn("scheduler is inactive. cannot enqueue job.", str(err.exception).lower())
+		finally:
+			frappe.flags.in_test = True
+			frappe.db.set_single_value("System Settings", "enable_scheduler", 1)
