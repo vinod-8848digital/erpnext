@@ -6,6 +6,10 @@ import unittest
 
 import frappe
 from frappe.tests.utils import change_settings
+from frappe.utils import (
+	getdate,
+	nowdate,
+)
 
 from erpnext.accounts.doctype.pos_closing_entry.test_pos_closing_entry import init_user_and_profile
 from erpnext.accounts.doctype.pos_invoice.pos_invoice import make_sales_return
@@ -481,3 +485,83 @@ class TestPOSInvoiceMergeLog(unittest.TestCase):
 		finally:
 			frappe.flags.in_test = True
 			frappe.db.set_single_value("System Settings", "enable_scheduler", 1)
+
+	def test_cancel_merge_logs(self):
+		"""
+		Create a POS Invoice
+		Create POS Invoice Merge Log for the invoice
+		Check the status of the POS Invoice Marge Log
+		Call the cancel_merge_logs function
+		Check the status of the POS Invoice Marge Log
+		"""
+
+		from erpnext.accounts.doctype.pos_invoice_merge_log.pos_invoice_merge_log import cancel_merge_logs
+
+		frappe.db.sql("delete from `tabPOS Invoice`")
+
+		try:
+			# Create a POS Invoice
+			inv = create_pos_invoice(qty=1, rate=69.5, do_not_save=True)
+			inv.append("payments", {"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": 70})
+			inv.insert()
+
+			pos_profile = frappe.get_doc("POS Profile", inv.pos_profile)
+			pos_profile.save()
+
+			inv.submit()
+
+			# Create Merge Log for the invoice
+			merge_logs = make_merge_log([{"name": inv.name}])
+
+			# check before cancelling
+			self.assertTrue(merge_logs)
+			merge_log_doc = frappe.get_doc("POS Invoice Merge Log", merge_logs[0])
+			self.assertEqual(merge_log_doc.docstatus, 1)  # Submitted
+
+			# Cancel the merge log(s)
+			cancel_merge_logs(merge_logs, closing_entry=None)
+
+			# Validate that merge log is cancelled
+			cancelled_merge_log = frappe.get_doc("POS Invoice Merge Log", merge_logs[0])
+			self.assertEqual(cancelled_merge_log.docstatus, 2)  # Cancelled
+
+		finally:
+			frappe.set_user("Administrator")
+			frappe.db.sql("delete from `tabPOS Profile`")
+			frappe.db.sql("delete from `tabPOS Invoice`")
+
+	def test_get_error_message(self):
+		from erpnext.accounts.doctype.pos_invoice_merge_log.pos_invoice_merge_log import get_error_message
+
+		msg = "Error Message"
+		result = get_error_message(msg)
+		self.assertEqual(result, msg)
+
+
+def make_merge_log(invoices):
+	merge_logs = []
+
+	merge_log = frappe.new_doc("POS Invoice Merge Log")
+	merge_log.posting_date = getdate(nowdate())
+
+	for inv in invoices:
+		inv_data = frappe.db.get_values(
+			"POS Invoice", inv.get("name"), ["customer", "posting_date", "grand_total"], as_dict=1
+		)[0]
+
+		merge_log.customer = inv_data.customer
+		merge_log.append(
+			"pos_invoices",
+			{
+				"pos_invoice": inv.get("name"),
+				"customer": inv_data.customer,
+				"posting_date": inv_data.posting_date,
+				"grand_total": inv_data.grand_total,
+			},
+		)
+
+	merge_log.save(ignore_permissions=True)
+	merge_log.submit()
+
+	merge_logs.append(merge_log.name)
+	return merge_logs
