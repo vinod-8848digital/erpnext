@@ -18,6 +18,7 @@ from erpnext.accounts.doctype.pos_invoice_merge_log.pos_invoice_merge_log import
 	check_scheduler_status,
 	consolidate_pos_invoices,
 )
+from erpnext.accounts.doctype.pos_opening_entry.test_pos_opening_entry import create_opening_entry
 from erpnext.accounts.doctype.sales_invoice.test_sales_invoice import create_sales_invoice
 from erpnext.stock.doctype.serial_and_batch_bundle.test_serial_and_batch_bundle import (
 	get_serial_nos_from_bundle,
@@ -551,15 +552,19 @@ class TestPOSInvoiceMergeLog(unittest.TestCase):
 			get_sales_invoice_item,
 		)
 
+		frappe.set_user("Administrator")
 		frappe.db.sql("delete from `tabPOS Invoice`")
 		frappe.db.sql("delete from `tabSales Invoice`")
-
 		try:
 			# Create POS Invoice
 			pos_inv = create_pos_invoice(qty=1, rate=100, do_not_save=True)
 			pos_inv.append("payments", {"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": 100})
 			pos_inv.insert()
 			pos_inv.submit()
+
+			pos_profile_doc = frappe.get_doc("POS Profile", pos_inv.pos_profile)
+			opening_entry = create_opening_entry(pos_profile_doc, "Administrator")
+			self.assertEqual(opening_entry.status, "Open")
 
 			# Create Sales Invoice
 			si = create_sales_invoice(
@@ -587,7 +592,6 @@ class TestPOSInvoiceMergeLog(unittest.TestCase):
 			self.assertEqual(result, si.items[0].name)
 
 		finally:
-			frappe.set_user("Administrator")
 			frappe.db.sql("delete from `tabPOS Profile`")
 			frappe.db.sql("delete from `tabPOS Invoice`")
 			frappe.db.sql("delete from `tabSales Invoice`")
@@ -599,6 +603,7 @@ class TestPOSInvoiceMergeLog(unittest.TestCase):
 		Create Sales Invoice not linked to the POS Invoice
 		Create a Return for Sales INvoice
 		"""
+		frappe.set_user("Administrator")
 		frappe.db.sql("delete from `tabPOS Invoice`")
 		frappe.db.sql("delete from `tabSales Invoice`")
 		try:
@@ -607,6 +612,10 @@ class TestPOSInvoiceMergeLog(unittest.TestCase):
 			pos_inv.append("payments", {"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": 100})
 			pos_inv.insert()
 			pos_inv.submit()
+
+			pos_profile_doc = frappe.get_doc("POS Profile", pos_inv.pos_profile)
+			opening_entry = create_opening_entry(pos_profile_doc, "Administrator")
+			self.assertEqual(opening_entry.status, "Open")
 
 			# Create return POS invoice
 			pos_inv_return = make_sales_return(pos_inv.name)
@@ -668,7 +677,6 @@ class TestPOSInvoiceMergeLog(unittest.TestCase):
 			self.assertEqual(pos_inv.status, "Consolidated")
 			self.assertEqual(pos_inv_return.status, "Consolidated")
 		finally:
-			frappe.set_user("Administrator")
 			frappe.db.sql("delete from `tabPOS Profile`")
 			frappe.db.sql("delete from `tabPOS Invoice`")
 			frappe.db.sql("delete from `tabSales Invoice`")
