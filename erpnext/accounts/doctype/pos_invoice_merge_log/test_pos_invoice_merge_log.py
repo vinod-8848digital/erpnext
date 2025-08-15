@@ -505,12 +505,14 @@ class TestPOSInvoiceMergeLog(unittest.TestCase):
 			# Create a POS Invoice
 			inv = create_pos_invoice(qty=1, rate=69.5, do_not_save=True)
 			inv.append("payments", {"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": 70})
+			pos_profile = frappe.get_doc("POS Profile", inv.pos_profile)
+			opening_entry = create_opening_entry(pos_profile, "Administrator")
 			inv.insert()
 
-			pos_profile = frappe.get_doc("POS Profile", inv.pos_profile)
 			pos_profile.save()
 
 			inv.submit()
+			self.assertEqual(opening_entry.status, "Open")
 
 			# Create Merge Log for the invoice
 			merge_logs = make_merge_log([{"name": inv.name}])
