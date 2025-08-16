@@ -501,36 +501,30 @@ class TestPOSInvoiceMergeLog(unittest.TestCase):
 
 		frappe.db.sql("delete from `tabPOS Invoice`")
 
-		try:
-			# Create a POS Invoice
-			test_user, pos_profile = init_user_and_profile()
-			opening_entry = create_opening_entry(pos_profile, test_user.name)
-			inv = create_pos_invoice(qty=1, rate=69.5, do_not_save=True, pos_profile=pos_profile)
-			inv.append("payments", {"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": 70})
-			inv.insert()
+		# Create a POS Invoice
+		test_user, pos_profile = init_user_and_profile()
+		opening_entry = create_opening_entry(pos_profile, test_user.name)
+		inv = create_pos_invoice(qty=1, rate=70, do_not_save=True, pos_profile=pos_profile)
+		inv.append("payments", {"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": 80})
+		inv.save(ignore_permissions=True)
 
-			inv.submit()
-			self.assertEqual(opening_entry.status, "Open")
+		inv.submit()
+		self.assertEqual(opening_entry.status, "Open")
 
-			# Create Merge Log for the invoice
-			merge_logs = make_merge_log([{"name": inv.name}])
+		# Create Merge Log for the invoice
+		merge_logs = make_merge_log([{"name": inv.name}])
 
-			# check before cancelling
-			self.assertTrue(merge_logs)
-			merge_log_doc = frappe.get_doc("POS Invoice Merge Log", merge_logs[0])
-			self.assertEqual(merge_log_doc.docstatus, 1)  # Submitted
+		# check before cancelling
+		self.assertTrue(merge_logs)
+		merge_log_doc = frappe.get_doc("POS Invoice Merge Log", merge_logs[0])
+		self.assertEqual(merge_log_doc.docstatus, 1)  # Submitted
 
-			# Cancel the merge log(s)
-			cancel_merge_logs(merge_logs, closing_entry=None)
+		# Cancel the merge log(s)
+		cancel_merge_logs(merge_logs, closing_entry=None)
 
-			# Validate that merge log is cancelled
-			cancelled_merge_log = frappe.get_doc("POS Invoice Merge Log", merge_logs[0])
-			self.assertEqual(cancelled_merge_log.docstatus, 2)  # Cancelled
-
-		finally:
-			frappe.set_user("Administrator")
-			frappe.db.sql("delete from `tabPOS Profile`")
-			frappe.db.sql("delete from `tabPOS Invoice`")
+		# Validate that merge log is cancelled
+		cancelled_merge_log = frappe.get_doc("POS Invoice Merge Log", merge_logs[0])
+		self.assertEqual(cancelled_merge_log.docstatus, 2)  # Cancelled
 
 	def test_get_error_message_TC_AC_356(self):
 		from erpnext.accounts.doctype.pos_invoice_merge_log.pos_invoice_merge_log import get_error_message
@@ -553,47 +547,41 @@ class TestPOSInvoiceMergeLog(unittest.TestCase):
 		)
 
 		frappe.set_user("Administrator")
-		try:
-			# Create POS Invoice
-			test_user, pos_profile = init_user_and_profile()
-			opening_entry = create_opening_entry(pos_profile, test_user.name)
+		# Create POS Invoice
+		test_user, pos_profile = init_user_and_profile()
+		opening_entry = create_opening_entry(pos_profile, test_user.name)
 
-			pos_inv = create_pos_invoice(qty=1, rate=100, do_not_save=True, pos_profile=pos_profile)
-			pos_inv.append("payments", {"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": 100})
-			pos_inv.insert()
-			pos_inv.submit()
+		pos_inv = create_pos_invoice(qty=1, rate=100, do_not_save=True, pos_profile=pos_profile)
+		pos_inv.append("payments", {"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": 150})
+		pos_inv.save(ignore_permissions=True)
+		pos_inv.submit()
 
-			self.assertEqual(opening_entry.status, "Open")
+		self.assertEqual(opening_entry.status, "Open")
 
-			# Create Sales Invoice
-			si = create_sales_invoice(
-				company="_Test Company",
-				debit_to="Debtors - _TC",
-				account_for_change_amount="Cash - _TC",
-				warehouse="Stores - _TC",
-				income_account="Sales - _TC",
-				expense_account="Cost of Goods Sold - _TC",
-				cost_center="Main - _TC",
-				item=pos_inv.items[0].item_code,
-				rate=1000,
-				update_stock=0,
-				do_not_save=1,
-			)
+		# Create Sales Invoice
+		si = create_sales_invoice(
+			company="_Test Company",
+			debit_to="Debtors - _TC",
+			account_for_change_amount="Cash - _TC",
+			warehouse="Stores - _TC",
+			income_account="Sales - _TC",
+			expense_account="Cost of Goods Sold - _TC",
+			cost_center="Main - _TC",
+			item=pos_inv.items[0].item_code,
+			rate=1000,
+			update_stock=0,
+			do_not_save=1,
+		)
 
-			# Link POS Invoice to the Sales Invoice Item
-			si.items[0].pos_invoice = pos_inv.name
-			si.items[0].pos_invoice_item = pos_inv.items[0].name
+		# Link POS Invoice to the Sales Invoice Item
+		si.items[0].pos_invoice = pos_inv.name
+		si.items[0].pos_invoice_item = pos_inv.items[0].name
 
-			si.save(ignore_permissions=True)
-			si.submit()
+		si.save(ignore_permissions=True)
+		si.submit()
 
-			result = get_sales_invoice_item(pos_inv.name, pos_inv.items[0].name)
-			self.assertEqual(result, si.items[0].name)
-
-		finally:
-			frappe.db.sql("delete from `tabPOS Profile`")
-			frappe.db.sql("delete from `tabPOS Invoice`")
-			frappe.db.sql("delete from `tabSales Invoice`")
+		result = get_sales_invoice_item(pos_inv.name, pos_inv.items[0].name)
+		self.assertEqual(result, si.items[0].name)
 
 	# def test_update_pos_invoices_TC_AC_358(self):
 	# 	"""
