@@ -505,7 +505,7 @@ class TestPOSInvoiceMergeLog(unittest.TestCase):
 			# Create a POS Invoice
 			test_user, pos_profile = init_user_and_profile()
 			opening_entry = create_opening_entry(pos_profile, test_user.name)
-			inv = create_pos_invoice(qty=1, rate=69.5, do_not_save=True)
+			inv = create_pos_invoice(qty=1, rate=69.5, do_not_save=True, pos_profile=pos_profile)
 			inv.append("payments", {"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": 70})
 			inv.insert()
 
@@ -558,7 +558,7 @@ class TestPOSInvoiceMergeLog(unittest.TestCase):
 			test_user, pos_profile = init_user_and_profile()
 			opening_entry = create_opening_entry(pos_profile, test_user.name)
 
-			pos_inv = create_pos_invoice(qty=1, rate=100, do_not_save=True)
+			pos_inv = create_pos_invoice(qty=1, rate=100, do_not_save=True, pos_profile=pos_profile)
 			pos_inv.append("payments", {"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": 100})
 			pos_inv.insert()
 			pos_inv.submit()
