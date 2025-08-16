@@ -503,11 +503,11 @@ class TestPOSInvoiceMergeLog(unittest.TestCase):
 
 		try:
 			# Create a POS Invoice
+			test_user, pos_profile = init_user_and_profile()
+			opening_entry = create_opening_entry(pos_profile, test_user.name)
 			inv = create_pos_invoice(qty=1, rate=69.5, do_not_save=True)
 			inv.append("payments", {"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": 70})
 			inv.insert()
-			pos_profile = frappe.get_doc("POS Profile", inv.pos_profile)
-			opening_entry = create_opening_entry(pos_profile, "Administrator")
 
 			inv.submit()
 			self.assertEqual(opening_entry.status, "Open")
@@ -555,12 +555,12 @@ class TestPOSInvoiceMergeLog(unittest.TestCase):
 		frappe.set_user("Administrator")
 		try:
 			# Create POS Invoice
+			test_user, pos_profile = init_user_and_profile()
+			opening_entry = create_opening_entry(pos_profile, test_user.name)
+
 			pos_inv = create_pos_invoice(qty=1, rate=100, do_not_save=True)
 			pos_inv.append("payments", {"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": 100})
 			pos_inv.insert()
-			pos_profile_doc = frappe.get_doc("POS Profile", pos_inv.pos_profile)
-			opening_entry = create_opening_entry(pos_profile_doc, "Administrator")
-
 			pos_inv.submit()
 
 			self.assertEqual(opening_entry.status, "Open")
