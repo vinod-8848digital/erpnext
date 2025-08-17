@@ -1639,7 +1639,9 @@ class TestPaymentRequest(FrappeTestCase):
 			create_sales_invoice,
 		)
 		from erpnext.stock.doctype.warehouse.test_warehouse import create_warehouse
+		from erpnext.buying.doctype.purchase_order.test_purchase_order import validate_fiscal_year
 		create_company("_Test Company")
+		validate_fiscal_year("_Test Company")
 		customer = create_customer("_Test Customer")
 		create_warehouse("_Test Warehouse")
 		item = make_test_item("_Test Item")
