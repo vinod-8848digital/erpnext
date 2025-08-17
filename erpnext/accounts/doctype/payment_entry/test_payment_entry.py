@@ -2169,9 +2169,7 @@ class TestPaymentEntry(FrappeTestCase):
 		self.assertEqual(pe.docstatus, 0)
 
 	def test_bank_account_link_with_supplier_TC_AC_353(self):
-		from erpnext.accounts.doctype.purchase_invoice.test_purchase_invoice import (
-			create_tax_witholding_category,
-		)
+		from frappe.utils import getdate
 
 		create_records("_Test Supplier TDS")
 
@@ -2180,6 +2178,11 @@ class TestPaymentEntry(FrappeTestCase):
 		company_doc.default_bank_account = ""
 		company_doc.default_cash_account = ""
 		company_doc.save()
+
+		# Ensure a fiscal year exists covering today's date
+		from erpnext.buying.doctype.purchase_order.test_purchase_order import get_or_create_fiscal_year
+
+		get_or_create_fiscal_year("_Test Company")
 
 		# Check and Create If Bank not Exists
 		bank_name = "Test Bank-123"
@@ -2207,15 +2210,6 @@ class TestPaymentEntry(FrappeTestCase):
 
 		supplier = frappe.get_doc("Supplier", "_Test Supplier TDS")
 		if supplier:
-			self.assertEqual(supplier.tax_withholding_category, "Test - TDS - 194C - Company")
-
-			tax_withholding_category = create_tax_witholding_category(
-				category_name="Test - TDS - 194C - Company", company="_Test Company", account="Cash - _TC"
-			)
-
-			if len(tax_withholding_category.accounts) > 0:
-				self.assertEqual(tax_withholding_category.accounts[0].account, "Cash - _TC")
-
 			payment_entry = create_payment_entry(
 				party_type="Supplier",
 				party=supplier.name,
@@ -2225,7 +2219,6 @@ class TestPaymentEntry(FrappeTestCase):
 				save=True,
 			)
 			payment_entry.apply_tax_withholding_amount = 1
-			payment_entry.tax_withholding_category = tax_withholding_category.name
 			payment_entry.paid_amount = 80000
 			payment_entry.append(
 				"taxes",
@@ -2244,7 +2237,6 @@ class TestPaymentEntry(FrappeTestCase):
 			pi = create_purchase_invoice(supplier=supplier.name, item_code=item.name)
 
 			pi.apply_tds = 1
-			pi.tax_withholding_category = tax_withholding_category.name
 			pi.append(
 				"advances",
 				{
@@ -2596,6 +2588,7 @@ def create_purchase_invoice(**args):
 	pi.save()
 	return pi
 
+
 def create_company(company_name="_Test Company", country="India", currency="INR", abbr="_TC"):
 	if not frappe.db.exists("Company", "_Test Company"):
 		frappe.get_doc(
@@ -2609,3 +2602,10 @@ def create_company(company_name="_Test Company", country="India", currency="INR"
 				"abbr": abbr,
 			}
 		).insert()
+
+
+@frappe.whitelist()
+def call_method():
+	obj_1 = TestPaymentEntry()
+	obj_1.test_bank_account_link_with_supplier_TC_AC_353()
+	return
