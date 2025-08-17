@@ -2293,6 +2293,64 @@ class TestPaymentEntry(FrappeTestCase):
 			)
 			return
 
+	def test_bank_account_link_with_supplier_TC_AC_364(self):
+		create_records("_Test Supplier TDS")
+
+		# Update Company Default Account && Create Bank Account if not exists
+		company_doc = frappe.get_doc("Company", "_Test Company")
+		company_doc.default_bank_account = ""
+		company_doc.default_cash_account = ""
+		company_doc.save()
+
+		from erpnext.buying.doctype.purchase_order.test_purchase_order import get_or_create_fiscal_year
+
+		get_or_create_fiscal_year("_Test Company")
+
+		supplier = frappe.get_doc("Supplier", "_Test Supplier TDS")
+		if supplier:
+			item = make_test_item()
+
+			pi = create_purchase_invoice(supplier=supplier.name, item_code=item.name, do_not_apply_tds=1)
+			pi.exchange_rate = 1
+			pi.source_exchange_rate = 1
+			pi.save()
+			pi.submit()
+
+			payment_entry = create_payment_entry(
+				party_type="Supplier",
+				party=supplier.name,
+				payment_type="Pay",
+				paid_from="Cash - _TC",
+				paid_to="Creditors - _TC",
+				save=True,
+			)
+
+			payment_entry.paid_amount = 80000
+			payment_entry.posting_date = pi.posting_date or pi.creation_date
+
+			payment_entry.append(
+				"references",
+				{
+					"reference_doctype": pi.doctype,
+					"reference_name": pi.name,
+					"allocated_amount": 80000,
+					"account": "Creditors - _TC",
+				},
+			)
+
+			payment_entry.save()
+			payment_entry.submit()
+
+			# Assertions
+			self.assertEqual(payment_entry.docstatus, 1, "Payment Entry should be submitted.")
+			self.assertEqual(payment_entry.paid_amount, 80000, "Paid amount should be 80000.")
+			self.assertTrue(
+				any(ref.reference_name == pi.name for ref in payment_entry.references),
+				"Payment Entry should have reference to the Purchase Invoice.",
+			)
+
+			return
+
 
 def create_payment_entry(**args):
 	payment_entry = frappe.new_doc("Payment Entry")
@@ -2607,5 +2665,5 @@ def create_company(company_name="_Test Company", country="India", currency="INR"
 @frappe.whitelist()
 def call_method():
 	obj_1 = TestPaymentEntry()
-	obj_1.test_bank_account_link_with_supplier_TC_AC_353()
+	obj_1.test_bank_account_link_with_supplier_TC_AC_364()
 	return
