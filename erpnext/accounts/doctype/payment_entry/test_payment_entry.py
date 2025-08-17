@@ -2086,6 +2086,9 @@ class TestPaymentEntry(FrappeTestCase):
 			self.check_gl_entries()
 
 	def test_on_update_after_submit_TC_ACC_345(self):
+		from erpnext.buying.doctype.purchase_order.test_purchase_order import get_or_create_fiscal_year
+
+		get_or_create_fiscal_year("_Test Company")
 		si = create_sales_invoice(do_not_save=1, qty=1, rate=200)
 		si.append(
 			"taxes",
