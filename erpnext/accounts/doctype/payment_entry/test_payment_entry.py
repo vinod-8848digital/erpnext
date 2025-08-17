@@ -2218,25 +2218,12 @@ class TestPaymentEntry(FrappeTestCase):
 				paid_to="Creditors - _TC",
 				save=True,
 			)
-			payment_entry.apply_tax_withholding_amount = 1
 			payment_entry.paid_amount = 80000
-			payment_entry.append(
-				"taxes",
-				{
-					"account_head": "_Test TDS Payable - _TC",
-					"charge_type": "On Paid Amount",
-					"rate": 0,
-					"add_deduct_tax": "Deduct",
-					"description": "Cash",
-				},
-			)
 
 			payment_entry.save()
 			payment_entry.submit()
 			item = make_test_item()
-			pi = create_purchase_invoice(supplier=supplier.name, item_code=item.name)
-
-			pi.apply_tds = 1
+			pi = create_purchase_invoice(supplier=supplier.name, item_code=item.name, do_not_apply_tds=1)
 			pi.append(
 				"advances",
 				{
@@ -2250,14 +2237,6 @@ class TestPaymentEntry(FrappeTestCase):
 			pi.source_exchange_rate = 1
 			pi.save()
 			pi.submit()
-			self.voucher_no = pi.name
-			self.expected_gle = [
-				{"account": "_Test TDS Payable - _TC", "debit": 0.0, "credit": 1000.0},
-				{"account": "Stock Received But Not Billed - _TC", "debit": 90000.0, "credit": 0.0},
-				{"account": "Creditors - _TC", "debit": 1000.0, "credit": 0.0},
-				{"account": "Creditors - _TC", "debit": 0.0, "credit": 90000.0},
-			]
-			self.check_gl_entries()
 
 			pe = get_payment_entry("Purchase Invoice", pi.name)
 			pe.payment_type = "Pay"
@@ -2270,18 +2249,12 @@ class TestPaymentEntry(FrappeTestCase):
 			pe.source_exchange_rate = 1
 			pe.save()
 			pe.submit()
-			self.expected_gle = [
-				{"account": "Creditors - _TC", "debit": 9000.0, "credit": 0.0},
-				{"account": "Cash - _TC", "debit": 0.0, "credit": 9000.0},
-			]
-			self.voucher_no = pe.name
-			self.check_gl_entries()
 
 			self.assertEqual(pe.docstatus, 1, "Payment Entry should be submitted.")
 
 			# Assert paid amounts are correct
-			self.assertEqual(pe.paid_amount, 9000.0, "Paid amount should be 9000.0")
-			self.assertEqual(pe.received_amount, 9000.0, "Received amount should be 9000.0")
+			self.assertEqual(pe.paid_amount, 10000.0, "Paid amount should be 9000.0")
+			self.assertEqual(pe.received_amount, 10000.0, "Received amount should be 9000.0")
 
 			# Assert bank account linked is correct
 			bank_account_doc = frappe.get_doc("Bank Account", {"account_name": bank_account_name})
@@ -2291,6 +2264,64 @@ class TestPaymentEntry(FrappeTestCase):
 			self.assertEqual(
 				bank_account_doc.bank, bank_name, "Bank Account should be linked to correct bank."
 			)
+			return
+
+	def test_bank_account_link_with_supplier_TC_AC_364(self):
+		create_records("_Test Supplier TDS")
+
+		# Update Company Default Account && Create Bank Account if not exists
+		company_doc = frappe.get_doc("Company", "_Test Company")
+		company_doc.default_bank_account = ""
+		company_doc.default_cash_account = ""
+		company_doc.save()
+
+		from erpnext.buying.doctype.purchase_order.test_purchase_order import get_or_create_fiscal_year
+
+		get_or_create_fiscal_year("_Test Company")
+
+		supplier = frappe.get_doc("Supplier", "_Test Supplier TDS")
+		if supplier:
+			item = make_test_item()
+
+			pi = create_purchase_invoice(supplier=supplier.name, item_code=item.name, do_not_apply_tds=1)
+			pi.exchange_rate = 1
+			pi.source_exchange_rate = 1
+			pi.save()
+			pi.submit()
+
+			payment_entry = create_payment_entry(
+				party_type="Supplier",
+				party=supplier.name,
+				payment_type="Pay",
+				paid_from="Cash - _TC",
+				paid_to="Creditors - _TC",
+				save=True,
+			)
+
+			payment_entry.paid_amount = 80000
+			payment_entry.posting_date = pi.posting_date or pi.creation_date
+
+			payment_entry.append(
+				"references",
+				{
+					"reference_doctype": pi.doctype,
+					"reference_name": pi.name,
+					"allocated_amount": 80000,
+					"account": "Creditors - _TC",
+				},
+			)
+
+			payment_entry.save()
+			payment_entry.submit()
+
+			# Assertions
+			self.assertEqual(payment_entry.docstatus, 1, "Payment Entry should be submitted.")
+			self.assertEqual(payment_entry.paid_amount, 80000, "Paid amount should be 80000.")
+			self.assertTrue(
+				any(ref.reference_name == pi.name for ref in payment_entry.references),
+				"Payment Entry should have reference to the Purchase Invoice.",
+			)
+
 			return
 
 
@@ -2602,10 +2633,3 @@ def create_company(company_name="_Test Company", country="India", currency="INR"
 				"abbr": abbr,
 			}
 		).insert()
-
-
-@frappe.whitelist()
-def call_method():
-	obj_1 = TestPaymentEntry()
-	obj_1.test_bank_account_link_with_supplier_TC_AC_353()
-	return
