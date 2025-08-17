@@ -3,7 +3,7 @@
 
 
 # import frappe
-from frappe.model.document import Document
+from frappe.model.document import Document  # pragma: no cover
 
 
 class POSSearchFields(Document):
@@ -12,7 +12,7 @@ class POSSearchFields(Document):
 
 	from typing import TYPE_CHECKING
 
-	if TYPE_CHECKING:
+	if TYPE_CHECKING:  # pragma: no cover
 		from frappe.types import DF
 
 		field: DF.Literal

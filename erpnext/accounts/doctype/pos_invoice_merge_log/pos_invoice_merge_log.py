@@ -24,7 +24,7 @@ class POSInvoiceMergeLog(Document):
 
 	from typing import TYPE_CHECKING
 
-	if TYPE_CHECKING:
+	if TYPE_CHECKING:  # pragma: no cover
 		from frappe.types import DF
 
 		from erpnext.accounts.doctype.pos_invoice_reference.pos_invoice_reference import (

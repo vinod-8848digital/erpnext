@@ -7,7 +7,7 @@ import frappe
 from frappe.utils import cint, flt, getdate, today
 
 from erpnext.accounts.doctype.loyalty_program.loyalty_program import (
-	get_loyalty_program_details_with_points,
+	get_loyalty_program_details_with_points, get_redeemption_factor, get_loyalty_program_details
 )
 from erpnext.accounts.party import get_dashboard_info
 
@@ -197,6 +197,59 @@ class TestLoyaltyProgram(unittest.TestCase):
 		for d in company_wise_info:
 			self.assertTrue(d.get("loyalty_points"))
 
+	def test_get_redeemption_factor_TC_ACC_327(self):
+		# Create a test Loyalty Program
+		self.loyalty_program = frappe.get_doc({
+			"doctype": "Loyalty Program",
+			"program_name": "Test Program",
+			"loyalty_program_name": "Test Loyalty Program",
+			"program_type": "Single Tier",
+			"from_date": "2025-01-01",
+			"to_date": "2025-12-31",
+			"conversion_factor": 10,
+			"redeemption_factor": 5,
+			"expiry_duration": 365,
+			"collection_rules": [
+				{
+					"tier_name": "Default Tier",
+					"collection_factor": 1,
+					"minimum_amount": 0
+				}
+			]
+		}).insert()
+		
+		# Create a test Customer and assign Loyalty Program
+		test_customer = frappe.get_doc({
+			"doctype": "Customer",
+			"customer_name": "Test Customer",
+			"territory": "All Territories",
+			"loyalty_program": self.loyalty_program.name
+		}).insert()
+
+		# Call the method on Loyalty Program instance
+		factor = get_redeemption_factor(self.loyalty_program.name, test_customer.name)
+		
+		# Assert expected redemption factor
+		self.assertEqual(factor, 10)
+
+		test_customer.delete()
+		self.loyalty_program.delete()
+
+	def test_loyalty_program_details_with_silent_TC_ACC_328(self):
+		# Create a test Customer and assign Loyalty Program
+		self.test_customer = frappe.get_doc({
+			"doctype": "Customer",
+			"customer_name": "Test Customer",
+			"territory": "All Territories",
+		}).insert()
+
+
+		response = get_loyalty_program_details(self.test_customer, silent=True)
+		self.assertIsInstance(response, dict)
+		self.assertEqual(response.loyalty_programs, None)
+
+		self.test_customer.delete()
+
 
 def get_points_earned(self):
 	def get_returned_amount():
@@ -323,19 +376,10 @@ def create_records():
 		).insert()
 
 	# create an item
-	if not frappe.db.exists("Item", "Loyal Item"):
-		frappe.get_doc(
-			{
-				"doctype": "Item",
-				"item_code": "Loyal Item",
-				"item_name": "Loyal Item",
-				"item_group": "All Item Groups",
-				"company": "_Test Company",
-				"is_stock_item": 1,
-				"opening_stock": 100,
-				"valuation_rate": 10000,
-			}
-		).insert()
+	item_code = "Loyal Item"
+	if not frappe.db.exists("Item", item_code):
+			from erpnext.accounts.doctype.payment_entry.test_payment_entry import make_test_item
+			make_test_item(item_code)
 
 	# create item price
 	if not frappe.db.exists("Item Price", {"price_list": "Standard Selling", "item_code": "Loyal Item"}):

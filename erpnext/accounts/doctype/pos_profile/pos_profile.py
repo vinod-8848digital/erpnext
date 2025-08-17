@@ -18,7 +18,7 @@ class POSProfile(Document):
 
 	from typing import TYPE_CHECKING
 
-	if TYPE_CHECKING:
+	if TYPE_CHECKING:  # pragma: no cover
 		from erpnext.accounts.doctype.pos_customer_group.pos_customer_group import POSCustomerGroup
 		from erpnext.accounts.doctype.pos_item_group.pos_item_group import POSItemGroup
 		from erpnext.accounts.doctype.pos_payment_method.pos_payment_method import POSPaymentMethod

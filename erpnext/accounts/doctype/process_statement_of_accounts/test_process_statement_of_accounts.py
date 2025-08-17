@@ -4,9 +4,11 @@
 
 import frappe
 from frappe.tests.utils import FrappeTestCase
-from frappe.utils import add_days, getdate, today
+from frappe.utils import add_days, format_date, getdate, today
 
 from erpnext.accounts.doctype.process_statement_of_accounts.process_statement_of_accounts import (
+	get_context,
+	get_report_pdf,
 	get_statement_dict,
 	send_emails,
 )
@@ -16,6 +18,7 @@ from erpnext.accounts.test.accounts_mixin import AccountsTestMixin
 
 class TestProcessStatementOfAccounts(AccountsTestMixin, FrappeTestCase):
 	def setUp(self):
+		frappe.set_user("Administrator")
 		self.create_company()
 		self.create_customer()
 		self.create_customer(customer_name="Other Customer")
@@ -83,6 +86,139 @@ class TestProcessStatementOfAccounts(AccountsTestMixin, FrappeTestCase):
 	def check_ageing_summary(self, ageing, expected_ageing):
 		for age_range in expected_ageing:
 			self.assertEqual(expected_ageing[age_range], ageing.get(age_range))
+
+	def test_send_auto_email_TC_ACC_341(self):
+		from erpnext.accounts.doctype.process_statement_of_accounts.process_statement_of_accounts import (
+			send_auto_email,
+		)
+
+		posa1 = create_process_soa(
+			name="_Test POSA SEND 1",
+			enable_auto_email=1,
+			from_date=getdate(today()),
+			to_date=getdate(today()),
+		)
+
+		posa2 = create_process_soa(
+			name="_Test POSA SEND 2", enable_auto_email=1, posting_date=getdate(today())
+		)
+
+		posa3 = create_process_soa(
+			name="_Test POSA SEND 3", enable_auto_email=1, to_date=add_days(getdate(today()), -1)
+		)
+
+		posa4 = create_process_soa(name="_Test POSA SEND 4", enable_auto_email=0, to_date=getdate(today()))
+
+		result = send_auto_email()
+		self.assertTrue(result)
+
+		selected_names = {
+			d.name
+			for d in frappe.get_list(
+				"Process Statement Of Accounts",
+				filters={"enable_auto_email": 1},
+				or_filters={"to_date": today(), "posting_date": today()},
+				fields=["name"],
+			)
+		}
+
+		self.assertIn(posa1.name, selected_names)
+		self.assertIn(posa2.name, selected_names)
+		self.assertIn(posa3.name, selected_names)
+		self.assertNotIn(posa4.name, selected_names)
+
+	def test_fetch_customers_sales_partner_TC_ACC_342(self):
+		from erpnext.accounts.doctype.process_statement_of_accounts.process_statement_of_accounts import (
+			fetch_customers,
+		)
+
+		# Create a Sales Partner
+		sales_partner = frappe.get_doc(
+			{
+				"doctype": "Sales Partner",
+				"partner_name": "_Test Sales Partner Fetch",
+				"commission_rate": "100",
+			}
+		).insert(ignore_permissions=True)
+
+		# Create a Customer linked to that Sales Partner
+		customer = frappe.get_doc(
+			{
+				"doctype": "Customer",
+				"customer_name": "_Test Customer Fetch",
+				"customer_type": "Company",
+				"email_id": "customer@example.com",
+				"default_sales_partner": sales_partner.name,
+			}
+		).insert(ignore_permissions=True)
+
+		customers_list = fetch_customers(
+			customer_collection="Sales Partner", collection_name=sales_partner.name, primary_mandatory=1
+		)
+
+		self.assertIsInstance(customers_list, list)
+		self.assertTrue(any(cust["name"] == customer.name for cust in customers_list))
+		self.assertEqual(customers_list[0]["primary_email"], "customer@example.com")
+
+	def test_download_statements_TC_ACC_343(self):
+		from erpnext.accounts.doctype.process_statement_of_accounts.process_statement_of_accounts import (
+			download_statements,
+		)
+
+		posa_01 = create_process_soa(
+			name="_Test POSA 01",
+		)
+
+		doc = frappe.get_doc("Process Statement Of Accounts", posa_01.name)
+
+		download_statements(doc.name)
+		report = get_report_pdf(doc)
+
+		self.assertEqual(frappe.local.response.filename, f"{doc.name}.pdf")
+		self.assertEqual(frappe.local.response.type, "download")
+		self.assertEqual(frappe.local.response.filecontent, report)
+
+	def test_get_context_TC_ACC_344(self):
+		# Create test customer
+		customer = frappe.get_doc(
+			{
+				"doctype": "Customer",
+				"customer_name": "Test Customer for Context",
+				"customer_group": "All Customer Groups",
+				"territory": "All Territories",
+			}
+		).insert(ignore_permissions=True)
+
+		# Create Process Statement of Accounts document with dates
+		from_date = "2023-01-01"
+		to_date = "2023-12-31"
+		template_doc = frappe.get_doc(
+			{
+				"doctype": "Process Statement Of Accounts",
+				"from_date": from_date,
+				"to_date": to_date,
+				"customers": [{"customer": customer.name}],
+			}
+		)
+
+		context = get_context(customer.name, template_doc)
+
+		self.assertIsInstance(context, dict)
+		self.assertIn("doc", context)
+		self.assertIn("customer", context)
+		self.assertIn("frappe", context)
+
+		self.assertNotEqual(id(context["doc"]), id(template_doc))
+
+		self.assertFalse(hasattr(context["doc"], "customers"))
+
+		self.assertEqual(context["doc"].from_date, format_date(from_date))
+		self.assertEqual(context["doc"].to_date, format_date(to_date))
+
+		self.assertEqual(context["customer"].name, customer.name)
+		self.assertIsNotNone(context["frappe"])
+
+		customer.delete(ignore_permissions=True)
 
 	def tearDown(self):
 		frappe.db.rollback()

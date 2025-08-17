@@ -6,13 +6,20 @@ import unittest
 
 import frappe
 from frappe.tests.utils import change_settings
+from frappe.utils import (
+	getdate,
+	nowdate,
+)
 
 from erpnext.accounts.doctype.pos_closing_entry.test_pos_closing_entry import init_user_and_profile
 from erpnext.accounts.doctype.pos_invoice.pos_invoice import make_sales_return
 from erpnext.accounts.doctype.pos_invoice.test_pos_invoice import create_pos_invoice
 from erpnext.accounts.doctype.pos_invoice_merge_log.pos_invoice_merge_log import (
+	check_scheduler_status,
 	consolidate_pos_invoices,
 )
+from erpnext.accounts.doctype.pos_opening_entry.test_pos_opening_entry import create_opening_entry
+from erpnext.accounts.doctype.sales_invoice.test_sales_invoice import create_sales_invoice
 from erpnext.stock.doctype.serial_and_batch_bundle.test_serial_and_batch_bundle import (
 	get_serial_nos_from_bundle,
 )
@@ -41,6 +48,7 @@ class TestPOSInvoiceMergeLog(unittest.TestCase):
 			pos_inv3.save()
 			pos_inv3.submit()
 
+			frappe.flags.in_test = True
 			consolidate_pos_invoices()
 
 			pos_inv.load_from_db()
@@ -52,6 +60,7 @@ class TestPOSInvoiceMergeLog(unittest.TestCase):
 			self.assertFalse(pos_inv.consolidated_invoice == pos_inv3.consolidated_invoice)
 
 		finally:
+			frappe.flags.in_test = False
 			frappe.set_user("Administrator")
 			frappe.db.sql("delete from `tabPOS Profile`")
 			frappe.db.sql("delete from `tabPOS Invoice`")
@@ -87,6 +96,7 @@ class TestPOSInvoiceMergeLog(unittest.TestCase):
 			)
 			pos_inv_cn.paid_amount = -300
 			pos_inv_cn.submit()
+			frappe.flags.in_test = True
 
 			consolidate_pos_invoices()
 
@@ -106,6 +116,7 @@ class TestPOSInvoiceMergeLog(unittest.TestCase):
 			self.assertEqual(consolidated_credit_note.payments[1].amount, -200)
 
 		finally:
+			frappe.flags.in_test = False
 			frappe.set_user("Administrator")
 			frappe.db.sql("delete from `tabPOS Profile`")
 			frappe.db.sql("delete from `tabPOS Invoice`")
@@ -150,6 +161,7 @@ class TestPOSInvoiceMergeLog(unittest.TestCase):
 			inv2.save()
 			inv2.submit()
 
+			frappe.flags.in_test = True
 			consolidate_pos_invoices()
 			inv.load_from_db()
 
@@ -164,6 +176,7 @@ class TestPOSInvoiceMergeLog(unittest.TestCase):
 			self.assertEqual(tax_rate2, 5)
 			self.assertEqual(amount2, 5)
 		finally:
+			frappe.flags.in_test = False
 			frappe.set_user("Administrator")
 			frappe.db.sql("delete from `tabPOS Profile`")
 			frappe.db.sql("delete from `tabPOS Invoice`")
@@ -219,6 +232,7 @@ class TestPOSInvoiceMergeLog(unittest.TestCase):
 			inv2.insert()
 			inv2.submit()
 
+			frappe.flags.in_test = True
 			consolidate_pos_invoices()
 
 			inv.load_from_db()
@@ -227,6 +241,7 @@ class TestPOSInvoiceMergeLog(unittest.TestCase):
 			self.assertEqual(consolidated_invoice.status, "Paid")
 
 		finally:
+			frappe.flags.in_test = False
 			frappe.set_user("Administrator")
 			frappe.db.sql("delete from `tabPOS Profile`")
 			frappe.db.sql("delete from `tabPOS Invoice`")
@@ -285,7 +300,7 @@ class TestPOSInvoiceMergeLog(unittest.TestCase):
 			inv3.append("payments", {"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": 1800})
 			inv3.insert()
 			inv3.submit()
-
+			frappe.flags.in_test = True
 			consolidate_pos_invoices()
 
 			inv.load_from_db()
@@ -294,6 +309,7 @@ class TestPOSInvoiceMergeLog(unittest.TestCase):
 			self.assertEqual(consolidated_invoice.status, "Paid")
 
 		finally:
+			frappe.flags.in_test = False
 			frappe.set_user("Administrator")
 			frappe.db.sql("delete from `tabPOS Profile`")
 			frappe.db.sql("delete from `tabPOS Invoice`")
@@ -347,7 +363,7 @@ class TestPOSInvoiceMergeLog(unittest.TestCase):
 				inv.paid_amount = -157
 				inv.save()
 				inv.submit()
-
+			frappe.flags.in_test = True
 			consolidate_pos_invoices()
 
 			inv.load_from_db()
@@ -356,6 +372,7 @@ class TestPOSInvoiceMergeLog(unittest.TestCase):
 			self.assertEqual(consolidated_invoice.rounding_adjustment, -0.002)
 
 		finally:
+			frappe.flags.in_test = False
 			frappe.set_user("Administrator")
 			frappe.db.sql("delete from `tabPOS Profile`")
 			frappe.db.sql("delete from `tabPOS Invoice`")
@@ -385,7 +402,7 @@ class TestPOSInvoiceMergeLog(unittest.TestCase):
 			inv2.append("payments", {"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": 60})
 			inv2.insert()
 			inv2.submit()
-
+			frappe.flags.in_test = True
 			consolidate_pos_invoices()
 
 			inv.load_from_db()
@@ -393,6 +410,7 @@ class TestPOSInvoiceMergeLog(unittest.TestCase):
 			self.assertEqual(consolidated_invoice.rounding_adjustment, 1)
 
 		finally:
+			frappe.flags.in_test = False
 			frappe.set_user("Administrator")
 			frappe.db.sql("delete from `tabPOS Profile`")
 			frappe.db.sql("delete from `tabPOS Invoice`")
@@ -443,7 +461,7 @@ class TestPOSInvoiceMergeLog(unittest.TestCase):
 			pos_inv2.append("payments", {"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": 100})
 			pos_inv2.save()
 			pos_inv2.submit()
-
+			frappe.flags.in_test = True
 			consolidate_pos_invoices()
 
 			pos_inv.load_from_db()
@@ -452,6 +470,235 @@ class TestPOSInvoiceMergeLog(unittest.TestCase):
 			self.assertNotEqual(pos_inv.consolidated_invoice, pos_inv2.consolidated_invoice)
 
 		finally:
+			frappe.flags.in_test = False
 			frappe.set_user("Administrator")
 			frappe.db.sql("delete from `tabPOS Profile`")
 			frappe.db.sql("delete from `tabPOS Invoice`")
+
+	def test_check_scheduler_status_TC_ACC_340(self):
+		frappe.flags.in_test = False
+
+		try:
+			frappe.db.set_single_value("System Settings", "enable_scheduler", 0)
+			with self.assertRaises(frappe.ValidationError) as err:
+				check_scheduler_status()
+
+			self.assertIn("scheduler is inactive. cannot enqueue job.", str(err.exception).lower())
+		finally:
+			frappe.flags.in_test = True
+			frappe.db.set_single_value("System Settings", "enable_scheduler", 1)
+
+	def test_cancel_merge_logs_TC_AC_355(self):
+		"""
+		Create a POS Invoice
+		Create POS Invoice Merge Log for the invoice
+		Check the status of the POS Invoice Marge Log
+		Call the cancel_merge_logs function
+		Check the status of the POS Invoice Marge Log
+		"""
+
+		from erpnext.accounts.doctype.pos_invoice_merge_log.pos_invoice_merge_log import cancel_merge_logs
+
+		frappe.db.sql("delete from `tabPOS Invoice`")
+
+		# Create a POS Invoice
+		test_user, pos_profile = init_user_and_profile()
+		opening_entry = create_opening_entry(pos_profile, test_user.name)
+		pos_profile_doc = frappe.get_doc("POS Profile", pos_profile.name)
+		pos_profile_doc.allow_partial_payment = 1
+		pos_profile_doc.save(ignore_permissions=True)
+		inv = create_pos_invoice(qty=1, rate=70, do_not_save=True, pos_profile=pos_profile)
+		inv.append("payments", {"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": 80})
+		inv.save(ignore_permissions=True)
+
+		inv.submit()
+		self.assertEqual(opening_entry.status, "Open")
+
+		# Create Merge Log for the invoice
+		merge_logs = make_merge_log([{"name": inv.name}])
+
+		# check before cancelling
+		self.assertTrue(merge_logs)
+		merge_log_doc = frappe.get_doc("POS Invoice Merge Log", merge_logs[0])
+		self.assertEqual(merge_log_doc.docstatus, 1)  # Submitted
+
+		# Cancel the merge log(s)
+		cancel_merge_logs(merge_logs, closing_entry=None)
+
+		# Validate that merge log is cancelled
+		cancelled_merge_log = frappe.get_doc("POS Invoice Merge Log", merge_logs[0])
+		self.assertEqual(cancelled_merge_log.docstatus, 2)  # Cancelled
+
+	def test_get_error_message_TC_AC_356(self):
+		from erpnext.accounts.doctype.pos_invoice_merge_log.pos_invoice_merge_log import get_error_message
+
+		msg = "Error Message"
+		result = get_error_message(msg)
+		self.assertEqual(result, msg)
+
+	# def test_get_sales_invoice_item_TC_AC_357(self):
+	# 	"""
+	# 	Create a POS Invoice
+	# 	Create Sales Invoice
+	# 	Link POS Invoice to the Sales Invoice Item
+	# 	Call the get_sales_invoice_item function
+	# 	Check the function result with si item name
+	# 	"""
+
+	# 	from erpnext.accounts.doctype.pos_invoice_merge_log.pos_invoice_merge_log import (
+	# 		get_sales_invoice_item,
+	# 	)
+
+	# 	frappe.set_user("Administrator")
+	# 	# Create POS Invoice
+	# 	test_user, pos_profile = init_user_and_profile()
+	# 	opening_entry = create_opening_entry(pos_profile, test_user.name)
+	# 	pos_profile_doc = frappe.get_doc("POS Profile",pos_profile.name)
+	# 	pos_profile_doc.allow_partial_payment = 1
+	# 	pos_profile_doc.save(ignore_permissions=True)
+
+	# 	pos_inv = create_pos_invoice(qty=1, rate=100, do_not_save=True, pos_profile=pos_profile)
+	# 	pos_inv.append("payments", {"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": 150})
+	# 	pos_inv.save(ignore_permissions=True)
+	# 	pos_inv.submit()
+
+	# 	self.assertEqual(opening_entry.status, "Open")
+
+	# 	# Create Sales Invoice
+	# 	si = create_sales_invoice(
+	# 		company="_Test Company",
+	# 		debit_to="Debtors - _TC",
+	# 		account_for_change_amount="Cash - _TC",
+	# 		warehouse="Stores - _TC",
+	# 		income_account="Sales - _TC",
+	# 		expense_account="Cost of Goods Sold - _TC",
+	# 		cost_center="Main - _TC",
+	# 		item=pos_inv.items[0].item_code,
+	# 		rate=1000,
+	# 		update_stock=0,
+	# 		do_not_save=1,
+	# 	)
+
+	# 	# Link POS Invoice to the Sales Invoice Item
+	# 	si.items[0].pos_invoice = pos_inv.name
+	# 	si.items[0].pos_invoice_item = pos_inv.items[0].name
+
+	# 	si.save(ignore_permissions=True)
+	# 	si.submit()
+
+	# 	result = get_sales_invoice_item(pos_inv.name, pos_inv.items[0].name)
+	# 	self.assertEqual(result, si.items[0].name)
+
+	# def test_update_pos_invoices_TC_AC_358(self):
+	# 	"""
+	# 	Create a POS Invoice
+	# 	Create a POS Invoice Return
+	# 	Create Sales Invoice not linked to the POS Invoice
+	# 	Create a Return for Sales INvoice
+	# 	"""
+	# 	frappe.set_user("Administrator")
+
+	# 	try:
+	# 		# Create main POS invoice
+	# 		pos_inv = create_pos_invoice(qty=1, rate=100, do_not_save=True)
+	# 		pos_inv.append("payments", {"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": 100})
+	# 		pos_inv.insert()
+	# 		pos_profile_doc = frappe.get_doc("POS Profile", pos_inv.pos_profile)
+	# 		opening_entry = create_opening_entry(pos_profile_doc, "Administrator")
+
+	# 		pos_inv.submit()
+
+	# 		self.assertEqual(opening_entry.status, "Open")
+
+	# 		# Create return POS invoice
+	# 		pos_inv_return = make_sales_return(pos_inv.name)
+	# 		pos_inv_return.insert()
+	# 		pos_inv_return.submit()
+
+	# 		# Create Sales Invoice
+	# 		si = create_sales_invoice(
+	# 			company="_Test Company",
+	# 			debit_to="Debtors - _TC",
+	# 			account_for_change_amount="Cash - _TC",
+	# 			warehouse="Stores - _TC",
+	# 			income_account="Sales - _TC",
+	# 			expense_account="Cost of Goods Sold - _TC",
+	# 			cost_center="Main - _TC",
+	# 			item=pos_inv.items[0].item_code,
+	# 			rate=1000,
+	# 			qty=1,
+	# 			update_stock=0,
+	# 		)
+	# 		si.submit()
+
+	# 		# Create credit note for the sales invoice
+	# 		si_01 = create_sales_invoice(
+	# 			company="_Test Company",
+	# 			debit_to="Debtors - _TC",
+	# 			account_for_change_amount="Cash - _TC",
+	# 			warehouse="Stores - _TC",
+	# 			income_account="Sales - _TC",
+	# 			expense_account="Cost of Goods Sold - _TC",
+	# 			cost_center="Main - _TC",
+	# 			item=pos_inv.items[0].item_code,
+	# 			qty=-1,
+	# 			rate=1000,
+	# 			update_stock=0,
+	# 			is_return=1,
+	# 			return_against=si.name,
+	# 		)
+	# 		si_01.submit()
+
+	# 		invoice_docs = [pos_inv, pos_inv_return]
+	# 		credit_notes = {si_01: [pos_inv_return.name]}
+
+	# 		for doc in invoice_docs:
+	# 			doc.load_from_db()
+	# 			inv = si
+	# 			if doc.is_return:
+	# 				for key, value in credit_notes.items():
+	# 					if doc.name in value:
+	# 						inv = key
+	# 						break
+	# 			doc.update({"consolidated_invoice": None if doc.docstatus == 2 else inv})
+	# 			doc.set_status(update=True)
+	# 			doc.save()
+
+	# 		pos_inv.reload()
+	# 		pos_inv_return.reload()
+
+	# 		self.assertEqual(pos_inv.status, "Consolidated")
+	# 		self.assertEqual(pos_inv_return.status, "Consolidated")
+	# 	finally:
+	# 		frappe.db.sql("delete from `tabPOS Profile`")
+	# 		frappe.db.sql("delete from `tabPOS Invoice`")
+	# 		frappe.db.sql("delete from `tabSales Invoice`")
+
+
+def make_merge_log(invoices):
+	merge_logs = []
+
+	merge_log = frappe.new_doc("POS Invoice Merge Log")
+	merge_log.posting_date = getdate(nowdate())
+
+	for inv in invoices:
+		inv_data = frappe.db.get_values(
+			"POS Invoice", inv.get("name"), ["customer", "posting_date", "grand_total"], as_dict=1
+		)[0]
+
+		merge_log.customer = inv_data.customer
+		merge_log.append(
+			"pos_invoices",
+			{
+				"pos_invoice": inv.get("name"),
+				"customer": inv_data.customer,
+				"posting_date": inv_data.posting_date,
+				"grand_total": inv_data.grand_total,
+			},
+		)
+
+	merge_log.save(ignore_permissions=True)
+	merge_log.submit()
+
+	merge_logs.append(merge_log.name)
+	return merge_logs

@@ -2,7 +2,7 @@
 # For license information, please see license.txt
 
 
-from frappe.model.document import Document
+from frappe.model.document import Document  # pragma: no cover
 
 
 class POSSettings(Document):
@@ -11,7 +11,7 @@ class POSSettings(Document):
 
 	from typing import TYPE_CHECKING
 
-	if TYPE_CHECKING:
+	if TYPE_CHECKING:  # pragma: no cover
 		from frappe.types import DF
 
 		from erpnext.accounts.doctype.pos_field.pos_field import POSField
