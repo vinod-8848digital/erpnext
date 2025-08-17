@@ -59,6 +59,10 @@ payment_method = [
 
 
 class TestPaymentRequest(FrappeTestCase):
+	def tearDown(self):
+		super().tearDown()
+		frappe.db.rollback()
+  
 	def setUp(self):
 		if not frappe.db.get_value("Payment Gateway", payment_gateway["gateway"], "name"):
 			frappe.get_doc(payment_gateway).insert(ignore_permissions=True)
@@ -66,7 +70,7 @@ class TestPaymentRequest(FrappeTestCase):
 		for method in payment_method:
 			if not frappe.db.get_value(
 				"Payment Gateway Account",
-				{"payment_gateway": method["payment_gateway"], "currency": method["currency"]},
+				{"payment_gateway": method["payment_gateway"]},
 				"name",
 			):
 				frappe.get_doc(method).insert(ignore_permissions=True)
@@ -1626,6 +1630,53 @@ class TestPaymentRequest(FrappeTestCase):
 		si.load_from_db()
 		pr = make_payment_request(dt="Sales Invoice", dn=si.name, mute_email=1)
 		self.assertEqual(pr.grand_total, si.outstanding_amount)
+  
+	def test_set_payment_request_url_TC_AC_359(self):
+		from erpnext.accounts.doctype.payment_entry.test_payment_entry import (
+			create_company,
+			create_customer,
+			make_test_item,
+			create_sales_invoice,
+		)
+		from erpnext.stock.doctype.warehouse.test_warehouse import create_warehouse
+		create_company("_Test Company")
+		customer = create_customer("_Test Customer")
+		create_warehouse("_Test Warehouse")
+		item = make_test_item("_Test Item")
+		si = create_sales_invoice(
+			customer = customer,
+			company = "_Test Company",
+			item_code = item.name,
+			qty = 1,
+			rate = 1000,
+			currency = "INR",
+			warehouse = "_Test Warehouse - _TC"
+		)
+		pr = make_payment_request(
+			dt = "Sales Invoice",
+			dn = si.name,
+			mute_email = 1,
+			submit_doc = 0
+		)
+		pr_doc = frappe.get_doc("Payment Request", pr.name)
+		rz = frappe.get_doc({
+			"doctype": "Razorpay Settings",
+			"api_key": "test_api_key",
+			"api_secret": "test_api_secret",
+			"redirect_to": "http://localhost:8000",
+		})
+		rz.flags.ignore_validate = True
+		rz.save(ignore_permissions=True)
+		pg = create_payment_gateway_account(pg_name="Test Payment Gateway", payment_channel="Email", is_default=True)
+		pr_doc.payment_gateway_account = pg.name
+		pr_doc.payment_gateway = "Test Payment Gateway"
+		pr_doc.save(ignore_permissions=True)
+		pg_doc = frappe.get_doc("Payment Gateway", "Test Payment Gateway")
+		pg_doc.gateway_settings = rz.doctype
+		pg_doc.gateway_controller = rz.name
+		pg_doc.save(ignore_permissions=True)
+		pr_doc.set_payment_request_url()
+		self.assertTrue(pr_doc.payment_url)
 
 def test_partial_paid_invoice_with_submitted_payment_entry(self):
 	pi = make_purchase_invoice(currency="INR", qty=1, rate=5000)
@@ -1651,14 +1702,14 @@ def test_partial_paid_invoice_with_submitted_payment_entry(self):
 	self.assertEqual(pr.grand_total, pi.outstanding_amount)
 
 
-def create_payment_gateway_account(pg_name, payment_channel=None, is_default=False):
+def create_payment_gateway_account(pg_name, payment_channel=None, is_default=False, currency="INR"):
 	default_channel = "Email"
 	if not frappe.db.exists("Payment Gateway", pg_name):
 		frappe.get_doc(dict(
 			doctype="Payment Gateway",
 			gateway=pg_name
 		)).insert()
-	if not frappe.db.exists("Payment Gateway Account", pg_name):
+	if not frappe.db.exists("Payment Gateway Account", {"payment_gateway": pg_name, "currency": currency}):
 		pg = frappe.get_doc(dict(
 				doctype = "Payment Gateway Account",
 				payment_gateway=pg_name,
@@ -1667,7 +1718,7 @@ def create_payment_gateway_account(pg_name, payment_channel=None, is_default=Fal
 				is_default=is_default
 			)).insert()
 	else:
-		pg = frappe.get_doc("Payment Gateway Account", pg_name)
+		pg = frappe.get_doc("Payment Gateway Account", pg_name+" - "+currency)
 	return pg
 
 def create_subscription_plan(sp_name, **kwargs):

@@ -266,7 +266,7 @@ class PaymentRequest(Document):
 			or (self.payment_gateway_account and self.payment_channel == "Phone")
 		):
 			self.db_set("status", "Initiated")
-
+			
 	def get_payment_url(self):
 		if self.reference_doctype != "Fees":
 			data = frappe.db.get_value(

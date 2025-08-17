@@ -679,7 +679,7 @@ class TestPaymentLedgerEntry(FrappeTestCase):
 			f"Invalid value Test Cost Center - _TC1 for Cost Center against account _Test Ledger Account - _TC"
 		)
 	
-	def test_validate_dimensions_for_pl_and_bs_TC_ACC_340(self):
+	def test_validate_dimensions_for_pl_and_bs_TC_ACC_347(self):
 		
 		from erpnext.accounts.doctype.account.test_account import create_account
 		from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_company
