@@ -6,14 +6,19 @@ import frappe
 import frappe.utils
 from frappe import qb
 from frappe.tests.utils import FrappeTestCase, change_settings
-from frappe.utils import add_days, flt, get_date_str, nowdate
+from frappe.utils import add_days, flt, get_date_str, getdate, nowdate
 
 from erpnext.accounts.doctype.account.test_account import create_account
+from erpnext.accounts.doctype.bank_transaction.test_bank_transaction import (
+	create_bank_account,
+	create_gl_account,
+)
 from erpnext.accounts.doctype.payment_entry.payment_entry import (
 	get_outstanding_reference_documents,
 	get_party_details,
 	get_payment_entry,
 	get_reference_details,
+	make_payment_order,
 )
 from erpnext.accounts.doctype.purchase_invoice.test_purchase_invoice import (
 	make_purchase_invoice,
@@ -2331,6 +2336,48 @@ class TestPaymentEntry(FrappeTestCase):
 
 			return
 
+	def test_make_payment_order_TC_ACC_354(self):
+		get_or_create_fiscal_year("_Test Company")
+		make_test_item("_Test Item")
+
+		uniq_identifier = frappe.generate_hash(length=10)
+		self.gl_account = create_gl_account("_Test Bank " + uniq_identifier)
+		self.bank_account = create_bank_account(
+			gl_account=self.gl_account, bank_account_name="Checking Account " + uniq_identifier
+		)
+		purchase_invoice = make_purchase_invoice()
+
+		payment_entry = get_payment_entry(
+			"Purchase Invoice", purchase_invoice.name, bank_account=self.gl_account
+		)
+		payment_entry.reference_no = "_Test_Payment_Order"
+		payment_entry.reference_date = getdate()
+		payment_entry.party_bank_account = self.bank_account
+		payment_entry.insert()
+		payment_entry.submit()
+
+		doc = create_payment_order_against_payment_entry(payment_entry, "Payment Entry", self.bank_account)
+		reference_doc = doc.get("references")[0]
+		self.assertEqual(reference_doc.reference_name, payment_entry.name)
+		self.assertEqual(reference_doc.reference_doctype, "Payment Entry")
+		self.assertEqual(reference_doc.supplier, "_Test Supplier")
+		self.assertEqual(reference_doc.amount, 250)
+
+
+def create_payment_order_against_payment_entry(ref_doc, order_type, bank_account):
+	payment_order = frappe.get_doc(
+		dict(
+			doctype="Payment Order",
+			company="_Test Company",
+			payment_order_type=order_type,
+			company_bank_account=bank_account,
+		)
+	)
+	doc = make_payment_order(ref_doc.name, payment_order)
+	doc.save()
+	doc.submit()
+	return doc
+
 
 def create_payment_entry(**args):
 	payment_entry = frappe.new_doc("Payment Entry")
@@ -2643,41 +2690,64 @@ def create_company(company_name="_Test Company", country="India", currency="INR"
 
 
 def get_or_create_fiscal_year(company="_Test Company"):
-	FY_name_list = frappe.get_all("Fiscal Year Company", filters={"company": company}, pluck="parent")
 	from datetime import date
 
-	current_posting_date = frappe.utils.getdate()
-
-	for fy_name in FY_name_list:
-		fy_doc = frappe.get_doc("Fiscal Year", fy_name)
-
-		if (fy_doc.year_end_date >= current_posting_date) and (
-			current_posting_date <= fy_doc.year_start_date
-		):
-			return True
-
-	# Create or Append Company in Fiscal Year dt if not exists
+	current_posting_date = getdate()
 	current_year = current_posting_date.year
 	first_date = date(current_year, 4, 1)
 	last_date = date(current_year + 1, 3, 31)
 
-	current_fy_name = frappe.db.exists(
-		"Fiscal Year", {"year_start_date": first_date, "year_end_date": last_date}
+	fy_name_list = get_fy_list(first_date, last_date)
+	curr_fy_exists = False
+
+	for fy_name in fy_name_list:
+		fy_doc = frappe.get_doc("Fiscal Year", fy_name.name)
+		if fy_doc.year_start_date <= current_posting_date <= fy_doc.year_end_date:
+			company_for_existing = [c.company for c in fy_doc.companies]
+			if company in company_for_existing:
+				return fy_doc.name  # Return fiscal year name if exists
+			else:
+				curr_fy_exists = True
+				break
+
+	# Create new fiscal year if not found
+
+	current_fy_name = (
+		fy_name.name
+		if curr_fy_exists
+		else frappe.db.exists("Fiscal Year", {"year_start_date": first_date, "year_end_date": last_date})
 	)
 	if current_fy_name:
 		fy_doc = frappe.get_doc("Fiscal Year", current_fy_name)
-
 	else:
 		fy_doc = frappe.new_doc("Fiscal Year")
-		fy_doc.year = f"{current_year}-{company}"
+		fy_doc.year = f"{current_year}-{current_year + 1}"
 		fy_doc.year_start_date = first_date
 		fy_doc.year_end_date = last_date
 
 	fy_doc.append("companies", {"company": company})
 	fy_doc.save()
+	return fy_doc.name
+
+
+def get_fy_list(year_start_date, year_end_date):
+	return frappe.db.sql(
+		"""select name from `tabFiscal Year`
+			where (
+				(%(year_start_date)s between year_start_date and year_end_date)
+				or (%(year_end_date)s between year_start_date and year_end_date)
+				or (year_start_date between %(year_start_date)s and %(year_end_date)s)
+				or (year_end_date between %(year_start_date)s and %(year_end_date)s)
+			) """,
+		{
+			"year_start_date": year_start_date,
+			"year_end_date": year_end_date,
+		},
+		as_dict=True,
+	)
 
 
 @frappe.whitelist()
 def call_method():
 	obj_1 = TestPaymentEntry()
-	obj_1.test_apply_tax_withholding_category_TC_ACC_021()
+	obj_1.test_make_payment_order_TC_ACC_354()
