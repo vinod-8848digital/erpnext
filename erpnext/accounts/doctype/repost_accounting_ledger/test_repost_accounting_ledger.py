@@ -434,9 +434,6 @@ def update_repost_settings():
 		repost_settings.save()
 
 
-from frappe.query_builder import DocType
-
-
 def check_existing_fiscal_years(start_date, end_date):
 	return frappe.get_all(
 		"Fiscal Year",
