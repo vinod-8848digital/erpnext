@@ -276,7 +276,8 @@ class TestRepostAccountingLedger(AccountsTestMixin, FrappeTestCase):
 		company.save()
 
 	def test_validate_for_closed_fiscal_year(self):
-		if not frappe.db.exists("Fiscal Year", "2019-2020"):
+		existing_fiscal_years = check_existing_fiscal_years(getdate("2019-04-01"), getdate("2020-03-31"))
+		if not existing_fiscal_years:
 			fy = frappe.get_doc(
 				{
 					"doctype": "Fiscal Year",
@@ -287,6 +288,12 @@ class TestRepostAccountingLedger(AccountsTestMixin, FrappeTestCase):
 					"companies": [{"company": "_Test Company"}],
 				}
 			).insert(ignore_permissions=True)
+		else:
+			for fy in existing_fiscal_years:
+				fy_doc = frappe.get_doc("Fiscal Year", fy)
+				fy_doc.append("companies", {"company": "_Test Company"})
+				fy_doc.save(ignore_permissions=True)
+
 		si = create_sales_invoice(
 			item=self.item,
 			company=self.company,
@@ -322,7 +329,7 @@ class TestRepostAccountingLedger(AccountsTestMixin, FrappeTestCase):
 		ral.delete_cancelled_entries = False
 		ral.append("vouchers", {"voucher_type": si.doctype, "voucher_no": si.name})
 		ral.append("vouchers", {"voucher_type": pe.doctype, "voucher_no": pe.name})
-		ral.save()
+		ral.save(ignore_permissions=True)
 		with self.assertRaises(frappe.ValidationError) as cm:
 			ral.validate_for_closed_fiscal_year()
 
@@ -330,7 +337,7 @@ class TestRepostAccountingLedger(AccountsTestMixin, FrappeTestCase):
 			str(cm.exception), "Cannot Resubmit Ledger entries for vouchers in Closed fiscal year."
 		)
 
-	def test_get_existing_ledger_entries(self):
+	def test_get_existing_ledger_entries_TC_ACC_371(self):
 		si = create_sales_invoice(
 			item=self.item,
 			company=self.company,
@@ -369,7 +376,7 @@ class TestRepostAccountingLedger(AccountsTestMixin, FrappeTestCase):
 			found = any(x["name"] == gle["name"] and x["old"] for x in existing_list)
 			self.assertTrue(found)
 
-	def test_get_repost_allowed_types(self):
+	def test_get_repost_allowed_types_TC_ACC_372(self):
 		from erpnext.accounts.doctype.repost_accounting_ledger.repost_accounting_ledger import (
 			get_repost_allowed_types,
 		)
@@ -425,3 +432,17 @@ def update_repost_settings():
 	for x in allowed_types:
 		repost_settings.append("allowed_types", {"document_type": x, "allowed": True})
 		repost_settings.save()
+
+
+from frappe.query_builder import DocType
+
+
+def check_existing_fiscal_years(start_date, end_date):
+	return frappe.get_all(
+		"Fiscal Year",
+		filters={
+			"year_start_date": ("<=", end_date),
+			"year_end_date": (">=", start_date),
+		},
+		fields=["name"],
+	)

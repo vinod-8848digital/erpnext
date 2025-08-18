@@ -550,7 +550,7 @@ class TestPOSInvoiceMergeLog(unittest.TestCase):
 		result = get_error_message(msg)
 		self.assertEqual(result, msg)
 
-	def test_get_serial_and_batch_bundles(self):
+	def test_get_serial_and_batch_bundles_TC_ACC_373(self):
 		pos_invoices = []
 		test_user, pos_profile = init_user_and_profile()
 
