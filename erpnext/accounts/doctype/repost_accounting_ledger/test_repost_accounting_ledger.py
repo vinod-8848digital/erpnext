@@ -369,6 +369,49 @@ class TestRepostAccountingLedger(AccountsTestMixin, FrappeTestCase):
 			found = any(x["name"] == gle["name"] and x["old"] for x in existing_list)
 			self.assertTrue(found)
 
+	def test_get_repost_allowed_types(self):
+		from erpnext.accounts.doctype.repost_accounting_ledger.repost_accounting_ledger import (
+			get_repost_allowed_types,
+		)
+
+		if not frappe.db.exists(
+			"Repost Allowed Types",
+			{
+				"document_type": "Purchase Invoice",
+				"parent": "Repost Accounting Ledger Settings",
+			},
+		):
+			settings = frappe.get_single("Repost Accounting Ledger Settings")
+			settings.append("allowed_types", {"document_type": "Purchase Invoice", "allowed": 1})
+			settings.save()
+
+		# Case 1: Valid doctype "Purchase Invoice"
+		allowed_types = get_repost_allowed_types(
+			doctype="Repost Allowed Types",
+			txt="Purchase Invoice",
+			searchfield="document_type",
+			start=0,
+			page_len=10,
+			filters={},
+		)
+
+		self.assertTrue(
+			any("Purchase Invoice" in row for row in allowed_types),
+			"Purchase Invoice should be returned in allowed types",
+		)
+
+		# Case 2: Wrong doctype should return empty list
+		wrong_types = get_repost_allowed_types(
+			doctype="Repost Allowed Types",
+			txt="Non Existing Doctype",
+			searchfield="document_type",
+			start=0,
+			page_len=10,
+			filters={},
+		)
+
+		self.assertEqual(wrong_types, [], "Non Existing Doctype should return an empty list")
+
 
 def update_repost_settings():
 	allowed_types = [
