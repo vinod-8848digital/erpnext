@@ -330,6 +330,45 @@ class TestRepostAccountingLedger(AccountsTestMixin, FrappeTestCase):
 			str(cm.exception), "Cannot Resubmit Ledger entries for vouchers in Closed fiscal year."
 		)
 
+	def test_get_existing_ledger_entries(self):
+		si = create_sales_invoice(
+			item=self.item,
+			company=self.company,
+			customer=self.customer,
+			debit_to=self.debit_to,
+			parent_cost_center=self.cost_center,
+			cost_center=self.cost_center,
+			rate=100,
+		)
+		si.submit()
+
+		pe = get_payment_entry(si.doctype, si.name)
+		pe.save().submit()
+
+		ral = frappe.new_doc("Repost Accounting Ledger")
+		ral.company = self.company
+		ral.delete_cancelled_entries = False
+		ral.append("vouchers", {"voucher_type": si.doctype, "voucher_no": si.name})
+		ral.append("vouchers", {"voucher_type": pe.doctype, "voucher_no": pe.name})
+		ral.save()
+
+		ral.get_existing_ledger_entries()
+
+		vouchers = [x.voucher_no for x in ral.vouchers]
+		expected_gles = frappe.db.get_all(
+			"GL Entry",
+			filters={"voucher_no": ["in", vouchers], "is_cancelled": 0},
+			fields=["name", "voucher_type", "voucher_no"],
+		)
+
+		for gle in expected_gles:
+			key = (gle["voucher_type"], gle["voucher_no"])
+			self.assertIn(key, ral.gles)
+			existing_list = ral.gles[key]["existing"]
+
+			found = any(x["name"] == gle["name"] and x["old"] for x in existing_list)
+			self.assertTrue(found)
+
 
 def update_repost_settings():
 	allowed_types = [
