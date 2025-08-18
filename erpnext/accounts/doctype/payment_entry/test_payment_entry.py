@@ -1975,7 +1975,7 @@ class TestPaymentEntry(FrappeTestCase):
 			)
 
 			if len(tax_withholding_category.accounts) > 0:
-				self.assertEqual(tax_withholding_category.accounts[0].account, "Cash - _TC")
+				self.assertEqual(tax_withholding_category.accounts[0].account, "_Test TDS Payable - _TC")
 
 			payment_entry = create_payment_entry(
 				party_type="Supplier",
@@ -2003,9 +2003,9 @@ class TestPaymentEntry(FrappeTestCase):
 			payment_entry.submit()
 			self.voucher_no = payment_entry.name
 			self.expected_gle = [
+				{"account": "_Test TDS Payable - _TC", "debit": 0, "credit": 8000.0},
 				{"account": "Creditors - _TC", "debit": 80000.0, "credit": 0.0},
 				{"account": "Cash - _TC", "debit": 0.0, "credit": 72000.0},
-				{"account": "Cash - _TC", "debit": 0.0, "credit": 8000.0},
 			]
 			self.check_gl_entries()
 
@@ -2680,4 +2680,4 @@ def get_or_create_fiscal_year(company="_Test Company"):
 @frappe.whitelist()
 def call_method():
 	obj_1 = TestPaymentEntry()
-	obj_1.test_link_advance_payment_with_purchase_invoice_TC_ACC_022()
+	obj_1.test_apply_tax_withholding_category_TC_ACC_021()
