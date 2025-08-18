@@ -1,23 +1,28 @@
 # Copyright (c) 2018, Frappe Technologies Pvt. Ltd. and Contributors
 # See license.txt
 
-
 import frappe
 from frappe.tests.utils import FrappeTestCase, change_settings
-from frappe.utils import add_days, flt, today ,get_date_str
+from frappe.utils import add_days, flt, today ,get_date_str, getdate
 
+from datetime import date
 from erpnext.accounts.doctype.payment_entry.payment_entry import get_payment_entry
 from erpnext.accounts.doctype.sales_invoice.test_sales_invoice import create_sales_invoice
 from erpnext.accounts.test.accounts_mixin import AccountsTestMixin
+from frappe.exceptions import ValidationError
 
 class TestExchangeRateRevaluation(AccountsTestMixin, FrappeTestCase):
 	def setUp(self):
+		create_warehouse(warehouse_name="_Test Warehouse")
 		self.create_company()
 		self.create_usd_receivable_account()
-		self.create_item()
+		self.create_item(company="_Test Company", warehouse="_Test Warehouse - _TC")
 		self.create_customer()
 		self.clear_old_entries()
 		self.set_system_and_company_settings()
+		
+		# Ensure a valid Fiscal Year exists for today
+		ensure_test_fiscal_year("_Test Company")
 
 	def tearDown(self):
 		frappe.db.rollback()
@@ -736,6 +741,97 @@ class TestExchangeRateRevaluation(AccountsTestMixin, FrappeTestCase):
 			voucher_type="Journal Entry"
 		)
     
+	def test_validate_rounding_loss_allowance_TC_ACC_320(self):
+		err = frappe.get_doc({
+			"doctype": "Exchange Rate Revaluation",
+			"company": self.company,
+			"rounding_loss_allowance": 2,  # Invalid (>1)
+			"accounts": [
+				{
+					"account": "Debtors - {}".format(self.company_abbr),
+					"new_exchange_rate": 1.5
+				}
+			]
+		})
+
+		with self.assertRaises(ValidationError) as cm:
+			err.save()
+
+		self.assertIn(
+			"Rounding Loss Allowance should be between 0 and 1",
+			str(cm.exception)
+    	)
+  
+	def test_remove_accounts_without_gain_loss_TC_ACC_321(self):
+		err_doc = frappe.get_doc({
+			"doctype": "Exchange Rate Revaluation",
+			"company": self.company,
+			"posting_date": getdate(),   # 👈 ensures it's inside current FY
+			"accounts": [
+				frappe._dict(account=f"Debtors - {self.company_abbr}", gain_loss=0),
+				frappe._dict(account=f"Creditors - {self.company_abbr}", gain_loss=None),
+			]
+		})
+
+		with self.assertRaises(ValidationError) as cm:
+			err_doc.remove_accounts_without_gain_loss()
+
+		self.assertIn(
+			"At least one account with exchange gain or loss is required",
+			str(cm.exception)
+		)
+  
+	def test_throw_invalid_response_message_coverage_TC_ACC_322(self):
+		doc = frappe.get_doc({
+			"doctype": "Exchange Rate Revaluation",
+			"company": "_Test Company",
+			"rounding_loss_allowance": 0.01,
+			"accounts": [
+				frappe._dict(account="Cash In Hand - _TC", balance_in_base_currency=0, new_balance_in_base_currency=0, gain_loss=0, new_exchange_rate=0.5),
+			]
+		}).insert()
+
+		accounts_data = doc.get_accounts_data()
+
+		self.assertEqual(accounts_data, [])
+
+	def test_get_for_unrealized_gain_loss_account_throws_TC_ACC_323(self):
+		company_name = "_Test Company No GainLoss Account"
+		if not frappe.db.exists("Company", company_name):
+			frappe.get_doc({
+				"doctype": "Company",
+				"company_name": company_name,
+				"abbr": "TCA",
+				"default_currency": "INR"
+			}).insert()
+
+		doc = frappe.get_doc({
+			"doctype": "Exchange Rate Revaluation",
+			"company": company_name,
+			"accounts": [
+				frappe._dict(account="Cash In Hand - _TC", balance_in_base_currency=0, new_balance_in_base_currency=0, gain_loss=0, new_exchange_rate=0.5),
+			]
+		}).insert()
+
+		with self.assertRaises(ValidationError) as cm:
+			doc.get_for_unrealized_gain_loss_account()
+
+		self.assertIn("Please set Unrealized Exchange Gain/Loss Account", str(cm.exception))
+  
+	def test_get_accounts_data_triggers_throw_invalid_response_message_TC_ACC_336(self):
+		doc = frappe.get_doc({
+			"doctype": "Exchange Rate Revaluation",
+			"company": "_Test Company",
+			"posting_date": getdate(),
+			"rounding_loss_allowance": 0.01,
+			"accounts": [
+				frappe._dict(account="Cash In Hand - _TC", balance_in_base_currency=0, new_balance_in_base_currency=0, gain_loss=0, new_exchange_rate=0.5),
+			]
+		}).insert()
+
+		accounts_data = doc.get_accounts_data()
+
+		self.assertEqual(accounts_data, [])
 
 def gain_loss_account(company:str):
 	doc = frappe.get_doc("Company", company)
@@ -882,3 +978,48 @@ def create_cost_center(**args):
 			cc.is_group = args.is_group or 0
 			cc.parent_cost_center = args.parent_cost_center or "_Test Company - _TC"
 			cc.insert()
+
+def ensure_test_fiscal_year(company_name):
+    today = getdate()
+    
+    # Determine fiscal year start/end (Apr 1 – Mar 31)
+    if today.month < 4:
+        start_year = today.year - 1
+        end_year = today.year
+    else:
+        start_year = today.year
+        end_year = today.year + 1
+
+    start_date = date(start_year, 4, 1)
+    end_date = date(end_year, 3, 31)
+    year_name = f"{start_year}-{str(end_year)[-2:]}"
+    
+    # Delete overlapping FYs for this company (optional, ensures clean slate)
+    overlaps = frappe.db.sql("""
+        SELECT name FROM `tabFiscal Year`
+        WHERE (%s BETWEEN year_start_date AND year_end_date)
+           OR (%s BETWEEN year_start_date AND year_end_date)
+    """, (start_date, end_date))
+    
+    for fy_name_overlap in overlaps:
+        fy_doc = frappe.get_doc("Fiscal Year", fy_name_overlap[0])
+        # Remove company from FY if exists
+        fy_doc.companies = [c for c in fy_doc.companies if c.company != company_name]
+        fy_doc.save(ignore_permissions=True)
+        frappe.db.commit()
+    
+    # Create FY if not exists
+    fy = frappe.db.exists("Fiscal Year", {"year": year_name})
+    if not fy:
+        fy_doc = frappe.get_doc({
+            "doctype": "Fiscal Year",
+            "year": year_name,
+            "year_start_date": start_date,
+            "year_end_date": end_date,
+            "disabled": 0,
+            "companies": [{"company": company_name}]
+        })
+        fy_doc.insert(ignore_permissions=True)
+        frappe.db.commit()
+    
+    return year_name

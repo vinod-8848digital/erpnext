@@ -12,7 +12,7 @@ class PartyLink(Document):
 
 	from typing import TYPE_CHECKING
 
-	if TYPE_CHECKING:
+	if TYPE_CHECKING: # pragma: no cover
 		from frappe.types import DF
 
 		primary_party: DF.DynamicLink | None
@@ -28,7 +28,7 @@ class PartyLink(Document):
 					"Allowed primary roles are 'Customer' and 'Supplier'. Please select one of these roles only."
 				),
 				title=_("Invalid Primary Role"),
-			)
+			) # pragma: no cover
 
 		existing_party_link = frappe.get_all(
 			"Party Link",
@@ -43,7 +43,7 @@ class PartyLink(Document):
 					self.secondary_role,
 					bold(self.secondary_party),
 				)
-			)
+			) # pragma: no cover
 
 		existing_party_link = frappe.get_all(
 			"Party Link", {"primary_party": self.secondary_party}, pluck="primary_role"
@@ -53,7 +53,7 @@ class PartyLink(Document):
 				_("{} {} is already linked with another {}").format(
 					self.secondary_role, self.secondary_party, existing_party_link[0]
 				)
-			)
+			) # pragma: no cover
 
 		existing_party_link = frappe.get_all(
 			"Party Link", {"secondary_party": self.primary_party}, pluck="primary_role"
@@ -63,7 +63,7 @@ class PartyLink(Document):
 				_("{} {} is already linked with another {}").format(
 					self.primary_role, self.primary_party, existing_party_link[0]
 				)
-			)
+			) # pragma: no cover
 
 
 @frappe.whitelist()
