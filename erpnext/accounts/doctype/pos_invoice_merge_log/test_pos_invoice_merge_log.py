@@ -550,14 +550,14 @@ class TestPOSInvoiceMergeLog(unittest.TestCase):
 		result = get_error_message(msg)
 		self.assertEqual(result, msg)
 
-	def test_get_serial_and_batch_bundles(self):
+	def test_get_serial_and_batch_bundles_TC_ACC_373(self):
 		pos_invoices = []
 		test_user, pos_profile = init_user_and_profile()
 
-		pos_profile_doc = frappe.get_doc("POS Profile", pos_profile.name, pos_profile=pos_profile)
+		pos_profile_doc = frappe.get_doc("POS Profile", pos_profile.name)
 		pos_profile_doc.allow_partial_payment = 1
 		pos_profile_doc.save(ignore_permissions=True)
-		inv = create_pos_invoice(qty=1, rate=70, do_not_save=True)
+		inv = create_pos_invoice(qty=1, rate=70, do_not_save=True, pos_profile=pos_profile)
 		inv.append("payments", {"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": 70})
 		inv.save(ignore_permissions=True)
 
