@@ -2064,6 +2064,7 @@ class TestPaymentEntry(FrappeTestCase):
 					"allocated_amount": 80000,
 				},
 			)
+
 			pi.save()
 			pi.submit()
 			self.voucher_no = pi.name
@@ -2076,11 +2077,12 @@ class TestPaymentEntry(FrappeTestCase):
 			self.check_gl_entries()
 
 			pe = get_payment_entry("Purchase Invoice", pi.name)
+
 			pe.save()
 			pe.submit()
 			self.expected_gle = [
+				{"account": "_Test Bank 2 - _TC", "debit": 0.0, "credit": 9000.0},
 				{"account": "Creditors - _TC", "debit": 9000.0, "credit": 0.0},
-				{"account": "Cash - _TC", "debit": 0.0, "credit": 9000.0},
 			]
 			self.voucher_no = pe.name
 			self.check_gl_entries()
@@ -2644,9 +2646,11 @@ def get_or_create_fiscal_year(company="_Test Company"):
 	FY_name_list = frappe.get_all("Fiscal Year Company", filters={"company": company}, pluck="parent")
 	from datetime import date
 
+	current_posting_date = frappe.utils.getdate()
+
 	for fy_name in FY_name_list:
 		fy_doc = frappe.get_doc("Fiscal Year", fy_name)
-		current_posting_date = frappe.utils.getdate()
+
 		if (fy_doc.year_end_date >= current_posting_date) and (
 			current_posting_date <= fy_doc.year_start_date
 		):
@@ -2671,3 +2675,9 @@ def get_or_create_fiscal_year(company="_Test Company"):
 
 	fy_doc.append("companies", {"company": company})
 	fy_doc.save()
+
+
+@frappe.whitelist()
+def call_method():
+	obj_1 = TestPaymentEntry()
+	obj_1.test_link_advance_payment_with_purchase_invoice_TC_ACC_022()
