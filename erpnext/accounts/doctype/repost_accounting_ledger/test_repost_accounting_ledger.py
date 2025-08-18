@@ -5,7 +5,7 @@ import frappe
 from frappe import qb
 from frappe.query_builder.functions import Sum
 from frappe.tests.utils import FrappeTestCase, change_settings
-from frappe.utils import add_days, nowdate, today
+from frappe.utils import add_days, getdate, nowdate, today
 
 from erpnext.accounts.doctype.payment_entry.payment_entry import get_payment_entry
 from erpnext.accounts.doctype.payment_request.payment_request import make_payment_request
@@ -14,6 +14,7 @@ from erpnext.accounts.test.accounts_mixin import AccountsTestMixin
 from erpnext.accounts.utils import get_fiscal_year
 from erpnext.stock.doctype.item.test_item import make_item
 from erpnext.stock.doctype.purchase_receipt.test_purchase_receipt import get_gl_entries, make_purchase_receipt
+
 
 class TestRepostAccountingLedger(AccountsTestMixin, FrappeTestCase):
 	def setUp(self):
@@ -139,8 +140,8 @@ class TestRepostAccountingLedger(AccountsTestMixin, FrappeTestCase):
 				"transaction_date": today(),
 				"posting_date": today(),
 				"company": self.company,
-				"period_start_date":frappe.utils.getdate(fy[1]),
-				"period_end_date":frappe.utils.getdate(fy[2]),
+				"period_start_date": frappe.utils.getdate(fy[1]),
+				"period_end_date": frappe.utils.getdate(fy[2]),
 				"fiscal_year": fy[0],
 				"cost_center": self.cost_center,
 				"closing_account_head": self.retained_earnings,
@@ -274,14 +275,70 @@ class TestRepostAccountingLedger(AccountsTestMixin, FrappeTestCase):
 		company.default_provisional_account = None
 		company.save()
 
+	def test_validate_for_closed_fiscal_year(self):
+		if not frappe.db.exists("Fiscal Year", "2019-2020"):
+			fy = frappe.get_doc(
+				{
+					"doctype": "Fiscal Year",
+					"year": "2019-2020",
+					"year_start_date": getdate("2019-04-01"),
+					"year_end_date": getdate("2020-03-31"),
+					"disabled": 0,
+					"companies": [{"company": "_Test Company"}],
+				}
+			).insert(ignore_permissions=True)
+		si = create_sales_invoice(
+			item=self.item,
+			company=self.company,
+			customer=self.customer,
+			debit_to=self.debit_to,
+			parent_cost_center=self.cost_center,
+			cost_center=self.cost_center,
+			posting_date=getdate("2020-03-31"),
+			rate=100,
+		)
+
+		pe = get_payment_entry(si.doctype, si.name)
+		pe.posting_date = getdate("2020-03-31")
+		pe.save().submit()
+
+		pcv = frappe.get_doc(
+			{
+				"doctype": "Period Closing Voucher",
+				"company": self.company,
+				"closing_account_head": "Creditors - " + self.company_abbr,
+				"period_start_date": frappe.utils.getdate("2019-04-01"),
+				"period_end_date": frappe.utils.getdate("2020-03-31"),
+				"posting_date": frappe.utils.getdate("2020-12-31"),
+				"fiscal_year": fy.name,
+				"remarks": "test",
+			}
+		).insert(ignore_permissions=True)
+
+		pcv.save().submit()
+
+		ral = frappe.new_doc("Repost Accounting Ledger")
+		ral.company = self.company
+		ral.delete_cancelled_entries = False
+		ral.append("vouchers", {"voucher_type": si.doctype, "voucher_no": si.name})
+		ral.append("vouchers", {"voucher_type": pe.doctype, "voucher_no": pe.name})
+		ral.save()
+		with self.assertRaises(frappe.ValidationError) as cm:
+			ral.validate_for_closed_fiscal_year()
+
+		self.assertEqual(
+			str(cm.exception), "Cannot Resubmit Ledger entries for vouchers in Closed fiscal year."
+		)
+
+
 def update_repost_settings():
 	allowed_types = [
- 		"Sales Invoice",
- 		"Purchase Invoice",
- 		"Payment Entry",
- 		"Journal Entry",
- 		"Purchase Receipt",
- 	]
+		"Sales Invoice",
+		"Purchase Invoice",
+		"Payment Entry",
+		"Journal Entry",
+		"Purchase Receipt",
+	]
 	repost_settings = frappe.get_doc("Repost Accounting Ledger Settings")
 	for x in allowed_types:
 		repost_settings.append("allowed_types", {"document_type": x, "allowed": True})
