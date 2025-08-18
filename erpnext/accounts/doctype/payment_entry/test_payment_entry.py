@@ -15,6 +15,7 @@ from erpnext.accounts.doctype.bank_transaction.test_bank_transaction import (
 )
 from erpnext.accounts.doctype.payment_entry.payment_entry import (
 	get_outstanding_reference_documents,
+	get_paid_amount,
 	get_party_details,
 	get_payment_entry,
 	get_reference_details,
@@ -2363,6 +2364,96 @@ class TestPaymentEntry(FrappeTestCase):
 		self.assertEqual(reference_doc.supplier, "_Test Supplier")
 		self.assertEqual(reference_doc.amount, 250)
 
+	def test_paid_amount_for_customer_TC_ACC_374(self):
+		company = "_Test Company"
+		customer = "_Test Customer"
+		account_receivable = "Debtors - _TC"
+
+		create_customer(customer, "INR")
+		make_test_item("_Test Item")
+		get_or_create_fiscal_year("_Test Company")
+
+		si = create_sales_invoice()
+
+		# Insert GL Entries for a customer
+		frappe.get_doc(
+			{
+				"doctype": "GL Entry",
+				"posting_date": getdate(),
+				"account": account_receivable,
+				"party_type": "Customer",
+				"party": customer,
+				"debit": 0,
+				"credit": 500,
+				"voucher_type": "Sales Invoice",
+				"voucher_no": si.name,
+				"against_voucher_type": "Sales Invoice",
+				"against_voucher": si.name,
+				"company": company,
+				"debit_in_account_currency": 0,
+				"credit_in_account_currency": 500,
+				"due_date": getdate(),  # 🔑 Important!
+			}
+		).insert(ignore_permissions=True)
+
+		amount = get_paid_amount(
+			dt="Sales Invoice",
+			dn=si.name,
+			party_type="Customer",
+			party=customer,
+			account=account_receivable,
+			due_date=getdate(),
+		)
+
+		self.assertEqual(amount, 500)
+
+	def test_paid_amount_for_supplier_TC_ACC_375(self):
+		company = "_Test Company"
+		supplier = "_Test Supplier"
+		account_payable = "Creditors - _TC"
+
+		create_supplier(
+			supplier_name=supplier,
+			company="_Test Company",
+			default_currency="INR",
+		)
+		make_test_item("_Test Item")
+		get_or_create_fiscal_year("_Test Company")
+
+		pi = create_purchase_invoice(supplier=supplier)
+
+		# Insert GL Entries for a customer
+		gl_entry = frappe.get_doc(
+			{
+				"doctype": "GL Entry",
+				"posting_date": getdate(),
+				"account": account_payable,
+				"party_type": "Supplier",
+				"party": supplier,
+				"debit": 400,
+				"credit": 0,
+				"voucher_type": "Purchase Invoice",
+				"voucher_no": pi.name,
+				"against_voucher_type": "Purchase Invoice",
+				"against_voucher": pi.name,
+				"due_date": getdate(),
+				"company": company,
+				"debit_in_account_currency": 400,
+				"credit_in_account_currency": 0,
+			}
+		).insert(ignore_permissions=True)
+
+		amount = get_paid_amount(
+			dt="Purchase Invoice",
+			dn=pi.name,
+			party_type="Supplier",
+			party=supplier,
+			account=account_payable,
+			due_date=getdate(),
+		)
+
+		self.assertEqual(amount, 400)
+
 
 def create_payment_order_against_payment_entry(ref_doc, order_type, bank_account):
 	payment_order = frappe.get_doc(
@@ -2660,7 +2751,7 @@ def create_purchase_invoice(**args):
 			"items": [
 				{
 					"doctype": "Purchase Invoice Item",
-					"item_code": args.item_code,
+					"item_code": args.item_code or "_Test Item",
 					"qty": args.qty or 1,
 					"rate": args.rate or 90000,
 					"cost_center": "Main - _TC",
@@ -2750,4 +2841,4 @@ def get_fy_list(year_start_date, year_end_date):
 @frappe.whitelist()
 def call_method():
 	obj_1 = TestPaymentEntry()
-	obj_1.test_make_payment_order_TC_ACC_354()
+	obj_1.test_paid_amount_for_supplier_TC_ACC_375()
