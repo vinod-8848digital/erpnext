@@ -2175,7 +2175,7 @@ class TestPaymentEntry(FrappeTestCase):
 		self.assertNotIn(pe.party_type, ["Customer", "Supplier"])
 		self.assertEqual(pe.docstatus, 0)
 
-	def test_bank_account_link_with_supplier_TC_AC_353(self):
+	def test_bank_account_link_with_supplier_TC_ACC_353(self):
 		from frappe.utils import getdate
 
 		create_records("_Test Supplier TDS")
@@ -2273,7 +2273,7 @@ class TestPaymentEntry(FrappeTestCase):
 			)
 			return
 
-	def test_bank_account_link_with_supplier_TC_AC_364(self):
+	def test_bank_account_link_with_supplier_TC_ACC_364(self):
 		create_records("_Test Supplier TDS")
 
 		# Update Company Default Account && Create Bank Account if not exists
