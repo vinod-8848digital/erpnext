@@ -1400,7 +1400,6 @@ class TestPOSInvoice(unittest.TestCase):
 
 		item_groups = get_item_group(pos_profile)
 
-		print(item_groups)
 		self.assertIn("Test Group A", item_groups)
 		self.assertIn("Child Group A1", item_groups)
 
