@@ -2086,7 +2086,12 @@ class TestPaymentEntry(FrappeTestCase):
 			self.check_gl_entries()
 
 	def test_on_update_after_submit_TC_ACC_345(self):
-		si = create_sales_invoice(do_not_save=1, qty=1, rate=200)
+		get_or_create_fiscal_year("_Test Company")
+		reposting_accounts_doc = frappe.get_doc("Repost Accounting Ledger Settings")
+		reposting_accounts_doc.append("allowed_types", {"document_type": "Payment Entry", "allowed": 1})
+		reposting_accounts_doc.save()
+
+		si = create_sales_invoice(do_not_save=1, qty=1, rate=200, company="_Test Company")
 		si.append(
 			"taxes",
 			{
@@ -2633,3 +2638,36 @@ def create_company(company_name="_Test Company", country="India", currency="INR"
 				"abbr": abbr,
 			}
 		).insert()
+
+
+def get_or_create_fiscal_year(company="_Test Company"):
+	FY_name_list = frappe.get_all("Fiscal Year Company", filters={"company": company}, pluck="parent")
+	from datetime import date
+
+	for fy_name in FY_name_list:
+		fy_doc = frappe.get_doc("Fiscal Year", fy_name)
+		current_posting_date = frappe.utils.getdate()
+		if (fy_doc.year_end_date >= current_posting_date) and (
+			current_posting_date <= fy_doc.year_start_date
+		):
+			return True
+
+	# Create or Append Company in Fiscal Year dt if not exists
+	current_year = current_posting_date.year
+	first_date = date(current_year, 4, 1)
+	last_date = date(current_year + 1, 3, 31)
+
+	current_fy_name = frappe.db.exists(
+		"Fiscal Year", {"year_start_date": first_date, "year_end_date": last_date}
+	)
+	if current_fy_name:
+		fy_doc = frappe.get_doc("Fiscal Year", current_fy_name)
+
+	else:
+		fy_doc = frappe.new_doc("Fiscal Year")
+		fy_doc.year = f"{current_year}-{company}"
+		fy_doc.year_start_date = first_date
+		fy_doc.year_end_date = last_date
+
+	fy_doc.append("companies", {"company": company})
+	fy_doc.save()
