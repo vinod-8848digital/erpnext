@@ -1403,6 +1403,25 @@ class TestPOSInvoice(unittest.TestCase):
 		self.assertIn("Test Group A", item_groups)
 		self.assertIn("Child Group A1", item_groups)
 
+	def test_item_query(self):
+		from erpnext.accounts.doctype.pos_invoice.pos_invoice import item_query
+
+		filters = {}
+		pos_profile = make_pos_profile()
+		pos_profile.append("item_groups", {"item_group": "Test Group A"})
+		pos_profile.save(ignore_permissions=True)
+		filters["pos_profile"] = ["=", pos_profile]
+		result = item_query(
+			"Item",
+			txt="",
+			searchfield="item_code",
+			start=0,
+			page_len=10,
+			filters=filters,
+			as_dict=True,
+		)
+		self.assertEqual(result, [])
+
 
 def create_pos_invoice(**args):
 	args = frappe._dict(args)
