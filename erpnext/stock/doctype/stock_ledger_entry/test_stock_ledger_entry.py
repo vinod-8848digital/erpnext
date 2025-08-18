@@ -1645,12 +1645,12 @@ def create_delivery_note_entries_for_batchwise_item_valuation_test(dn_entry_list
 def fetch_sle_details_for_doc_list(doc_list, columns, as_dict=1):
 	return frappe.db.sql(
 		f"""
-		SELECT { ', '.join(columns)}
+		SELECT {', '.join(columns)}
 		FROM `tabStock Ledger Entry`
 		WHERE
 			voucher_no IN %(voucher_nos)s
-			and docstatus = 1
-		ORDER BY timestamp(posting_date, posting_time) ASC, CREATION ASC
+			AND docstatus = 1
+		ORDER BY (posting_date + posting_time) ASC, creation ASC
 	""",
 		dict(voucher_nos=[doc.name for doc in doc_list]),
 		as_dict=as_dict,
