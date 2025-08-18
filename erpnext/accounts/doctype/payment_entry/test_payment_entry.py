@@ -2454,6 +2454,68 @@ class TestPaymentEntry(FrappeTestCase):
 
 		self.assertEqual(amount, 400)
 
+	def test_allocate_amount_to_reference_TC_ACC_376(self):
+		customer = "_Test Customer"
+
+		create_customer(customer, "INR")
+		make_test_item("_Test Item")
+		get_or_create_fiscal_year("_Test Company")
+
+		si = create_sales_invoice()
+
+		pe = frappe.new_doc("Payment Entry")
+		pe.payment_type = "Receive"
+		pe.party_type = "Customer"
+		pe.party = "_Test Customer"
+		pe.company = "_Test Company"
+		pe.paid_amount = 500
+		pe.references = []
+
+		ref = frappe._dict(
+			reference_doctype="Sales Invoice",
+			reference_name=si.name,
+			outstanding_amount=500,
+			allocated_amount=0,
+			payment_request=None,
+		)
+		pe.references = [ref]
+
+		pe.allocate_amount_to_references(
+			paid_amount=500,
+			paid_amount_change=False,
+			allocate_payment_amount=True,
+		)
+
+		self.assertEqual(pe.references[0].allocated_amount, 500)
+
+	def test_partial_allocation_TC_ACC_377(self):
+		"""If paid_amount < outstanding, allocate only paid_amount"""
+
+		customer = "_Test Customer"
+
+		create_customer(customer, "INR")
+		make_test_item("_Test Item")
+		get_or_create_fiscal_year("_Test Company")
+
+		si = create_sales_invoice()
+
+		ref = frappe._dict(
+			reference_doctype="Sales Invoice",
+			reference_name=si.name,
+			outstanding_amount=1000,
+			allocated_amount=0,
+			payment_request=None,
+		)
+		self.pe.references = [ref]
+
+		self.pe.allocate_amount_to_references(
+			paid_amount=400,
+			paid_amount_change=False,
+			allocate_payment_amount=True,
+		)
+
+		self.assertEqual(self.pe.references[0].allocated_amount, 400)
+
 
 def create_payment_order_against_payment_entry(ref_doc, order_type, bank_account):
 	payment_order = frappe.get_doc(
@@ -2841,4 +2903,4 @@ def get_fy_list(year_start_date, year_end_date):
 @frappe.whitelist()
 def call_method():
 	obj_1 = TestPaymentEntry()
-	obj_1.test_paid_amount_for_supplier_TC_ACC_375()
+	obj_1.test_allocate_amount_to_reference_TC_ACC_376()
