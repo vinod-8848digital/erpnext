@@ -502,6 +502,7 @@ class TestPOSInvoiceMergeLog(unittest.TestCase):
 		frappe.db.sql("delete from `tabPOS Invoice`")
 
 		# Create a POS Invoice
+
 		test_user, pos_profile = init_user_and_profile()
 		opening_entry = create_opening_entry(pos_profile, test_user.name)
 		pos_profile_doc = frappe.get_doc("POS Profile", pos_profile.name)
@@ -513,6 +514,18 @@ class TestPOSInvoiceMergeLog(unittest.TestCase):
 
 		inv.submit()
 		self.assertEqual(opening_entry.status, "Open")
+
+		if not frappe.db.exists("Fiscal Year", "2025-2026"):
+			frappe.get_doc(
+				{
+					"doctype": "Fiscal Year",
+					"year": "2025-2026",
+					"year_start_date": getdate("2025-04-01"),
+					"year_end_date": getdate("2026-03-31"),
+					"disabled": 0,
+					"companies": [{"company": pos_profile_doc.company.name}],
+				}
+			).insert(ignore_permissions=True)
 
 		# Create Merge Log for the invoice
 		merge_logs = make_merge_log([{"name": inv.name}])
