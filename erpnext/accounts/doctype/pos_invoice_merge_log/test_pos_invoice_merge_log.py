@@ -431,6 +431,7 @@ class TestPOSInvoiceMergeLog(unittest.TestCase):
 		frappe.db.sql("delete from `tabPOS Invoice`")
 
 		try:
+			create_uom("_Test UOM")
 			se = make_serialized_item()
 			serial_no = get_serial_nos_from_bundle(se.get("items")[0].serial_and_batch_bundle)[0]
 
@@ -549,6 +550,40 @@ class TestPOSInvoiceMergeLog(unittest.TestCase):
 		result = get_error_message(msg)
 		self.assertEqual(result, msg)
 
+	def test_get_serial_and_batch_bundles(self):
+		pos_invoices = []
+		test_user, pos_profile = init_user_and_profile()
+
+		pos_profile_doc = frappe.get_doc("POS Profile", pos_profile.name, pos_profile=pos_profile)
+		pos_profile_doc.allow_partial_payment = 1
+		pos_profile_doc.save(ignore_permissions=True)
+		inv = create_pos_invoice(qty=1, rate=70, do_not_save=True)
+		inv.append("payments", {"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": 70})
+		inv.save(ignore_permissions=True)
+
+		inv.submit()
+
+		inv01 = create_pos_invoice(qty=1, rate=70, do_not_save=True, pos_profile=pos_profile)
+		inv01.append("payments", {"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": 70})
+		inv01.save(ignore_permissions=True)
+
+		inv01.submit()
+		pos_invoices.append(inv.name)
+		pos_invoices.append(inv01.name)
+
+		if pos_invoices:
+			serial_and_batch_bundle = frappe.get_all(
+				"POS Invoice Item",
+				filters={
+					"docstatus": 1,
+					"parent": ["in", pos_invoices],
+					"serial_and_batch_bundle": ["is", "set"],
+				},
+				pluck="serial_and_batch_bundle",
+			)
+
+		self.assertEqual(serial_and_batch_bundle, [])
+
 
 def make_merge_log(invoices):
 	merge_logs = []
@@ -577,3 +612,14 @@ def make_merge_log(invoices):
 
 	merge_logs.append(merge_log.name)
 	return merge_logs
+
+
+def create_uom(uom):
+	existing_uom = frappe.db.get_value("UOM", filters={"uom_name": uom}, fieldname="uom_name")
+	if existing_uom:
+		return existing_uom
+	else:
+		new_uom = frappe.new_doc("UOM")
+		new_uom.uom_name = uom
+		new_uom.save(ignore_permissions=True)
+		return new_uom.uom_name

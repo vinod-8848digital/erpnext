@@ -5689,7 +5689,7 @@ def make_serialized_item(**args):
 	se.get("items")[0].transfer_qty = 2
 
 	se.set_stock_entry_type()
-	se.insert()
+	se.insert(ignore_permissions=True)
 	se.submit()
 
 	se.load_from_db()
