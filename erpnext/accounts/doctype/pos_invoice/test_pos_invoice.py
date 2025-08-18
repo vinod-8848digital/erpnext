@@ -7,12 +7,15 @@ import unittest
 import frappe
 from frappe import _
 from frappe.tests.utils import if_app_installed
-from frappe.utils import cint, flt, getdate, today
+from frappe.utils import cint, flt, getdate, nowdate, today
 
 from erpnext.accounts.doctype.pos_closing_entry.pos_closing_entry import make_closing_entry_from_opening
 from erpnext.accounts.doctype.pos_invoice.pos_invoice import PartialPaymentValidationError, make_sales_return
 from erpnext.accounts.doctype.pos_opening_entry.test_pos_opening_entry import create_opening_entry
 from erpnext.accounts.doctype.pos_profile.test_pos_profile import make_pos_profile
+from erpnext.accounts.doctype.sales_invoice.sales_invoice import (
+	update_multi_mode_option,
+)
 from erpnext.accounts.doctype.sales_invoice.test_sales_invoice import create_sales_invoice
 from erpnext.stock.doctype.item.test_item import make_item
 from erpnext.stock.doctype.purchase_receipt.test_purchase_receipt import make_purchase_receipt
@@ -1421,6 +1424,52 @@ class TestPOSInvoice(unittest.TestCase):
 			as_dict=True,
 		)
 		self.assertEqual(result, [])
+
+	def test_make_merge_log(self):
+		from erpnext.accounts.doctype.pos_invoice.pos_invoice import make_merge_log
+
+		invoices = []
+		inv = create_pos_invoice(qty=1, rate=70, do_not_save=True)
+		inv.append("payments", {"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": 70})
+		inv.save(ignore_permissions=True)
+
+		inv.submit()
+		invoices.append(inv)
+		merge_log = frappe.new_doc("POS Invoice Merge Log")
+		merge_log.posting_date = getdate(nowdate())
+		merge_log.customer = inv.customer
+		merge_log.append(
+			"pos_invoices",
+			{
+				"pos_invoice": inv.get("name"),
+				"customer": inv.customer,
+				"posting_date": inv.posting_date,
+				"grand_total": inv.grand_total,
+			},
+		)
+		result = make_merge_log(invoices)
+
+		self.assertEqual(result.customer, merge_log.customer)
+		self.assertEqual(result.posting_date, merge_log.posting_date)
+
+		self.assertEqual(
+			[d.pos_invoice for d in result.pos_invoices],
+			[d.pos_invoice for d in merge_log.pos_invoices],
+		)
+
+	def test_reset_mode_of_payments(self):
+		inv = create_pos_invoice(qty=1, rate=70, do_not_save=True)
+		inv.append("payments", {"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": 70})
+		inv.save(ignore_permissions=True)
+
+		inv.submit()
+
+		if inv.pos_profile:
+			pos_profile = frappe.get_cached_doc("POS Profile", inv.pos_profile)
+			update_multi_mode_option(inv, pos_profile)
+			inv.paid_amount = 0
+
+		self.assertEqual(inv.paid_amount, 0)
 
 
 def create_pos_invoice(**args):
