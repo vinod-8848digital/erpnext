@@ -5,7 +5,7 @@ import frappe
 from frappe import qb
 from frappe.query_builder.functions import Sum
 from frappe.tests.utils import FrappeTestCase, change_settings
-from frappe.utils import add_days, nowdate, today
+from frappe.utils import add_days, getdate, nowdate, today
 
 from erpnext.accounts.doctype.payment_entry.payment_entry import get_payment_entry
 from erpnext.accounts.doctype.payment_request.payment_request import make_payment_request
@@ -14,6 +14,7 @@ from erpnext.accounts.test.accounts_mixin import AccountsTestMixin
 from erpnext.accounts.utils import get_fiscal_year
 from erpnext.stock.doctype.item.test_item import make_item
 from erpnext.stock.doctype.purchase_receipt.test_purchase_receipt import get_gl_entries, make_purchase_receipt
+
 
 class TestRepostAccountingLedger(AccountsTestMixin, FrappeTestCase):
 	def setUp(self):
@@ -139,8 +140,8 @@ class TestRepostAccountingLedger(AccountsTestMixin, FrappeTestCase):
 				"transaction_date": today(),
 				"posting_date": today(),
 				"company": self.company,
-				"period_start_date":frappe.utils.getdate(fy[1]),
-				"period_end_date":frappe.utils.getdate(fy[2]),
+				"period_start_date": frappe.utils.getdate(fy[1]),
+				"period_end_date": frappe.utils.getdate(fy[2]),
 				"fiscal_year": fy[0],
 				"cost_center": self.cost_center,
 				"closing_account_head": self.retained_earnings,
@@ -274,14 +275,152 @@ class TestRepostAccountingLedger(AccountsTestMixin, FrappeTestCase):
 		company.default_provisional_account = None
 		company.save()
 
+	def test_validate_for_closed_fiscal_year(self):
+		if not frappe.db.exists("Fiscal Year", "2019-2020"):
+			fy = frappe.get_doc(
+				{
+					"doctype": "Fiscal Year",
+					"year": "2019-2020",
+					"year_start_date": getdate("2019-04-01"),
+					"year_end_date": getdate("2020-03-31"),
+					"disabled": 0,
+					"companies": [{"company": "_Test Company"}],
+				}
+			).insert(ignore_permissions=True)
+		si = create_sales_invoice(
+			item=self.item,
+			company=self.company,
+			customer=self.customer,
+			debit_to=self.debit_to,
+			parent_cost_center=self.cost_center,
+			cost_center=self.cost_center,
+			posting_date=getdate("2020-03-31"),
+			rate=100,
+		)
+
+		pe = get_payment_entry(si.doctype, si.name)
+		pe.posting_date = getdate("2020-03-31")
+		pe.save().submit()
+
+		pcv = frappe.get_doc(
+			{
+				"doctype": "Period Closing Voucher",
+				"company": self.company,
+				"closing_account_head": "Creditors - " + self.company_abbr,
+				"period_start_date": frappe.utils.getdate("2019-04-01"),
+				"period_end_date": frappe.utils.getdate("2020-03-31"),
+				"posting_date": frappe.utils.getdate("2020-12-31"),
+				"fiscal_year": fy.name,
+				"remarks": "test",
+			}
+		).insert(ignore_permissions=True)
+
+		pcv.save().submit()
+
+		ral = frappe.new_doc("Repost Accounting Ledger")
+		ral.company = self.company
+		ral.delete_cancelled_entries = False
+		ral.append("vouchers", {"voucher_type": si.doctype, "voucher_no": si.name})
+		ral.append("vouchers", {"voucher_type": pe.doctype, "voucher_no": pe.name})
+		ral.save()
+		with self.assertRaises(frappe.ValidationError) as cm:
+			ral.validate_for_closed_fiscal_year()
+
+		self.assertEqual(
+			str(cm.exception), "Cannot Resubmit Ledger entries for vouchers in Closed fiscal year."
+		)
+
+	def test_get_existing_ledger_entries(self):
+		si = create_sales_invoice(
+			item=self.item,
+			company=self.company,
+			customer=self.customer,
+			debit_to=self.debit_to,
+			parent_cost_center=self.cost_center,
+			cost_center=self.cost_center,
+			rate=100,
+		)
+		si.submit()
+
+		pe = get_payment_entry(si.doctype, si.name)
+		pe.save().submit()
+
+		ral = frappe.new_doc("Repost Accounting Ledger")
+		ral.company = self.company
+		ral.delete_cancelled_entries = False
+		ral.append("vouchers", {"voucher_type": si.doctype, "voucher_no": si.name})
+		ral.append("vouchers", {"voucher_type": pe.doctype, "voucher_no": pe.name})
+		ral.save()
+
+		ral.get_existing_ledger_entries()
+
+		vouchers = [x.voucher_no for x in ral.vouchers]
+		expected_gles = frappe.db.get_all(
+			"GL Entry",
+			filters={"voucher_no": ["in", vouchers], "is_cancelled": 0},
+			fields=["name", "voucher_type", "voucher_no"],
+		)
+
+		for gle in expected_gles:
+			key = (gle["voucher_type"], gle["voucher_no"])
+			self.assertIn(key, ral.gles)
+			existing_list = ral.gles[key]["existing"]
+
+			found = any(x["name"] == gle["name"] and x["old"] for x in existing_list)
+			self.assertTrue(found)
+
+	def test_get_repost_allowed_types(self):
+		from erpnext.accounts.doctype.repost_accounting_ledger.repost_accounting_ledger import (
+			get_repost_allowed_types,
+		)
+
+		if not frappe.db.exists(
+			"Repost Allowed Types",
+			{
+				"document_type": "Purchase Invoice",
+				"parent": "Repost Accounting Ledger Settings",
+			},
+		):
+			settings = frappe.get_single("Repost Accounting Ledger Settings")
+			settings.append("allowed_types", {"document_type": "Purchase Invoice", "allowed": 1})
+			settings.save()
+
+		# Case 1: Valid doctype "Purchase Invoice"
+		allowed_types = get_repost_allowed_types(
+			doctype="Repost Allowed Types",
+			txt="Purchase Invoice",
+			searchfield="document_type",
+			start=0,
+			page_len=10,
+			filters={},
+		)
+
+		self.assertTrue(
+			any("Purchase Invoice" in row for row in allowed_types),
+			"Purchase Invoice should be returned in allowed types",
+		)
+
+		# Case 2: Wrong doctype should return empty list
+		wrong_types = get_repost_allowed_types(
+			doctype="Repost Allowed Types",
+			txt="Non Existing Doctype",
+			searchfield="document_type",
+			start=0,
+			page_len=10,
+			filters={},
+		)
+
+		self.assertEqual(wrong_types, [], "Non Existing Doctype should return an empty list")
+
+
 def update_repost_settings():
 	allowed_types = [
- 		"Sales Invoice",
- 		"Purchase Invoice",
- 		"Payment Entry",
- 		"Journal Entry",
- 		"Purchase Receipt",
- 	]
+		"Sales Invoice",
+		"Purchase Invoice",
+		"Payment Entry",
+		"Journal Entry",
+		"Purchase Receipt",
+	]
 	repost_settings = frappe.get_doc("Repost Accounting Ledger Settings")
 	for x in allowed_types:
 		repost_settings.append("allowed_types", {"document_type": x, "allowed": True})

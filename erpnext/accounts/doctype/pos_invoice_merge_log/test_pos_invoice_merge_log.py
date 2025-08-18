@@ -523,7 +523,7 @@ class TestPOSInvoiceMergeLog(unittest.TestCase):
 					"year_start_date": getdate("2025-04-01"),
 					"year_end_date": getdate("2026-03-31"),
 					"disabled": 0,
-					"companies": [{"company": pos_profile_doc.company.name}],
+					"companies": [{"company": pos_profile_doc.company}],
 				}
 			).insert(ignore_permissions=True)
 
