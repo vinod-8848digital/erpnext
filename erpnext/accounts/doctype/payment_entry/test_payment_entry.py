@@ -2550,6 +2550,61 @@ class TestPaymentEntry(FrappeTestCase):
 		# Validate allocation
 		self.assertEqual(pe.references[0].allocated_amount, 400)
 
+	def test_validate_journal_entry_valid_TC_ACC_378(self):
+		company = "_Test Company"
+		customer = "_Test Customer"
+		account_receivable = "Debtors - _TC"
+
+		create_customer(customer, "INR")
+		get_or_create_fiscal_year(company)
+
+		# Create Journal Entry
+		je = frappe.get_doc(
+			{
+				"doctype": "Journal Entry",
+				"voucher_type": "Journal Entry",
+				"company": company,
+				"posting_date": getdate(),
+				"accounts": [
+					{
+						"account": account_receivable,
+						"party_type": "Customer",
+						"party": customer,
+						"debit_in_account_currency": 500,
+					},
+					{
+						"account": "Cash - _TC",
+						"credit_in_account_currency": 500,
+					},
+				],
+			}
+		).insert(ignore_permissions=True)
+		je.submit()
+
+		# Create a Payment Entry with reference to JE
+		pe = frappe.get_doc(
+			{
+				"doctype": "Payment Entry",
+				"payment_type": "Receive",
+				"party_type": "Customer",
+				"party": customer,
+				"company": company,
+				"paid_amount": 500,
+				"received_amount": 500,
+				"paid_to": "Cash - _TC",
+				"references": [
+					{
+						"reference_doctype": "Journal Entry",
+						"reference_name": je.name,
+						"allocated_amount": 500,
+					}
+				],
+			}
+		).insert(ignore_permissions=True)
+		pe.submit()
+
+		self.assertEqual(pe.docstatus, 1, "Payment Entry should be in Submit state")
+
 
 def create_payment_order_against_payment_entry(ref_doc, order_type, bank_account):
 	payment_order = frappe.get_doc(
@@ -2937,4 +2992,4 @@ def get_fy_list(year_start_date, year_end_date):
 @frappe.whitelist()
 def call_method():
 	obj_1 = TestPaymentEntry()
-	obj_1.test_partial_allocation_TC_ACC_377()
+	obj_1.test_validate_journal_entry_valid_TC_ACC_378()
