@@ -2492,29 +2492,63 @@ class TestPaymentEntry(FrappeTestCase):
 		"""If paid_amount < outstanding, allocate only paid_amount"""
 
 		customer = "_Test Customer"
+		company = "_Test Company"
 
+		# Setup
 		create_customer(customer, "INR")
 		make_test_item("_Test Item")
-		get_or_create_fiscal_year("_Test Company")
+		get_or_create_fiscal_year(company)
 
-		si = create_sales_invoice()
+		si = create_sales_invoice(customer=customer, company=company, qty=10)
 
+		si.save()
+		si.submit()
+
+		pr = frappe.get_doc(
+			{
+				"doctype": "Payment Request",
+				"party_type": "Customer",
+				"party": customer,
+				"reference_doctype": "Sales Invoice",
+				"reference_name": si.name,
+				"transaction_date": getdate(),
+				"grand_total": 1000,
+				"outstanding_amount": 1000,
+				"status": "Initiated",
+				"docstatus": 1,
+				"company": company,
+			}
+		).insert(ignore_permissions=True)
+
+		# Create Payment Entry manually (not via get_payment_entry to have full control)
+		pe = frappe.new_doc("Payment Entry")
+		pe.payment_type = "Receive"
+		pe.party_type = "Customer"
+		pe.party = customer
+		pe.company = company
+		pe.paid_amount = 400
+		pe.received_amount = 400
+		pe.references = []
+
+		# Add custom reference row with 1000 outstanding
 		ref = frappe._dict(
 			reference_doctype="Sales Invoice",
 			reference_name=si.name,
 			outstanding_amount=1000,
-			allocated_amount=0,
-			payment_request=None,
+			allocated_amount=200,  # now it will be included
 		)
-		self.pe.references = [ref]
 
-		self.pe.allocate_amount_to_references(
+		pe.references = [ref]
+
+		# Run allocation
+		pe.allocate_amount_to_references(
 			paid_amount=400,
 			paid_amount_change=False,
 			allocate_payment_amount=True,
 		)
 
-		self.assertEqual(self.pe.references[0].allocated_amount, 400)
+		# Validate allocation
+		self.assertEqual(pe.references[0].allocated_amount, 400)
 
 
 def create_payment_order_against_payment_entry(ref_doc, order_type, bank_account):
@@ -2903,4 +2937,4 @@ def get_fy_list(year_start_date, year_end_date):
 @frappe.whitelist()
 def call_method():
 	obj_1 = TestPaymentEntry()
-	obj_1.test_allocate_amount_to_reference_TC_ACC_376()
+	obj_1.test_partial_allocation_TC_ACC_377()
