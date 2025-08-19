@@ -5,6 +5,7 @@ import json
 import unittest
 
 import frappe
+from frappe import _
 from frappe.tests.utils import change_settings
 from frappe.utils import (
 	flt,
@@ -647,6 +648,59 @@ class TestPOSInvoiceMergeLog(unittest.TestCase):
 			)
 
 		self.assertEqual(serial_and_batch_bundle, [])
+
+	def test_validate_pos_invoice_status(self):
+		test_user, pos_profile = init_user_and_profile()
+
+		pos_profile_doc = frappe.get_doc("POS Profile", pos_profile.name)
+		pos_profile_doc.allow_partial_payment = 1
+		pos_profile_doc.save(ignore_permissions=True)
+		inv = create_pos_invoice(qty=1, rate=70, do_not_save=True, pos_profile=pos_profile)
+		inv.append("payments", {"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": 70})
+		inv.save(ignore_permissions=True)
+
+		inv.submit()
+
+		pos_inv_cn = make_sales_return(inv.name)
+		pos_inv_cn.paid_amount = pos_inv_cn.grand_total
+		pos_inv_cn.submit()
+
+		merge_log = frappe.new_doc("POS Invoice Merge Log")
+		merge_log.posting_date = getdate(nowdate())
+		merge_log.customer = pos_inv_cn.customer
+		merge_log.append(
+			"pos_invoices",
+			{
+				"pos_invoice": pos_inv_cn.name,
+				"customer": pos_inv_cn.customer,
+				"posting_date": pos_inv_cn.posting_date,
+				"grand_total": pos_inv_cn.grand_total,
+			},
+		)
+
+		for d in merge_log.pos_invoices:
+			bold_return_against = frappe.bold(inv)
+			bold_pos_invoice = frappe.bold(d.pos_invoice)
+			if inv.status != "Consolidated":
+				msg = _("Row #{}: The original Invoice {} of return invoice {} is not consolidated.").format(
+					d.idx, bold_return_against, bold_pos_invoice
+				)
+				msg += " "
+				msg += _(
+					"The original invoice should be consolidated before or along with the return invoice."
+				)
+				msg += "<br><br>"
+				msg += _("You can add the original invoice {} manually to proceed.").format(
+					bold_return_against
+				)
+				with self.assertRaises(frappe.ValidationError) as error:
+					merge_log.save()
+
+				err_msg = str(error.exception)
+				self.assertIn(f"The original Invoice {inv.name}", err_msg)
+				self.assertIn(f"of return invoice {pos_inv_cn.name}", err_msg)
+				self.assertIn("is not consolidated", err_msg)
+				self.assertIn(f"You can add the original invoice {inv.name} manually to proceed.", err_msg)
 
 
 def make_merge_log(invoices):

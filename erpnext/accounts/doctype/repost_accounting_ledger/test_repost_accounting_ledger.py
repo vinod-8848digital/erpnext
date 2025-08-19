@@ -276,6 +276,7 @@ class TestRepostAccountingLedger(AccountsTestMixin, FrappeTestCase):
 		company.save()
 
 	def test_validate_for_closed_fiscal_year(self):
+		frappe.set_user("Administrator")
 		existing_fiscal_years = check_existing_fiscal_years(getdate("2023-04-01"), getdate("2024-03-31"))
 		if not existing_fiscal_years:
 			fy = frappe.get_doc(
