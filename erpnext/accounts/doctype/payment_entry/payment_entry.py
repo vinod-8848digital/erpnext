@@ -27,9 +27,9 @@ from erpnext.accounts.doctype.invoice_discounting.invoice_discounting import (
 )
 from erpnext.accounts.doctype.journal_entry.journal_entry import get_default_bank_cash_account
 from erpnext.accounts.doctype.repost_accounting_ledger.repost_accounting_ledger import (
- 	validate_docs_for_deferred_accounting,
- 	validate_docs_for_voucher_types,
- )
+	validate_docs_for_deferred_accounting,
+	validate_docs_for_voucher_types,
+)
 from erpnext.accounts.doctype.tax_withholding_category.tax_withholding_category import (
 	get_party_tax_withholding_details,
 )
@@ -58,7 +58,6 @@ class InvalidPaymentEntry(ValidationError):
 
 
 class PaymentEntry(AccountsController):
-	
 	def __init__(self, *args, **kwargs):
 		super().__init__(*args, **kwargs)
 		if not self.is_new():
@@ -114,10 +113,9 @@ class PaymentEntry(AccountsController):
 			frappe.throw(_("Difference Amount must be zero"))
 		self.make_gl_entries()
 		self.update_outstanding_amounts()
+		self.update_advance_paid()
 		self.update_payment_schedule()
-		self.update_payment_requests()
-		self.make_advance_payment_ledger_entries()
-		self.update_advance_paid()  # advance_paid_status depends on the payment request amount
+		self.set_payment_req_status()
 		self.set_status()
 
 	def validate_for_repost(self):
@@ -682,7 +680,6 @@ class PaymentEntry(AccountsController):
 					as_dict=True,
 				)
 
-
 				if not je_accounts:
 					frappe.throw(
 						_(
@@ -1104,6 +1101,7 @@ class PaymentEntry(AccountsController):
 				- self.base_total_allocated_amount
 				- included_taxes
 			) / self.target_exchange_rate
+
 	def set_exchange_gain_loss(self):
 		exchange_gain_loss = flt(
 			self.base_paid_amount - self.base_received_amount,
@@ -1365,8 +1363,8 @@ class PaymentEntry(AccountsController):
 						"cost_center": self.cost_center,
 						dr_or_cr + "_in_account_currency": self.unallocated_amount,
 						dr_or_cr + "_in_transaction_currency": self.unallocated_amount
- 						if self.party_account_currency == self.transaction_currency
- 						else base_unallocated_amount / self.transaction_exchange_rate,
+						if self.party_account_currency == self.transaction_currency
+						else base_unallocated_amount / self.transaction_exchange_rate,
 						dr_or_cr: base_unallocated_amount,
 					},
 					item=self,
@@ -1383,7 +1381,11 @@ class PaymentEntry(AccountsController):
 			gl_entries.append(gle)
 
 	def make_advance_gl_entries(
-		self, entry: object | dict = None, cancel: bool = 0, update_outstanding: str = "Yes",clearing_date = None
+		self,
+		entry: object | dict = None,
+		cancel: bool = 0,
+		update_outstanding: str = "Yes",
+		clearing_date=None,
 	):
 		self.set_transaction_currency_and_rate()
 		gl_entries = []
@@ -1392,7 +1394,7 @@ class PaymentEntry(AccountsController):
 		if cancel:
 			make_reverse_gl_entries(gl_entries, partial_cancel=True)
 		else:
-			make_gl_entries(gl_entries, update_outstanding=update_outstanding,clearing_date=clearing_date)
+			make_gl_entries(gl_entries, update_outstanding=update_outstanding, clearing_date=clearing_date)
 
 	def add_advance_gl_entries(self, gl_entries: list, entry: object | dict | None, clearing_date=None):
 		"""
@@ -1489,15 +1491,15 @@ class PaymentEntry(AccountsController):
 		args_dict[dr_or_cr] = base_allocated_amount
 		args_dict[dr_or_cr + "_in_account_currency"] = invoice.allocated_amount
 		args_dict[dr_or_cr + "_in_transaction_currency"] = (
- 			invoice.allocated_amount
- 			if self.party_account_currency == self.transaction_currency
- 			else base_allocated_amount / self.transaction_exchange_rate
- 		)
+			invoice.allocated_amount
+			if self.party_account_currency == self.transaction_currency
+			else base_allocated_amount / self.transaction_exchange_rate
+		)
 		args_dict[dr_or_cr + "_in_transaction_currency"] = (
- 			invoice.allocated_amount
- 			if self.party_account_currency == self.transaction_currency
- 			else base_allocated_amount / self.transaction_exchange_rate
- 		)
+			invoice.allocated_amount
+			if self.party_account_currency == self.transaction_currency
+			else base_allocated_amount / self.transaction_exchange_rate
+		)
 		args_dict.update(
 			{
 				"against_voucher_type": "Payment Entry",
@@ -1520,8 +1522,8 @@ class PaymentEntry(AccountsController):
 						"against": self.party if self.payment_type == "Pay" else self.paid_to,
 						"credit_in_account_currency": self.paid_amount,
 						"credit_in_transaction_currency": self.paid_amount
- 						if self.paid_from_account_currency == self.transaction_currency
- 						else self.base_paid_amount / self.transaction_exchange_rate,
+						if self.paid_from_account_currency == self.transaction_currency
+						else self.base_paid_amount / self.transaction_exchange_rate,
 						"credit": self.base_paid_amount,
 						"cost_center": self.cost_center,
 						"post_net_value": True,
@@ -1538,8 +1540,8 @@ class PaymentEntry(AccountsController):
 						"against": self.party if self.payment_type == "Receive" else self.paid_from,
 						"debit_in_account_currency": self.received_amount,
 						"debit_in_transaction_currency": self.received_amount
- 						if self.paid_to_account_currency == self.transaction_currency
- 						else self.base_received_amount / self.transaction_exchange_rate,
+						if self.paid_to_account_currency == self.transaction_currency
+						else self.base_received_amount / self.transaction_exchange_rate,
 						"debit": self.base_received_amount,
 						"cost_center": self.cost_center,
 					},
@@ -1576,7 +1578,7 @@ class PaymentEntry(AccountsController):
 						if account_currency == self.company_currency
 						else d.tax_amount,
 						dr_or_cr + "_in_transaction_currency": base_tax_amount
- 						/ self.transaction_exchange_rate,
+						/ self.transaction_exchange_rate,
 						"cost_center": d.cost_center,
 						"post_net_value": True,
 					},
@@ -1603,7 +1605,7 @@ class PaymentEntry(AccountsController):
 							if account_currency == self.company_currency
 							else d.tax_amount,
 							rev_dr_or_cr + "_in_transaction_currency": base_tax_amount
- 							/ self.transaction_exchange_rate,
+							/ self.transaction_exchange_rate,
 							"cost_center": self.cost_center,
 							"post_net_value": True,
 						},
@@ -1641,7 +1643,7 @@ class PaymentEntry(AccountsController):
 			return self.paid_to
 		elif self.payment_type in ("Pay", "Internal Transfer"):
 			return self.paid_from
-		
+
 	def get_value_in_transaction_currency(self, account_currency, gl_dict, field):
 		company_currency = erpnext.get_company_currency(self.company)
 		conversion_rate = self.target_exchange_rate
@@ -2012,26 +2014,6 @@ class PaymentEntry(AccountsController):
 					allocated_negative_outstanding,
 				)
 
-
-	def make_advance_payment_ledger_entries(self):
-		if self.docstatus == 1 or self.docstatus == 2:
-			advance_payment_doctypes = frappe.get_hooks(
-				"advance_payment_receivable_doctypes"
-			) + frappe.get_hooks("advance_payment_payable_doctypes")
-			advance_doctype_references = [
-				x for x in self.references if x.reference_doctype in advance_payment_doctypes
-			]
-			for x in advance_doctype_references:
-				doc = frappe.new_doc("Advance Payment Ledger Entry")
-				doc.company = self.company
-				doc.voucher_type = self.doctype
-				doc.voucher_no = self.name
-				doc.against_voucher_type = x.reference_doctype
-				doc.against_voucher_no = x.reference_name
-				doc.amount = x.allocated_amount if self.docstatus == 1 else -1 * x.allocated_amount
-				doc.event = "Submit" if self.docstatus == 1 else "Cancel"
-				doc.save()
-
 	@frappe.whitelist()
 	def set_matched_payment_requests(self, matched_payment_requests):
 		"""
@@ -2103,7 +2085,7 @@ def get_matched_payment_request_of_references(references=None):
 		.where(PR.status != "Paid")
 		.where(PR.docstatus == 1)
 		.where(PR.outstanding_amount > 0)  # to avoid old PRs with 0 outstanding amount
-		.groupby(PR.reference_doctype, PR.reference_name, PR.outstanding_amount, PR.name  )
+		.groupby(PR.reference_doctype, PR.reference_name, PR.outstanding_amount, PR.name)
 	)
 
 	# query to fetch matched rows which are single
@@ -2337,7 +2319,7 @@ def get_outstanding_reference_documents(args, validate=False):
 			args.get("party_type"), args.get("party"), args.get("company"), include_advance=True
 		)
 		advance_account = accounts[1] if len(accounts) >= 1 else None
-		
+
 		if party_account == advance_account:
 			party_account = accounts[0]
 
@@ -2553,14 +2535,14 @@ def get_orders_to_be_billed(
 		grand_total_field = "grand_total"
 		rounded_total_field = "rounded_total"
 	orders = frappe.db.sql(
-        f"""
+		f"""
         SELECT
             name AS voucher_no,
-            CASE 
+            CASE
                 WHEN {rounded_total_field} > 0 THEN {rounded_total_field}
                 ELSE {grand_total_field}
             END AS invoice_amount,
-            (CASE 
+            (CASE
                 WHEN {rounded_total_field} > 0 THEN {rounded_total_field}
                 ELSE {grand_total_field}
             END - advance_paid) AS outstanding_amount,
@@ -2572,7 +2554,7 @@ def get_orders_to_be_billed(
             AND docstatus = 1
             AND company = %s
             AND status != 'Closed'
-            AND (CASE 
+            AND (CASE
                     WHEN {rounded_total_field} > 0 THEN {rounded_total_field}
                     ELSE {grand_total_field}
                  END) > advance_paid
@@ -2581,9 +2563,9 @@ def get_orders_to_be_billed(
         ORDER BY
             transaction_date, name
         """,
-        (party, company),
-        as_dict=True,
-    )
+		(party, company),
+		as_dict=True,
+	)
 
 	order_list = []
 	for d in orders:
@@ -2631,18 +2613,18 @@ def get_negative_outstanding_invoices(
 		rounded_total_field = "rounded_total"
 
 	return frappe.db.sql(
-    """
+		"""
     SELECT
-        '{voucher_type}' AS voucher_type, 
-        name AS voucher_no, 
+        '{voucher_type}' AS voucher_type,
+        name AS voucher_no,
         {account} AS account,
-        CASE 
-            WHEN {rounded_total_field} IS NOT NULL THEN {rounded_total_field} 
-            ELSE {grand_total_field} 
+        CASE
+            WHEN {rounded_total_field} IS NOT NULL THEN {rounded_total_field}
+            ELSE {grand_total_field}
         END AS invoice_amount,
-        outstanding_amount, 
+        outstanding_amount,
         posting_date,
-        due_date, 
+        due_date,
         conversion_rate AS exchange_rate
     FROM
         "tab{voucher_type}"
@@ -2652,24 +2634,24 @@ def get_negative_outstanding_invoices(
         {supplier_condition}
         {condition}
     ORDER BY
-        posting_date, 
+        posting_date,
         name
     """.format(
-        **{
-            "supplier_condition": supplier_condition,
-            "condition": condition,
-            "rounded_total_field": rounded_total_field,
-            "grand_total_field": grand_total_field,
-            "voucher_type": voucher_type,
-            "party_type": scrub(party_type),
-            "party_account": "debit_to" if party_type == "Customer" else "credit_to",
-            "cost_center": cost_center,
-            "account": account,
-        }
-    ),
-    (party, party_account),
-    as_dict=True,
-)
+			**{
+				"supplier_condition": supplier_condition,
+				"condition": condition,
+				"rounded_total_field": rounded_total_field,
+				"grand_total_field": grand_total_field,
+				"voucher_type": voucher_type,
+				"party_type": scrub(party_type),
+				"party_account": "debit_to" if party_type == "Customer" else "credit_to",
+				"cost_center": cost_center,
+				"account": account,
+			}
+		),
+		(party, party_account),
+		as_dict=True,
+	)
 
 
 @frappe.whitelist()
@@ -2926,8 +2908,8 @@ def get_payment_entry(
 	pe.received_amount = received_amount
 	pe.letter_head = doc.get("letter_head")
 	pe.bank_account = frappe.db.get_value(
- 		"Bank Account", {"is_company_account": 1, "is_default": 1, "company": doc.company}, "name"
- 	)
+		"Bank Account", {"is_company_account": 1, "is_default": 1, "company": doc.company}, "name"
+	)
 
 	if dt in ["Purchase Order", "Sales Order", "Sales Invoice", "Purchase Invoice"]:
 		pe.project = doc.get("project") or reduce(
