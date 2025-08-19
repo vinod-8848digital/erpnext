@@ -470,18 +470,8 @@ class TestStockEntry(FrappeTestCase):
 		self.assertFalse(gl_entries)
 
 	def test_repack_with_additional_costs(self):
-		from erpnext.stock.doctype.item.test_item import create_item
-
-		create_item("_Test Item")
-		create_item("_Test Item Home Desktop 100")
-		test_records = frappe.get_test_records("Company")
-		test_records = test_records[2:]
-		for rec in test_records:
-			if not frappe.db.exists("Company", rec.get("company_name")):
-				rec["doctype"] = "Company"
-				frappe.get_doc(rec).insert()
 		company = frappe.db.get_value("Warehouse", "Stores - TCP1", "company")
-		get_or_create_fiscal_year(company)
+
 		make_stock_entry(
 			item_code="_Test Item",
 			target="Stores - TCP1",
@@ -495,9 +485,7 @@ class TestStockEntry(FrappeTestCase):
 		repack.posting_date = nowdate()
 		repack.posting_time = nowtime()
 
-		expenses_included_in_valuation = frappe.get_value(
-			"Company", company, "expenses_included_in_valuation"
-		)
+		default_expense_account = frappe.get_value("Company", company, "default_expense_account")
 
 		items = get_multiple_items()
 		repack.items = []
@@ -508,12 +496,12 @@ class TestStockEntry(FrappeTestCase):
 			"additional_costs",
 			[
 				{
-					"expense_account": expenses_included_in_valuation,
+					"expense_account": default_expense_account,
 					"description": "Actual Operating Cost",
 					"amount": 1000,
 				},
 				{
-					"expense_account": expenses_included_in_valuation,
+					"expense_account": default_expense_account,
 					"description": "Additional Operating Cost",
 					"amount": 200,
 				},
@@ -525,7 +513,6 @@ class TestStockEntry(FrappeTestCase):
 		repack.submit()
 
 		stock_in_hand_account = get_inventory_account(repack.company, repack.get("items")[1].t_warehouse)
-		stock_adjust_account = frappe.get_cached_value("Company", company, "stock_adjustment_account")
 		rm_stock_value_diff = abs(
 			frappe.db.get_value(
 				"Stock Ledger Entry",
@@ -553,14 +540,7 @@ class TestStockEntry(FrappeTestCase):
 		self.check_gl_entries(
 			"Stock Entry",
 			repack.name,
-			sorted(
-				[
-					[stock_in_hand_account, 1200, 0.0],
-					[stock_adjust_account, 1200, 0.0],
-					[stock_adjust_account, 0.0, 1200],
-					["Expenses Included In Valuation - TCP1", 0.0, 1200.0],
-				]
-			),
+			sorted([[stock_in_hand_account, 1200, 0.0], ["Cost of Goods Sold - TCP1", 0.0, 1200.0]]),
 		)
 
 	def check_stock_ledger_entries(self, voucher_type, voucher_no, expected_sle):
