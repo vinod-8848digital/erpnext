@@ -401,12 +401,12 @@ class TestPOSInvoiceMergeLog(unittest.TestCase):
 					},
 				)
 				inv.payments = []
-				partial_amount = flt(inv.grand_total) / 2
+
 				inv.append(
 					"payments",
-					{"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": partial_amount},
+					{"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": -157},
 				)
-				inv.paid_amount = partial_amount
+				inv.paid_amount = -157
 				inv.save(ignore_permissions=True)
 				inv.submit()
 			frappe.flags.in_test = True
