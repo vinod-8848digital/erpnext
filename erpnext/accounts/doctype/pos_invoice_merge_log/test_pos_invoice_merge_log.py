@@ -34,17 +34,26 @@ class TestPOSInvoiceMergeLog(unittest.TestCase):
 			test_user, pos_profile = init_user_and_profile()
 
 			pos_inv = create_pos_invoice(rate=300, do_not_submit=1)
-			pos_inv.append("payments", {"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": 300})
+			pos_inv.append(
+				"payments",
+				{"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": pos_inv.grand_total},
+			)
 			pos_inv.save()
 			pos_inv.submit()
 
 			pos_inv2 = create_pos_invoice(rate=3200, do_not_submit=1)
-			pos_inv2.append("payments", {"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": 3200})
+			pos_inv2.append(
+				"payments",
+				{"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": pos_inv2.grand_total},
+			)
 			pos_inv2.save()
 			pos_inv2.submit()
 
 			pos_inv3 = create_pos_invoice(customer="_Test Customer 2", rate=2300, do_not_submit=1)
-			pos_inv3.append("payments", {"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": 2300})
+			pos_inv3.append(
+				"payments",
+				{"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": pos_inv3.grand_total},
+			)
 			pos_inv3.save()
 			pos_inv3.submit()
 
@@ -72,17 +81,26 @@ class TestPOSInvoiceMergeLog(unittest.TestCase):
 			test_user, pos_profile = init_user_and_profile()
 
 			pos_inv = create_pos_invoice(rate=300, do_not_submit=1)
-			pos_inv.append("payments", {"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": 300})
+			pos_inv.append(
+				"payments",
+				{"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": pos_inv.grand_total},
+			)
 			pos_inv.save()
 			pos_inv.submit()
 
 			pos_inv2 = create_pos_invoice(rate=3200, do_not_submit=1)
-			pos_inv2.append("payments", {"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": 3200})
+			pos_inv2.append(
+				"payments",
+				{"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": pos_inv2.grand_total},
+			)
 			pos_inv2.save()
 			pos_inv2.submit()
 
 			pos_inv3 = create_pos_invoice(customer="_Test Customer 2", rate=2300, do_not_submit=1)
-			pos_inv3.append("payments", {"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": 2300})
+			pos_inv3.append(
+				"payments",
+				{"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": pos_inv3.grand_total},
+			)
 			pos_inv3.save()
 			pos_inv3.submit()
 
@@ -211,7 +229,9 @@ class TestPOSInvoiceMergeLog(unittest.TestCase):
 					"included_in_print_rate": 1,
 				},
 			)
-			inv.append("payments", {"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": 30000})
+			inv.append(
+				"payments", {"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": inv.grand_total}
+			)
 			inv.insert()
 			inv.submit()
 
@@ -228,7 +248,9 @@ class TestPOSInvoiceMergeLog(unittest.TestCase):
 					"included_in_print_rate": 1,
 				},
 			)
-			inv2.append("payments", {"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": 30000})
+			inv2.append(
+				"payments", {"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": inv2.grand_total}
+			)
 			inv2.insert()
 			inv2.submit()
 
@@ -275,7 +297,9 @@ class TestPOSInvoiceMergeLog(unittest.TestCase):
 					"included_in_print_rate": 1,
 				},
 			)
-			inv.append("payments", {"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": 60000})
+			inv.append(
+				"payments", {"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": inv.grand_total}
+			)
 			inv.insert()
 			inv.submit()
 
@@ -292,12 +316,16 @@ class TestPOSInvoiceMergeLog(unittest.TestCase):
 					"included_in_print_rate": 1,
 				},
 			)
-			inv2.append("payments", {"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": 60000})
+			inv2.append(
+				"payments", {"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": inv2.grand_total}
+			)
 			inv2.insert()
 			inv2.submit()
 
 			inv3 = create_pos_invoice(qty=3, rate=600, do_not_save=True)
-			inv3.append("payments", {"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": 1800})
+			inv3.append(
+				"payments", {"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": inv3.grand_total}
+			)
 			inv3.insert()
 			inv3.submit()
 			frappe.flags.in_test = True
@@ -359,8 +387,11 @@ class TestPOSInvoiceMergeLog(unittest.TestCase):
 					},
 				)
 				inv.payments = []
-				inv.append("payments", {"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": -157})
-				inv.paid_amount = -157
+				inv.append(
+					"payments",
+					{"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": -inv.grand_total},
+				)
+				inv.paid_amount = -inv.grand_total
 				inv.save()
 				inv.submit()
 			frappe.flags.in_test = True
@@ -394,12 +425,16 @@ class TestPOSInvoiceMergeLog(unittest.TestCase):
 			init_user_and_profile()
 
 			inv = create_pos_invoice(qty=1, rate=69.5, do_not_save=True)
-			inv.append("payments", {"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": 70})
+			inv.append(
+				"payments", {"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": inv.grand_total}
+			)
 			inv.insert()
 			inv.submit()
 
 			inv2 = create_pos_invoice(qty=1, rate=59.5, do_not_save=True)
-			inv2.append("payments", {"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": 60})
+			inv2.append(
+				"payments", {"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": inv2.grand_total}
+			)
 			inv2.insert()
 			inv2.submit()
 			frappe.flags.in_test = True
@@ -444,7 +479,10 @@ class TestPOSInvoiceMergeLog(unittest.TestCase):
 				rate=100,
 				do_not_submit=1,
 			)
-			pos_inv.append("payments", {"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": 100})
+			pos_inv.append(
+				"payments",
+				{"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": pos_inv.grand_total},
+			)
 			pos_inv.save()
 			pos_inv.submit()
 
@@ -459,7 +497,10 @@ class TestPOSInvoiceMergeLog(unittest.TestCase):
 				rate=100,
 				do_not_submit=1,
 			)
-			pos_inv2.append("payments", {"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": 100})
+			pos_inv2.append(
+				"payments",
+				{"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": pos_inv2.grand_total},
+			)
 			pos_inv2.save()
 			pos_inv2.submit()
 			frappe.flags.in_test = True
