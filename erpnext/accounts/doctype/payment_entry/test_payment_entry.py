@@ -2670,7 +2670,7 @@ class TestPaymentEntry(FrappeTestCase):
 		self.assertEqual(pe.references[0].allocated_amount, 500)
 		self.assertEqual(pe.references[1].allocated_amount, 700)
 
-	def test_allocation_payment_request_reference_TC_ACC_383(self):
+	def test_allocation_payment_request_reference_TC_ACC_384(self):
 		customer = "_Test Customer"
 		company = "_Test Company"
 
@@ -2731,7 +2731,7 @@ class TestPaymentEntry(FrappeTestCase):
 
 		self.assertEqual(pe.references[0].allocated_amount, 500)
 
-	def test_allocation_for_customer_ACC_384(self):
+	def test_allocation_for_customer_ACC_385(self):
 		customer = "_Test Customer"
 		company = "_Test Company"
 
@@ -3171,4 +3171,4 @@ def create_user():
 @frappe.whitelist()
 def call_method():
 	obj_1 = TestPaymentEntry()
-	obj_1.test_allocation_for_customer_ACC_384()
+	obj_1.test_allocation_for_customer_ACC_385()
