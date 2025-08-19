@@ -2605,6 +2605,132 @@ class TestPaymentEntry(FrappeTestCase):
 
 		self.assertEqual(pe.docstatus, 1, "Payment Entry should be in Submit state")
 
+	def test_extra_allocation_TC_ACC_383(self):
+		customer = "_Test Customer"
+		company = "_Test Company"
+
+		# Setup
+		create_customer(customer, "INR")
+		make_test_item("_Test Item")
+		get_or_create_fiscal_year(company)
+
+		si = create_sales_invoice(customer=customer, company=company, qty=10)
+		si.save()
+		si.submit()
+
+		# Create Payment Request with lower outstanding (force split case)
+		pr = frappe.get_doc(
+			{
+				"doctype": "Payment Request",
+				"party_type": "Customer",
+				"party": customer,
+				"reference_doctype": "Sales Invoice",
+				"reference_name": si.name,
+				"transaction_date": getdate(),
+				"grand_total": 500,
+				"outstanding_amount": 500,
+				"status": "Initiated",
+				"docstatus": 1,
+				"company": company,
+			}
+		).insert(ignore_permissions=True)
+
+		# Payment Entry
+		pe = frappe.new_doc("Payment Entry")
+		pe.payment_type = "Receive"
+		pe.party_type = "Customer"
+		pe.party = customer
+		pe.company = company
+		pe.paid_amount = 1200
+		pe.received_amount = 1200
+
+		# Reference row with > PR outstanding
+		pe.append(
+			"references",
+			{
+				"doctype": "Payment Entry Reference",
+				"reference_doctype": "Sales Invoice",
+				"reference_name": si.name,
+				"outstanding_amount": 1200,
+				"allocated_amount": 1200,  # more than PR (500)
+			},
+		)
+
+		# Trigger allocation
+		pe.allocate_amount_to_references(
+			paid_amount=1200,
+			paid_amount_change=False,
+			allocate_payment_amount=True,
+		)
+
+		# After allocation:
+		# - First row should consume PR’s 500
+		# - A new row should be created with remaining 700
+		self.assertEqual(len(pe.references), 2)
+		self.assertEqual(pe.references[0].allocated_amount, 500)
+		self.assertEqual(pe.references[1].allocated_amount, 700)
+
+	def test_allocation_payment_request_reference_TC_ACC_383(self):
+		customer = "_Test Customer"
+		company = "_Test Company"
+
+		# Setup
+		create_customer(customer, "INR")
+		make_test_item("_Test Item")
+		get_or_create_fiscal_year(company)
+
+		si = create_sales_invoice(customer=customer, company=company, qty=10)
+		si.save()
+		si.submit()
+
+		# Create Payment Request with lower outstanding (force split case)
+		pr = frappe.get_doc(
+			{
+				"doctype": "Payment Request",
+				"party_type": "Customer",
+				"party": customer,
+				"reference_doctype": "Sales Invoice",
+				"reference_name": si.name,
+				"transaction_date": getdate(),
+				"grand_total": 500,
+				"outstanding_amount": 500,
+				"status": "Initiated",
+				"docstatus": 1,
+				"company": company,
+			}
+		).insert(ignore_permissions=True)
+
+		# Payment Entry
+		pe = frappe.new_doc("Payment Entry")
+		pe.payment_type = "Receive"
+		pe.party_type = "Customer"
+		pe.party = customer
+		pe.company = company
+		pe.paid_amount = 1200
+		pe.received_amount = 1200
+
+		# Reference row with > PR outstanding
+		pe.append(
+			"references",
+			{
+				"doctype": "Payment Entry Reference",
+				"reference_doctype": "Sales Invoice",
+				"reference_name": si.name,
+				"outstanding_amount": 1200,
+				"allocated_amount": 1200,  # more than PR (500)
+				"payment_request": pr.name,
+			},
+		)
+
+		# Trigger allocation
+		pe.allocate_amount_to_references(
+			paid_amount=1200,
+			paid_amount_change=True,
+			allocate_payment_amount=True,
+		)
+
+		self.assertEqual(pe.references[0].allocated_amount, 500)
+
 
 def create_payment_order_against_payment_entry(ref_doc, order_type, bank_account):
 	payment_order = frappe.get_doc(
@@ -2989,7 +3115,17 @@ def get_fy_list(year_start_date, year_end_date):
 	)
 
 
+def create_user():
+	user_id = frappe.generate_hash() + "@example.com"
+	new_user = frappe.get_doc(doctype="User", email=user_id, first_name="Tester").insert()
+
+	# role with desk access
+	new_user.add_roles("_Test Role 2")
+	new_user.save()
+	return new_user.name
+
+
 @frappe.whitelist()
 def call_method():
 	obj_1 = TestPaymentEntry()
-	obj_1.test_validate_journal_entry_valid_TC_ACC_378()
+	obj_1.test_allocation_invalid_payment_party_combo_TC_ACC_383()
