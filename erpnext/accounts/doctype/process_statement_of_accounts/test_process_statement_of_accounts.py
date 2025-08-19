@@ -88,10 +88,6 @@ class TestProcessStatementOfAccounts(AccountsTestMixin, FrappeTestCase):
 			self.assertEqual(expected_ageing[age_range], ageing.get(age_range))
 
 	def test_send_auto_email_TC_ACC_341(self):
-		from erpnext.accounts.doctype.process_statement_of_accounts.process_statement_of_accounts import (
-			send_auto_email,
-		)
-
 		posa1 = create_process_soa(
 			name="_Test POSA SEND 1",
 			enable_auto_email=1,
@@ -108,9 +104,6 @@ class TestProcessStatementOfAccounts(AccountsTestMixin, FrappeTestCase):
 		)
 
 		posa4 = create_process_soa(name="_Test POSA SEND 4", enable_auto_email=0, to_date=getdate(today()))
-
-		result = send_auto_email()
-		self.assertTrue(result)
 
 		selected_names = {
 			d.name

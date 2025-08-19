@@ -401,12 +401,12 @@ class TestPOSInvoiceMergeLog(unittest.TestCase):
 					},
 				)
 				inv.payments = []
-
+				payment_amount = inv.grand_total
 				inv.append(
 					"payments",
-					{"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": -157},
+					{"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": payment_amount},
 				)
-				inv.paid_amount = -157
+				inv.paid_amount = payment_amount
 				inv.save(ignore_permissions=True)
 				inv.submit()
 			frappe.flags.in_test = True
