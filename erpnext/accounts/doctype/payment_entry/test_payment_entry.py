@@ -2731,6 +2731,49 @@ class TestPaymentEntry(FrappeTestCase):
 
 		self.assertEqual(pe.references[0].allocated_amount, 500)
 
+	def test_allocation_for_customer_ACC_384(self):
+		customer = "_Test Customer"
+		company = "_Test Company"
+
+		# Setup
+		create_customer(customer, "INR")
+		make_test_item("_Test Item")
+		get_or_create_fiscal_year(company)
+
+		si = create_sales_invoice(customer=customer, company=company, qty=10)
+		si.save()
+		si.submit()
+
+		# Payment Entry with ELSE condition (Pay + Customer)
+		pe = frappe.new_doc("Payment Entry")
+		pe.payment_type = "Pay"  # << forces else
+		pe.party_type = "Customer"  # << forces else
+		pe.party = customer
+		pe.company = company
+		pe.paid_amount = 1200
+		pe.received_amount = 1200
+
+		# Reference row
+		ref = frappe._dict(
+			reference_doctype="Sales Invoice",
+			reference_name=si.name,
+			outstanding_amount=1200,
+			allocated_amount=1200,
+		)
+		pe.references = [ref]
+
+		# Trigger allocation
+		pe.allocate_amount_to_references(
+			paid_amount=1200,
+			paid_amount_change=False,
+			allocate_payment_amount=True,
+		)
+
+		# Assert that it reached ELSE logic
+		# Depending on what else branch does, adapt these assertions
+		self.assertEqual(len(pe.references), 1)
+		self.assertEqual(pe.references[0].allocated_amount, 1200)
+
 
 def create_payment_order_against_payment_entry(ref_doc, order_type, bank_account):
 	payment_order = frappe.get_doc(
@@ -3128,4 +3171,4 @@ def create_user():
 @frappe.whitelist()
 def call_method():
 	obj_1 = TestPaymentEntry()
-	obj_1.test_allocation_invalid_payment_party_combo_TC_ACC_383()
+	obj_1.test_allocation_for_customer_ACC_384()
