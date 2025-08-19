@@ -276,14 +276,15 @@ class TestRepostAccountingLedger(AccountsTestMixin, FrappeTestCase):
 		company.save()
 
 	def test_validate_for_closed_fiscal_year(self):
-		existing_fiscal_years = check_existing_fiscal_years(getdate("2019-04-01"), getdate("2020-03-31"))
+		frappe.set_user("Administrator")
+		existing_fiscal_years = check_existing_fiscal_years(getdate("2023-04-01"), getdate("2024-03-31"))
 		if not existing_fiscal_years:
 			fy = frappe.get_doc(
 				{
 					"doctype": "Fiscal Year",
-					"year": "2019-2020",
-					"year_start_date": getdate("2019-04-01"),
-					"year_end_date": getdate("2020-03-31"),
+					"year": "2023-2024",
+					"year_start_date": getdate("2023-04-01"),
+					"year_end_date": getdate("2024-03-31"),
 					"disabled": 0,
 					"companies": [{"company": "_Test Company"}],
 				}
@@ -301,12 +302,12 @@ class TestRepostAccountingLedger(AccountsTestMixin, FrappeTestCase):
 			debit_to=self.debit_to,
 			parent_cost_center=self.cost_center,
 			cost_center=self.cost_center,
-			posting_date=getdate("2020-03-31"),
+			posting_date=getdate("2024-03-31"),
 			rate=100,
 		)
 
 		pe = get_payment_entry(si.doctype, si.name)
-		pe.posting_date = getdate("2020-03-31")
+		pe.posting_date = getdate("2024-03-31")
 		pe.save().submit()
 
 		pcv = frappe.get_doc(
@@ -314,9 +315,9 @@ class TestRepostAccountingLedger(AccountsTestMixin, FrappeTestCase):
 				"doctype": "Period Closing Voucher",
 				"company": self.company,
 				"closing_account_head": "Creditors - " + self.company_abbr,
-				"period_start_date": frappe.utils.getdate("2019-04-01"),
-				"period_end_date": frappe.utils.getdate("2020-03-31"),
-				"posting_date": frappe.utils.getdate("2020-12-31"),
+				"period_start_date": frappe.utils.getdate("2023-04-01"),
+				"period_end_date": frappe.utils.getdate("2024-03-31"),
+				"posting_date": frappe.utils.getdate("2025-12-31"),
 				"fiscal_year": fy.name,
 				"remarks": "test",
 			}
