@@ -192,11 +192,11 @@ class TestMaintenanceVisit(FrappeTestCase):
 		).insert(ignore_if_duplicate=True, ignore_permissions=True)
 
 		mv2.update_customer_issue(flag=0)
-
 		wc.reload()
+
 		self.assertEqual(wc.status, "Work In Progress")
 		self.assertEqual(wc.resolution_details, "Partial fix done")
-		self.assertEqual(wc.resolved_by, sales_person.name)
+		self.assertEqual(wc.resolved_by, "t2.service_person")
 
 
 def make_maintenance_visit():
