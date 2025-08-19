@@ -106,13 +106,17 @@ class TestPOSInvoiceMergeLog(unittest.TestCase):
 
 			pos_inv_cn = make_sales_return(pos_inv.name)
 			pos_inv_cn.set("payments", [])
+			grand_total = pos_inv_cn.grand_total
+			cash_amount = round(grand_total * 0.3, 2)
+			bank_amount = round(grand_total - cash_amount, 2)
 			pos_inv_cn.append(
-				"payments", {"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": -100}
+				"payments", {"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": -cash_amount}
 			)
 			pos_inv_cn.append(
-				"payments", {"mode_of_payment": "Bank Draft", "account": "_Test Bank - _TC", "amount": -200}
+				"payments",
+				{"mode_of_payment": "Bank Draft", "account": "_Test Bank - _TC", "amount": -bank_amount},
 			)
-			pos_inv_cn.paid_amount = -300
+			pos_inv_cn.paid_amount = -grand_total
 			pos_inv_cn.submit()
 			frappe.flags.in_test = True
 
@@ -232,7 +236,7 @@ class TestPOSInvoiceMergeLog(unittest.TestCase):
 			inv.append(
 				"payments", {"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": inv.grand_total}
 			)
-			inv.insert()
+			inv.save(ignore_permissions=True)
 			inv.submit()
 
 			inv2 = create_pos_invoice(qty=3, rate=10000, do_not_save=True)
@@ -251,7 +255,7 @@ class TestPOSInvoiceMergeLog(unittest.TestCase):
 			inv2.append(
 				"payments", {"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": inv2.grand_total}
 			)
-			inv2.insert()
+			inv2.save(ignore_permissions=True)
 			inv2.submit()
 
 			frappe.flags.in_test = True
@@ -300,7 +304,7 @@ class TestPOSInvoiceMergeLog(unittest.TestCase):
 			inv.append(
 				"payments", {"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": inv.grand_total}
 			)
-			inv.insert()
+			inv.save(ignore_permissions=True)
 			inv.submit()
 
 			inv2 = create_pos_invoice(qty=6, rate=10000, do_not_save=True)
@@ -319,14 +323,14 @@ class TestPOSInvoiceMergeLog(unittest.TestCase):
 			inv2.append(
 				"payments", {"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": inv2.grand_total}
 			)
-			inv2.insert()
+			inv2.save(ignore_permissions=True)
 			inv2.submit()
 
 			inv3 = create_pos_invoice(qty=3, rate=600, do_not_save=True)
 			inv3.append(
 				"payments", {"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": inv3.grand_total}
 			)
-			inv3.insert()
+			inv3.save(ignore_permissions=True)
 			inv3.submit()
 			frappe.flags.in_test = True
 			consolidate_pos_invoices()
@@ -355,11 +359,14 @@ class TestPOSInvoiceMergeLog(unittest.TestCase):
 				rate=8000,
 				qty=10,
 			)
-			init_user_and_profile()
+			test_user, pos_profile = init_user_and_profile()
+			pos_profile_doc = frappe.get_doc("POS Profile", pos_profile.name)
+			pos_profile_doc.allow_partial_payment = 1
+			pos_profile_doc.save(ignore_permissions=True)
 
 			item_rates = [69, 59, 29]
 			for _i in [1, 2]:
-				inv = create_pos_invoice(is_return=1, do_not_save=1)
+				inv = create_pos_invoice(is_return=1, do_not_save=1, pos_profile=pos_profile)
 				inv.items = []
 				for rate in item_rates:
 					inv.append(
@@ -389,9 +396,9 @@ class TestPOSInvoiceMergeLog(unittest.TestCase):
 				inv.payments = []
 				inv.append(
 					"payments",
-					{"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": -inv.grand_total},
+					{"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": -157},
 				)
-				inv.paid_amount = -inv.grand_total
+				inv.paid_amount = -157
 				inv.save()
 				inv.submit()
 			frappe.flags.in_test = True
@@ -422,20 +429,23 @@ class TestPOSInvoiceMergeLog(unittest.TestCase):
 				qty=10,
 			)
 
-			init_user_and_profile()
+			test_user, pos_profile = init_user_and_profile()
+			pos_profile_doc = frappe.get_doc("POS Profile", pos_profile.name)
+			pos_profile_doc.allow_partial_payment = 1
+			pos_profile_doc.save(ignore_permissions=True)
 
-			inv = create_pos_invoice(qty=1, rate=69.5, do_not_save=True)
+			inv = create_pos_invoice(qty=1, rate=69.5, do_not_save=True, pos_profile=pos_profile)
 			inv.append(
 				"payments", {"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": inv.grand_total}
 			)
-			inv.insert()
+			inv.save(ignore_permissions=True)
 			inv.submit()
 
-			inv2 = create_pos_invoice(qty=1, rate=59.5, do_not_save=True)
+			inv2 = create_pos_invoice(qty=1, rate=59.5, do_not_save=True, pos_profile=pos_profile)
 			inv2.append(
 				"payments", {"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": inv2.grand_total}
 			)
-			inv2.insert()
+			inv2.save(ignore_permissions=True)
 			inv2.submit()
 			frappe.flags.in_test = True
 			consolidate_pos_invoices()
@@ -470,7 +480,10 @@ class TestPOSInvoiceMergeLog(unittest.TestCase):
 			se = make_serialized_item()
 			serial_no = get_serial_nos_from_bundle(se.get("items")[0].serial_and_batch_bundle)[0]
 
-			init_user_and_profile()
+			test_user, pos_profile = init_user_and_profile()
+			pos_profile_doc = frappe.get_doc("POS Profile", pos_profile.name)
+			pos_profile_doc.allow_partial_payment = 1
+			pos_profile_doc.save(ignore_permissions=True)
 
 			pos_inv = create_pos_invoice(
 				item_code="_Test Serialized Item With Series",
@@ -478,12 +491,13 @@ class TestPOSInvoiceMergeLog(unittest.TestCase):
 				qty=1,
 				rate=100,
 				do_not_submit=1,
+				pos_profile=pos_profile,
 			)
 			pos_inv.append(
 				"payments",
 				{"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": pos_inv.grand_total},
 			)
-			pos_inv.save()
+			pos_inv.save(ignore_permissions=True)
 			pos_inv.submit()
 
 			pos_inv_cn = make_sales_return(pos_inv.name)
@@ -496,12 +510,13 @@ class TestPOSInvoiceMergeLog(unittest.TestCase):
 				qty=1,
 				rate=100,
 				do_not_submit=1,
+				pos_profile=pos_profile,
 			)
 			pos_inv2.append(
 				"payments",
 				{"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": pos_inv2.grand_total},
 			)
-			pos_inv2.save()
+			pos_inv2.save(ignore_permissions=True)
 			pos_inv2.submit()
 			frappe.flags.in_test = True
 			consolidate_pos_invoices()
