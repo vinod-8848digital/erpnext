@@ -736,8 +736,6 @@ class TestPOSInvoiceMergeLog(unittest.TestCase):
 			cancel_merge_logs(merge_logs, closing_entry)
 
 	def test_enqueue_job(self):
-		from erpnext.accounts.doctype.pos_invoice_merge_log.pos_invoice_merge_log import get_error_message
-
 		check_scheduler_status()
 
 
