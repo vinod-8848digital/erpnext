@@ -30,7 +30,7 @@ class GLEntry(Document):
 
 	from typing import TYPE_CHECKING
 
-	if TYPE_CHECKING:
+	if TYPE_CHECKING: # pragma: no cover
 		from erpnext.accounts.doctype.gl_entry_reconciliation_details.gl_entry_reconciliation_details import GLEntryReconciliationDetails
 		from frappe.types import DF
 
