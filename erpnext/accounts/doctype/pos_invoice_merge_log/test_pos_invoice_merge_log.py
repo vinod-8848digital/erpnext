@@ -13,6 +13,7 @@ from frappe.utils import (
 	nowdate,
 )
 
+from erpnext.accounts.doctype.pos_closing_entry.pos_closing_entry import make_closing_entry_from_opening
 from erpnext.accounts.doctype.pos_closing_entry.test_pos_closing_entry import init_user_and_profile
 from erpnext.accounts.doctype.pos_invoice.pos_invoice import make_sales_return
 from erpnext.accounts.doctype.pos_invoice.test_pos_invoice import create_pos_invoice
@@ -681,6 +682,11 @@ class TestPOSInvoiceMergeLog(unittest.TestCase):
 		for d in merge_log.pos_invoices:
 			bold_return_against = frappe.bold(inv)
 			bold_pos_invoice = frappe.bold(d.pos_invoice)
+
+			if inv.docstatus != 1:
+				self.assertRaises(frappe.ValidationError, merge_log.save)
+			if inv.status == "Consolidated":
+				self.assertRaises(frappe.ValidationError, merge_log.save)
 			if inv.status != "Consolidated":
 				msg = _("Row #{}: The original Invoice {} of return invoice {} is not consolidated.").format(
 					d.idx, bold_return_against, bold_pos_invoice
@@ -701,6 +707,38 @@ class TestPOSInvoiceMergeLog(unittest.TestCase):
 				self.assertIn(f"of return invoice {pos_inv_cn.name}", err_msg)
 				self.assertIn("is not consolidated", err_msg)
 				self.assertIn(f"You can add the original invoice {inv.name} manually to proceed.", err_msg)
+
+	def test_unconsolidate_pos_invoices(self):
+		from erpnext.accounts.doctype.pos_invoice_merge_log.pos_invoice_merge_log import cancel_merge_logs
+
+		test_user, pos_profile = init_user_and_profile()
+
+		pos_profile_doc = frappe.get_doc("POS Profile", pos_profile.name)
+		pos_profile_doc.allow_partial_payment = 1
+		pos_profile_doc.save(ignore_permissions=True)
+		inv = create_pos_invoice(qty=1, rate=70, do_not_save=True, pos_profile=pos_profile)
+		inv.append("payments", {"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": 70})
+		inv.save(ignore_permissions=True)
+
+		inv.submit()
+
+		opening_entry = create_opening_entry(pos_profile, test_user)
+		closing_entry = make_closing_entry_from_opening(opening_entry)
+
+		merge_logs = frappe.get_all(
+			"POS Invoice Merge Log", filters={"pos_closing_entry": closing_entry.name}, pluck="name"
+		)
+
+		if len(merge_logs) >= 10:
+			closing_entry.set_status(update=True, status="Queued")
+			self.assertEqual(closing_entry.status, "Queued")
+		else:
+			cancel_merge_logs(merge_logs, closing_entry)
+
+	def test_enqueue_job(self):
+		from erpnext.accounts.doctype.pos_invoice_merge_log.pos_invoice_merge_log import get_error_message
+
+		check_scheduler_status()
 
 
 def make_merge_log(invoices):
