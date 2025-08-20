@@ -12,7 +12,7 @@ class TestMonthlyDistribution(unittest.TestCase):
 	def tearDown(self):
 		frappe.db.rollback()
 
-	def test_get_months_and_validate_in_monthly_distribution_TC_AC_350(self):
+	def test_get_months_and_validate_in_monthly_distribution_TC_ACC_350(self):
 		doc = frappe.new_doc("Monthly Distribution")
 		doc.get_months()
   
@@ -28,7 +28,7 @@ class TestMonthlyDistribution(unittest.TestCase):
    
 		self.assertIn("Percentage Allocation should be equal to 100%", str(cm.exception))
   
-	def test_get_periodwise_distribution_data_TC_AC_351(self):
+	def test_get_periodwise_distribution_data_TC_ACC_351(self):
 		from erpnext.accounts.doctype.monthly_distribution.monthly_distribution import get_periodwise_distribution_data
 		dist = frappe.new_doc("Monthly Distribution")
 		dist.distribution_id = "Test Distribution 1"
@@ -51,7 +51,7 @@ class TestMonthlyDistribution(unittest.TestCase):
 		for val in data.values():
 			self.assertAlmostEqual(val, 25.0, places=2)
    
-	def test_get_percentage_TC_AC_352(self):
+	def test_get_percentage_TC_ACC_352(self):
 		from erpnext.accounts.doctype.monthly_distribution.monthly_distribution import get_percentage
 		from datetime import datetime
 

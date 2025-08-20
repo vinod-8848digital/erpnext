@@ -1717,10 +1717,10 @@ class TestPaymentRequest(FrappeTestCase):
 		)
 		pr_doc = frappe.get_doc("Payment Request", pr.name)
 
-		if not frappe.db.exists("Mpesa Settings", {"payment_gateway_name": "Test Mpesa Gateway"}):
+		if not frappe.db.exists("Mpesa Settings", {"payment_gateway_name": "Test Mpesa Gateway New"}):
 			rz = frappe.get_doc({
 				"doctype": "Mpesa Settings",
-				"payment_gateway_name": "Test Mpesa Gateway",
+				"payment_gateway_name": "Test Mpesa Gateway New",
 				"consumer_key": "test_consumer_key",
 				"consumer_secret": "test_consumer_secret",
 				"business_shortcode": "test_business_shortcode",
@@ -1731,7 +1731,7 @@ class TestPaymentRequest(FrappeTestCase):
 			rz.flags.ignore_validate = True
 			rz.save(ignore_permissions=True)
 		else:
-			rz = frappe.get_doc("Mpesa Settings", "Test Mpesa Gateway")
+			rz = frappe.get_doc("Mpesa Settings", "Test Mpesa Gateway New")
 
 		pg = create_payment_gateway_account(pg_name="Test Phone Gateway", payment_channel="Phone", is_default=True)
 		pr_doc.payment_gateway_account = pg.name
@@ -1759,6 +1759,10 @@ class TestPaymentRequest(FrappeTestCase):
 			frappe.db.set_value("Integration Request", ir[0], "status", "Completed")
 		request_amount = pr_doc.get_request_amount()
 		self.assertEqual(request_amount, pr_doc.grand_total)
+		frappe.delete_doc("Payment Request", pr_doc.name, force=True)
+		frappe.delete_doc("Payment Gateway Account", pg.name ,force=True)
+		frappe.delete_doc("Payment Gateway", "Test Phone Gateway" ,force=True)
+		frappe.delete_doc("Mpesa Settings", "Test Mpesa Gateway New" ,force=True)
 		frappe.db.rollback()
 
 
