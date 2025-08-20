@@ -271,7 +271,7 @@ class TestOpeningInvoiceCreationTool(FrappeTestCase):
 		self.assertIsInstance(temp_account, str)
 		self.assertTrue(temp_account.startswith("ACC") or temp_account.startswith("Temp"))
 
-	def test_make_invoices_path_TC_ACC_504(self):
+	def test_make_invoices_path_TC_ACC_505(self):
 		company = "_Test Company"
 		tool = frappe.new_doc("Opening Invoice Creation Tool")
 		tool.company = company
@@ -302,6 +302,67 @@ class TestOpeningInvoiceCreationTool(FrappeTestCase):
 		# In test mode, enqueue runs inline and returns list of invoice names
 		self.assertGreaterEqual(tool.docstatus, 0)
 		self.assertGreaterEqual(len(tool.invoices), 50)
+
+		frappe.flags.in_test = False
+
+	def test_make_invoices_creating_missing_customer_TC_ACC_506(self):
+		company = "_Test Company"
+		tool = frappe.new_doc("Opening Invoice Creation Tool")
+		tool.company = company
+		tool.invoice_type = "Sales"
+		tool.create_missing_party = 1
+		party_name = ""
+		# Add 50 rows (>= 50 to trigger else path)
+		for i in range(50):
+			tool.append(
+				"invoices",
+				{
+					"party_type": "Customer",
+					"party": f"Customer {i}",
+					"outstanding_amount": 100 + i,
+					"temporary_opening_account": get_temporary_opening_account(company),
+				},
+			)
+			party_name = f"Customer {i}"
+			tool.validate_mandatory_invoice_fields(tool.invoices[i])
+
+		# Force test flag so scheduler check won't throw
+		frappe.flags.in_test = True
+
+		self.assertEqual(frappe.db.exists("Customer", party_name), party_name)
+
+		frappe.flags.in_test = False
+
+	def test_make_invoices_creating_missing_supplier_TC_ACC_507(self):
+		company = "_Test Company"
+		tool = frappe.new_doc("Opening Invoice Creation Tool")
+		tool.company = company
+		tool.invoice_type = "Sales"
+		tool.create_missing_party = 1
+
+		buying_setting = frappe.get_doc("Buying Settings", "supplier_group")
+		buying_setting.supplier_group = "Local"
+		buying_setting.save()
+		party_name = ""
+		# Add 50 rows (>= 50 to trigger else path)
+		for i in range(50):
+			tool.append(
+				"invoices",
+				{
+					"party_type": "Supplier",
+					"party": f"Supplier {i}",
+					"outstanding_amount": 100 + i,
+					"temporary_opening_account": get_temporary_opening_account(company),
+				},
+			)
+			party_name = f"Supplier {i}"
+
+			tool.validate_mandatory_invoice_fields(tool.invoices[i])
+
+		# Force test flag so scheduler check won't throw
+		frappe.flags.in_test = True
+
+		self.assertEqual(frappe.db.exists("Supplier", party_name), party_name)
 
 		frappe.flags.in_test = False
 
@@ -381,4 +442,4 @@ def make_customer(customer=None):
 @frappe.whitelist()
 def call_method():
 	obj_1 = TestOpeningInvoiceCreationTool()
-	obj_1.test_make_invoices_path()
+	obj_1.test_make_invoices_creating_missing_supplier_TC_ACC_507()
