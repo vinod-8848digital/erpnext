@@ -201,6 +201,7 @@ class PaymentEntry(AccountsController):
 			alert=True,
 		)
 
+	
 	def on_cancel(self):
 		self.ignore_linked_doctypes = (
 			"GL Entry",
@@ -215,13 +216,11 @@ class PaymentEntry(AccountsController):
 			"Advance Payment Ledger Entry",
 		)
 		super().on_cancel()
+		self.update_payment_requests(cancel=True)
 		self.make_gl_entries(cancel=1)
 		self.update_outstanding_amounts()
 		self.delink_advance_entry_references()
 		self.update_payment_schedule(cancel=1)
-		self.update_payment_requests(cancel=True)
-		self.make_advance_payment_ledger_entries()
-		self.update_advance_paid()  # advance_paid_status depends on the payment request amount
 		self.set_status()
 
 	def update_payment_requests(self, cancel=False):
