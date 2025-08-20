@@ -63,7 +63,7 @@ class TestPOSProfile(unittest.TestCase):
 			user = frappe.get_doc(
 				{
 					"doctype": "User",
-					"email": "test-perm@example.com",
+					"email": "customer@example.com",
 					"first_name": "Test Perm User",
 					"roles": [{"role": "Sales User"}],
 				}
