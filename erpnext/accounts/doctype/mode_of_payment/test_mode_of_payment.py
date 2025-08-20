@@ -52,7 +52,7 @@ class TestModeofPayment(unittest.TestCase):
 				# Here we can add further checks, like verifying the amount and whether it's debit/credit
 				self.assertEqual(entry.credit, pe.paid_amount)  # Assuming full payment is being made in Cash
 
-	def test_validate_pos_mode_of_payment_TC_AC_348(self):
+	def test_validate_pos_mode_of_payment_TC_ACC_348(self):
 		from frappe import _
 		from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_company, make_test_item
 		from erpnext.accounts.doctype.account.test_account import create_account
@@ -117,7 +117,7 @@ class TestModeofPayment(unittest.TestCase):
 		with self.assertRaises(frappe.ValidationError) as cm:
 			mop.validate_pos_mode_of_payment()
    
-	def test_validate_accounts_TC_AC_349(self):
+	def test_validate_accounts_TC_ACC_349(self):
 		from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_company
 		from erpnext.accounts.doctype.account.test_account import create_account
 		import frappe
