@@ -1631,7 +1631,7 @@ class TestPaymentRequest(FrappeTestCase):
 		pr = make_payment_request(dt="Sales Invoice", dn=si.name, mute_email=1)
 		self.assertEqual(pr.grand_total, si.outstanding_amount)
   
-	def test_set_payment_request_url_TC_AC_359(self):
+	def test_set_payment_request_url_TC_ACC_359(self):
 		from erpnext.accounts.doctype.payment_entry.test_payment_entry import (
 			create_company,
 			create_customer,
@@ -1639,9 +1639,9 @@ class TestPaymentRequest(FrappeTestCase):
 			create_sales_invoice,
 		)
 		from erpnext.stock.doctype.warehouse.test_warehouse import create_warehouse
-		from erpnext.buying.doctype.purchase_order.test_purchase_order import validate_fiscal_year
+		from erpnext.buying.doctype.purchase_order.test_purchase_order import get_or_create_fiscal_year
 		create_company("_Test Company")
-		validate_fiscal_year("_Test Company")
+		get_or_create_fiscal_year("_Test Company")
 		customer = create_customer("_Test Customer")
 		create_warehouse("_Test Warehouse")
 		item = make_test_item("_Test Item")

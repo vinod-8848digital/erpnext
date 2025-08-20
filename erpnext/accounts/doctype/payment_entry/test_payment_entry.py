@@ -3086,7 +3086,7 @@ def create_purchase_invoice(**args):
 
 
 def create_company(company_name="_Test Company", country="India", currency="INR", abbr="_TC"):
-	if not frappe.db.exists("Company", "_Test Company"):
+	if not frappe.db.exists("Company", company_name or "_Test Company"):
 		frappe.get_doc(
 			{
 				"doctype": "Company",
@@ -3097,7 +3097,7 @@ def create_company(company_name="_Test Company", country="India", currency="INR"
 				"company_email": "test@example.com",
 				"abbr": abbr,
 			}
-		).insert()
+		).insert(ignore_permissions=True, ignore_mandatory=True)
 
 
 def get_or_create_fiscal_year(company="_Test Company"):
