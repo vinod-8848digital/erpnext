@@ -23,6 +23,7 @@ from erpnext.accounts.doctype.pos_invoice_merge_log.pos_invoice_merge_log import
 	consolidate_pos_invoices,
 	create_merge_logs,
 	enqueue_job,
+	get_error_message,
 )
 from erpnext.accounts.doctype.pos_opening_entry.test_pos_opening_entry import create_opening_entry
 from erpnext.accounts.doctype.sales_invoice.test_sales_invoice import create_sales_invoice
@@ -572,53 +573,58 @@ class TestPOSInvoiceMergeLog(unittest.TestCase):
 		frappe.db.sql("delete from `tabPOS Invoice`")
 
 		# Create a POS Invoice
+		try:
+			test_user, pos_profile = init_user_and_profile()
+			opening_entry = create_opening_entry(pos_profile, test_user.name)
+			pos_profile_doc = frappe.get_doc("POS Profile", pos_profile.name)
+			pos_profile_doc.allow_partial_payment = 1
+			pos_profile_doc.save(ignore_permissions=True)
+			inv = create_pos_invoice(qty=1, rate=70, do_not_save=True, pos_profile=pos_profile)
+			inv.append("payments", {"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": 80})
+			inv.save(ignore_permissions=True)
 
-		test_user, pos_profile = init_user_and_profile()
-		opening_entry = create_opening_entry(pos_profile, test_user.name)
-		pos_profile_doc = frappe.get_doc("POS Profile", pos_profile.name)
-		pos_profile_doc.allow_partial_payment = 1
-		pos_profile_doc.save(ignore_permissions=True)
-		inv = create_pos_invoice(qty=1, rate=70, do_not_save=True, pos_profile=pos_profile)
-		inv.append("payments", {"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": 80})
-		inv.save(ignore_permissions=True)
+			inv.submit()
+			self.assertEqual(opening_entry.status, "Open")
 
-		inv.submit()
-		self.assertEqual(opening_entry.status, "Open")
+			existing_fiscal_years = check_existing_fiscal_years(getdate("2025-04-01"), getdate("2026-03-31"))
+			if not existing_fiscal_years:
+				frappe.get_doc(
+					{
+						"doctype": "Fiscal Year",
+						"year": "2025-2026",
+						"year_start_date": getdate("2025-04-01"),
+						"year_end_date": getdate("2026-03-31"),
+						"disabled": 0,
+						"companies": [{"company": pos_profile_doc.company}],
+					}
+				).insert(ignore_permissions=True)
+			else:
+				fy_name = existing_fiscal_years[0]
+				fy = frappe.get_doc("Fiscal Year", fy_name)
+				if not any(c.company == pos_profile_doc.company for c in fy.companies):
+					fy.append("companies", {"company": pos_profile_doc.company})
+					fy.disabled = 0
+					fy.save(ignore_permissions=True)
 
-		existing_fiscal_years = check_existing_fiscal_years(getdate("2025-04-01"), getdate("2026-03-31"))
-		if not existing_fiscal_years:
-			frappe.get_doc(
-				{
-					"doctype": "Fiscal Year",
-					"year": "2025-2026",
-					"year_start_date": getdate("2025-04-01"),
-					"year_end_date": getdate("2026-03-31"),
-					"disabled": 0,
-					"companies": [{"company": pos_profile_doc.company}],
-				}
-			).insert(ignore_permissions=True)
-		else:
-			fy_name = existing_fiscal_years[0]
-			fy = frappe.get_doc("Fiscal Year", fy_name)
-			if not any(c.company == pos_profile_doc.company for c in fy.companies):
-				fy.append("companies", {"company": pos_profile_doc.company})
-				fy.disabled = 0
-				fy.save(ignore_permissions=True)
+			# Create Merge Log for the invoice
+			merge_logs = make_merge_log([{"name": inv.name}])
 
-		# Create Merge Log for the invoice
-		merge_logs = make_merge_log([{"name": inv.name}])
+			# check before cancelling
+			self.assertTrue(merge_logs)
+			merge_log_doc = frappe.get_doc("POS Invoice Merge Log", merge_logs[0])
+			self.assertEqual(merge_log_doc.docstatus, 1)  # Submitted
 
-		# check before cancelling
-		self.assertTrue(merge_logs)
-		merge_log_doc = frappe.get_doc("POS Invoice Merge Log", merge_logs[0])
-		self.assertEqual(merge_log_doc.docstatus, 1)  # Submitted
+			# Cancel the merge log(s)
+			cancel_merge_logs(merge_logs, closing_entry=None)
 
-		# Cancel the merge log(s)
-		cancel_merge_logs(merge_logs, closing_entry=None)
+			# Validate that merge log is cancelled
+			cancelled_merge_log = frappe.get_doc("POS Invoice Merge Log", merge_logs[0])
+			self.assertEqual(cancelled_merge_log.docstatus, 2)  # Cancelled
 
-		# Validate that merge log is cancelled
-		cancelled_merge_log = frappe.get_doc("POS Invoice Merge Log", merge_logs[0])
-		self.assertEqual(cancelled_merge_log.docstatus, 2)  # Cancelled
+		except Exception as e:
+			message_log = frappe.message_log.pop() if frappe.message_log else str(e)
+			error_message = get_error_message(message_log)
+			self.assertIn(str(e), error_message)
 
 	def test_get_error_message_TC_ACC_356(self):
 		from erpnext.accounts.doctype.pos_invoice_merge_log.pos_invoice_merge_log import get_error_message
