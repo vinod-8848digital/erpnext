@@ -437,9 +437,3 @@ def make_customer(customer=None):
 		return customer.name
 	else:
 		return frappe.db.exists("Customer", customer_name)
-
-
-@frappe.whitelist()
-def call_method():
-	obj_1 = TestOpeningInvoiceCreationTool()
-	obj_1.test_make_invoices_creating_missing_supplier_TC_ACC_507()
