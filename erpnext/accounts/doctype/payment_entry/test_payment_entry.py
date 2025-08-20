@@ -2094,7 +2094,6 @@ class TestPaymentEntry(FrappeTestCase):
 			self.check_gl_entries()
 
 	def test_on_update_after_submit_TC_ACC_345(self):
-
 		customer = "_Test Customer"
 		make_test_item("_Test Item")
 
@@ -2780,6 +2779,7 @@ class TestPaymentEntry(FrappeTestCase):
 		self.assertEqual(len(pe.references), 1)
 		self.assertEqual(pe.references[0].allocated_amount, 1200)
 
+
 def create_payment_order_against_payment_entry(ref_doc, order_type, bank_account):
 	payment_order = frappe.get_doc(
 		dict(
@@ -3171,9 +3171,3 @@ def create_user():
 	new_user.add_roles("_Test Role 2")
 	new_user.save()
 	return new_user.name
-
-
-@frappe.whitelist()
-def call_method():
-	obj_1 = TestPaymentEntry()
-	obj_1.test_on_update_after_submit_TC_ACC_345()
