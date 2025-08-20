@@ -309,6 +309,9 @@ class TestInvoiceDiscounting(unittest.TestCase):
 		from erpnext.accounts.doctype.cost_center.test_cost_center import create_cost_center
 		create_cost_center(cost_center_name="_Test Cost Center", company="_Test Company")
 
+		from erpnext.accounts.doctype.payment_entry.test_payment_entry import get_or_create_fiscal_year
+		get_or_create_fiscal_year()
+  
 		inv = create_sales_invoice(rate=500)
 
 		inv_disc = create_invoice_discounting(
@@ -327,6 +330,9 @@ class TestInvoiceDiscounting(unittest.TestCase):
 		self.assertIsNotNone(inv_disc.loan_end_date)
 
 	def test_on_submit_executes_TC_ACC_379(self):
+		from erpnext.accounts.doctype.payment_entry.test_payment_entry import get_or_create_fiscal_year
+		get_or_create_fiscal_year()
+  
 		inv = create_sales_invoice(rate=400)
 
 		inv_disc = create_invoice_discounting(
@@ -344,6 +350,9 @@ class TestInvoiceDiscounting(unittest.TestCase):
 		self.assertEqual(inv_disc.total_amount, flt(inv.outstanding_amount))
 
 	def test_on_cancel_executes_TC_ACC_380(self):
+		from erpnext.accounts.doctype.payment_entry.test_payment_entry import get_or_create_fiscal_year
+		get_or_create_fiscal_year()
+  
 		inv = create_sales_invoice(rate=400)
   
 		inv_disc = create_invoice_discounting(
