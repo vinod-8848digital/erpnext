@@ -277,6 +277,7 @@ class TestRepostAccountingLedger(AccountsTestMixin, FrappeTestCase):
 
 	def test_validate_for_closed_fiscal_year(self):
 		frappe.set_user("Administrator")
+
 		existing_fiscal_years = check_existing_fiscal_years(getdate("2023-04-01"), getdate("2024-03-31"))
 		if not existing_fiscal_years:
 			fy = frappe.get_doc(
@@ -290,10 +291,12 @@ class TestRepostAccountingLedger(AccountsTestMixin, FrappeTestCase):
 				}
 			).insert(ignore_permissions=True)
 		else:
-			for fy in existing_fiscal_years:
-				fy_doc = frappe.get_doc("Fiscal Year", fy)
-				fy_doc.append("companies", {"company": "_Test Company"})
-				fy_doc.save(ignore_permissions=True)
+			fy_name = existing_fiscal_years[0]
+			fy = frappe.get_doc("Fiscal Year", fy_name)
+			if not any(c.company == "_Test Company" for c in fy.companies):
+				fy.append("companies", {"company": "_Test Company"})
+				fy.disabled = 0
+				fy.save(ignore_permissions=True)
 
 		si = create_sales_invoice(
 			item=self.item,
@@ -305,6 +308,7 @@ class TestRepostAccountingLedger(AccountsTestMixin, FrappeTestCase):
 			posting_date=getdate("2024-03-31"),
 			rate=100,
 		)
+		si.submit()
 
 		pe = get_payment_entry(si.doctype, si.name)
 		pe.posting_date = getdate("2024-03-31")
@@ -315,15 +319,14 @@ class TestRepostAccountingLedger(AccountsTestMixin, FrappeTestCase):
 				"doctype": "Period Closing Voucher",
 				"company": self.company,
 				"closing_account_head": "Creditors - " + self.company_abbr,
-				"period_start_date": frappe.utils.getdate("2023-04-01"),
-				"period_end_date": frappe.utils.getdate("2024-03-31"),
-				"posting_date": frappe.utils.getdate("2025-12-31"),
+				"period_start_date": getdate("2023-04-01"),
+				"period_end_date": getdate("2024-03-31"),
+				"posting_date": getdate("2025-12-31"),
 				"fiscal_year": fy.name,
 				"remarks": "test",
 			}
 		).insert(ignore_permissions=True)
-
-		pcv.save().submit()
+		pcv.submit()
 
 		ral = frappe.new_doc("Repost Accounting Ledger")
 		ral.company = self.company
@@ -331,6 +334,7 @@ class TestRepostAccountingLedger(AccountsTestMixin, FrappeTestCase):
 		ral.append("vouchers", {"voucher_type": si.doctype, "voucher_no": si.name})
 		ral.append("vouchers", {"voucher_type": pe.doctype, "voucher_no": pe.name})
 		ral.save(ignore_permissions=True)
+
 		with self.assertRaises(frappe.ValidationError) as cm:
 			ral.validate_for_closed_fiscal_year()
 
@@ -359,14 +363,17 @@ class TestRepostAccountingLedger(AccountsTestMixin, FrappeTestCase):
 		ral.append("vouchers", {"voucher_type": si.doctype, "voucher_no": si.name})
 		ral.append("vouchers", {"voucher_type": pe.doctype, "voucher_no": pe.name})
 		ral.save()
+		ral.submit()
 
 		ral.get_existing_ledger_entries()
 
 		vouchers = [x.voucher_no for x in ral.vouchers]
-		expected_gles = frappe.db.get_all(
-			"GL Entry",
-			filters={"voucher_no": ["in", vouchers], "is_cancelled": 0},
-			fields=["name", "voucher_type", "voucher_no"],
+		gl = qb.DocType("GL Entry")
+		expected_gles = (
+			qb.from_(gl)
+			.select(gl.star)
+			.where((gl.voucher_no.isin(vouchers)) & (gl.is_cancelled == 0))
+			.run(as_dict=True)
 		)
 
 		for gle in expected_gles:
