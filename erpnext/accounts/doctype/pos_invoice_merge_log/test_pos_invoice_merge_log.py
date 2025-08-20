@@ -627,8 +627,6 @@ class TestPOSInvoiceMergeLog(unittest.TestCase):
 			self.assertIn(str(e), error_message)
 
 	def test_get_error_message_TC_ACC_356(self):
-		from erpnext.accounts.doctype.pos_invoice_merge_log.pos_invoice_merge_log import get_error_message
-
 		msg = "Error Message"
 		result = get_error_message(msg)
 		self.assertEqual(result, msg)
