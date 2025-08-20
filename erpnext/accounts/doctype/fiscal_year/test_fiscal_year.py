@@ -110,7 +110,7 @@ class TestFiscalYear(unittest.TestCase):
 		frappe.delete_doc("Company", company_name, force=True)
  
  
-	def test_get_from_and_to_date_TC_ACC_339(self):
+	def test_get_from_and_to_date_TC_ACC_381(self):
 		from erpnext.accounts.doctype.fiscal_year.fiscal_year import get_from_and_to_date
 		from frappe.utils import getdate, add_years
 		from datetime import timedelta

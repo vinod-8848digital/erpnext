@@ -14,15 +14,16 @@ from frappe.exceptions import ValidationError
 class TestExchangeRateRevaluation(AccountsTestMixin, FrappeTestCase):
 	def setUp(self):
 		create_warehouse(warehouse_name="_Test Warehouse")
+
+		from erpnext.accounts.doctype.payment_entry.test_payment_entry import get_or_create_fiscal_year
+		get_or_create_fiscal_year()
+  
 		self.create_company()
 		self.create_usd_receivable_account()
 		self.create_item(company="_Test Company", warehouse="_Test Warehouse - _TC")
 		self.create_customer()
 		self.clear_old_entries()
 		self.set_system_and_company_settings()
-		
-		# Ensure a valid Fiscal Year exists for today
-		ensure_test_fiscal_year("_Test Company")
 
 	def tearDown(self):
 		frappe.db.rollback()
@@ -978,48 +979,3 @@ def create_cost_center(**args):
 			cc.is_group = args.is_group or 0
 			cc.parent_cost_center = args.parent_cost_center or "_Test Company - _TC"
 			cc.insert()
-
-def ensure_test_fiscal_year(company_name):
-    today = getdate()
-    
-    # Determine fiscal year start/end (Apr 1 – Mar 31)
-    if today.month < 4:
-        start_year = today.year - 1
-        end_year = today.year
-    else:
-        start_year = today.year
-        end_year = today.year + 1
-
-    start_date = date(start_year, 4, 1)
-    end_date = date(end_year, 3, 31)
-    year_name = f"{start_year}-{str(end_year)[-2:]}"
-    
-    # Delete overlapping FYs for this company (optional, ensures clean slate)
-    overlaps = frappe.db.sql("""
-        SELECT name FROM `tabFiscal Year`
-        WHERE (%s BETWEEN year_start_date AND year_end_date)
-           OR (%s BETWEEN year_start_date AND year_end_date)
-    """, (start_date, end_date))
-    
-    for fy_name_overlap in overlaps:
-        fy_doc = frappe.get_doc("Fiscal Year", fy_name_overlap[0])
-        # Remove company from FY if exists
-        fy_doc.companies = [c for c in fy_doc.companies if c.company != company_name]
-        fy_doc.save(ignore_permissions=True)
-        frappe.db.commit()
-    
-    # Create FY if not exists
-    fy = frappe.db.exists("Fiscal Year", {"year": year_name})
-    if not fy:
-        fy_doc = frappe.get_doc({
-            "doctype": "Fiscal Year",
-            "year": year_name,
-            "year_start_date": start_date,
-            "year_end_date": end_date,
-            "disabled": 0,
-            "companies": [{"company": company_name}]
-        })
-        fy_doc.insert(ignore_permissions=True)
-        frappe.db.commit()
-    
-    return year_name
