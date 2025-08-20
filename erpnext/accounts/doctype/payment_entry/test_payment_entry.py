@@ -2094,6 +2094,12 @@ class TestPaymentEntry(FrappeTestCase):
 			self.check_gl_entries()
 
 	def test_on_update_after_submit_TC_ACC_345(self):
+
+		customer = "_Test Customer"
+		make_test_item("_Test Item")
+
+		# Setup
+		create_customer(customer, "INR")
 		get_or_create_fiscal_year("_Test Company")
 		reposting_accounts_doc = frappe.get_doc("Repost Accounting Ledger Settings")
 		reposting_accounts_doc.append("allowed_types", {"document_type": "Payment Entry", "allowed": 1})
@@ -2774,7 +2780,6 @@ class TestPaymentEntry(FrappeTestCase):
 		self.assertEqual(len(pe.references), 1)
 		self.assertEqual(pe.references[0].allocated_amount, 1200)
 
-
 def create_payment_order_against_payment_entry(ref_doc, order_type, bank_account):
 	payment_order = frappe.get_doc(
 		dict(
@@ -3171,4 +3176,4 @@ def create_user():
 @frappe.whitelist()
 def call_method():
 	obj_1 = TestPaymentEntry()
-	obj_1.test_allocation_for_customer_ACC_385()
+	obj_1.test_on_update_after_submit_TC_ACC_345()

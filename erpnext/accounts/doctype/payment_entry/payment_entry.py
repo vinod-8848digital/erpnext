@@ -110,10 +110,10 @@ class PaymentEntry(AccountsController):
 
 	def on_submit(self):
 		if self.difference_amount:
-			frappe.throw(_("Difference Amount must be zero")) # pragma: no cover
+			frappe.throw(_("Difference Amount must be zero"))
+		self.update_payment_requests()
 		self.make_gl_entries()
 		self.update_outstanding_amounts()
-		self.update_advance_paid()
 		self.update_payment_schedule()
 		self.set_status()
 
