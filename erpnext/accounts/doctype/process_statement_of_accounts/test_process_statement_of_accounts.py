@@ -211,7 +211,7 @@ class TestProcessStatementOfAccounts(AccountsTestMixin, FrappeTestCase):
 		process_soa.load_from_db()
 		self.assertEqual(process_soa.posting_date, getdate(add_days(today(), 7)))
 
-	def test_(self):
+	def test_get_recipients_and_cc(self):
 		# Create test customer
 		customer = frappe.get_doc(
 			{
@@ -225,6 +225,7 @@ class TestProcessStatementOfAccounts(AccountsTestMixin, FrappeTestCase):
 
 		pr_soa = frappe.get_doc(
 			{
+				"name": "Test Process SOA",
 				"doctype": "Process Statement Of Accounts",
 				"customers": [{"customer": customer.name}],
 			}
@@ -245,7 +246,7 @@ class TestProcessStatementOfAccounts(AccountsTestMixin, FrappeTestCase):
 		if pr_soa.cc_to != "":
 			try:
 				cc = [frappe.get_value("User", user.cc, "email") for user in pr_soa.cc_to]
-				print(cc)
+				self.assertEqual(cc, [])
 			except Exception:
 				pass
 

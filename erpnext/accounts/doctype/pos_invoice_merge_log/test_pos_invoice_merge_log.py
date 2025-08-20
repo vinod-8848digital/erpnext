@@ -23,7 +23,6 @@ from erpnext.accounts.doctype.pos_invoice_merge_log.pos_invoice_merge_log import
 	consolidate_pos_invoices,
 	create_merge_logs,
 	enqueue_job,
-	get_invoice_customer_map,
 )
 from erpnext.accounts.doctype.pos_opening_entry.test_pos_opening_entry import create_opening_entry
 from erpnext.accounts.doctype.sales_invoice.test_sales_invoice import create_sales_invoice
