@@ -403,7 +403,7 @@ class TestPOSInvoiceMergeLog(unittest.TestCase):
 					},
 				)
 				inv.payments = []
-				payment_amount = inv.grand_total
+				payment_amount = inv.grand_total or 0.0
 				inv.append(
 					"payments",
 					{"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": payment_amount},
@@ -582,7 +582,8 @@ class TestPOSInvoiceMergeLog(unittest.TestCase):
 		inv.submit()
 		self.assertEqual(opening_entry.status, "Open")
 
-		if not frappe.db.exists("Fiscal Year", "2025-2026"):
+		existing_fiscal_years = check_existing_fiscal_years(getdate("2025-04-01"), getdate("2026-03-31"))
+		if not existing_fiscal_years:
 			frappe.get_doc(
 				{
 					"doctype": "Fiscal Year",
@@ -593,6 +594,13 @@ class TestPOSInvoiceMergeLog(unittest.TestCase):
 					"companies": [{"company": pos_profile_doc.company}],
 				}
 			).insert(ignore_permissions=True)
+		else:
+			fy_name = existing_fiscal_years[0]
+			fy = frappe.get_doc("Fiscal Year", fy_name)
+			if not any(c.company == pos_profile_doc.company for c in fy.companies):
+				fy.append("companies", {"company": pos_profile_doc.company})
+				fy.disabled = 0
+				fy.save(ignore_permissions=True)
 
 		# Create Merge Log for the invoice
 		merge_logs = make_merge_log([{"name": inv.name}])
@@ -800,3 +808,14 @@ def create_uom(uom):
 		new_uom.uom_name = uom
 		new_uom.save(ignore_permissions=True)
 		return new_uom.uom_name
+
+
+def check_existing_fiscal_years(start_date, end_date):
+	return frappe.get_all(
+		"Fiscal Year",
+		filters={
+			"year_start_date": ("<=", end_date),
+			"year_end_date": (">=", start_date),
+		},
+		fields=["name"],
+	)

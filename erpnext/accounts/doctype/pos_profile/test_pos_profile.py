@@ -7,6 +7,8 @@ import frappe
 
 from erpnext.accounts.doctype.pos_profile.pos_profile import (
 	get_child_nodes,
+	get_item_groups,
+	pos_profile_query,
 )
 from erpnext.stock.get_item_details import get_pos_profile
 
@@ -37,6 +39,82 @@ class TestPOSProfile(unittest.TestCase):
 			self.assertEqual(len(customers), customers_count[0][0])
 
 		frappe.db.sql("delete from `tabPOS Profile`")
+
+	def test_pos_profile_query(self):
+		from erpnext.accounts.doctype.pos_closing_entry.test_pos_closing_entry import init_user_and_profile
+
+		test_user, pos_profile = init_user_and_profile()
+		pos_profile_doc = frappe.get_doc("POS Profile", pos_profile.name)
+
+		result = pos_profile_query(
+			"POS Profile",
+			txt=pos_profile_doc.name[:5],
+			searchfield="name",
+			start=0,
+			page_len=10,
+			filters={"company": pos_profile_doc.company},
+		)
+
+		self.assertTrue(result, "Expected a profile to be returned")
+		self.assertIn(pos_profile_doc.name, [row[0] for row in result])
+
+	def test_get_item_groups(self):
+		if not frappe.db.exists("User", "test-perm@example.com"):
+			user = frappe.get_doc(
+				{
+					"doctype": "User",
+					"email": "test-perm@example.com",
+					"first_name": "Test Perm User",
+					"roles": [{"role": "Sales User"}],
+				}
+			)
+			user.insert(ignore_permissions=True)
+
+		if not frappe.db.exists("Item Group", "Test Parent Group"):
+			frappe.get_doc(
+				{
+					"doctype": "Item Group",
+					"item_group_name": "Test Parent Group",
+					"is_group": 1,
+					"parent_item_group": "All Item Groups",
+				}
+			).insert(ignore_permissions=True)
+
+		if not frappe.db.exists("Item Group", "Test Child Group"):
+			frappe.get_doc(
+				{
+					"doctype": "Item Group",
+					"item_group_name": "Test Child Group",
+					"is_group": 0,
+					"parent_item_group": "Test Parent Group",
+				}
+			).insert(ignore_permissions=True)
+
+		if not frappe.db.exists("User Permission", {"user": "test-perm@example.com", "allow": "Item Group"}):
+			frappe.get_doc(
+				{
+					"doctype": "User Permission",
+					"user": "test-perm@example.com",
+					"allow": "Item Group",
+					"for_value": "Test Parent Group",
+				}
+			).insert(ignore_permissions=True)
+
+		make_pos_profile()
+		pos_profile = get_pos_profile("_Test Company") or {}
+
+		if pos_profile:
+			doc = frappe.get_doc("POS Profile", pos_profile.get("name"))
+			if "Test Parent Group" not in [row.item_group for row in doc.item_groups]:
+				doc.append("item_groups", {"item_group": "Test Parent Group"})
+				doc.save(ignore_permissions=True)
+
+			frappe.set_user("test-perm@example.com")
+
+			result = get_item_groups(pos_profile.get("name"))
+
+			self.assertTrue(any("Test Parent Group" in r for r in result))
+			self.assertFalse(any("All Item Groups" in r for r in result))
 
 
 def get_customers_list(pos_profile=None):
@@ -73,7 +151,7 @@ def get_items_list(pos_profile, company):
 			args_list.extend([d.name for d in get_child_nodes("Item Group", d.item_group)])
 		if args_list:
 			cond = "and i.item_group in (%s)" % (", ".join(["%s"] * len(args_list)))
-	base_query = f"""
+	base_query = """
 	select
 		i.name, i.item_code, i.item_name, i.description, i.item_group, i.has_batch_no,
 		i.has_serial_no, i.is_stock_item, i.brand, i.stock_uom, i.image,
