@@ -5,5 +5,5 @@
 from frappe.model.document import Document
 
 
-class DistributionPercentage(Document):
+class DistributionPercentage(Document): # pragma: no cover
 	pass
