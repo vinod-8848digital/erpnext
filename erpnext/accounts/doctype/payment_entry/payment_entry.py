@@ -115,7 +115,6 @@ class PaymentEntry(AccountsController):
 		self.update_outstanding_amounts()
 		self.update_advance_paid()
 		self.update_payment_schedule()
-		self.set_payment_req_status()
 		self.set_status()
 
 	def validate_for_repost(self):

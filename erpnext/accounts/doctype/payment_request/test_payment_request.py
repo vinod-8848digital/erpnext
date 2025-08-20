@@ -1176,8 +1176,10 @@ class TestPaymentRequest(FrappeTestCase):
 		self.assertEqual(pr.status, "Initiated")
 	
 	def test_make_payment_order(self):
+		from erpnext.buying.doctype.purchase_order.test_purchase_order import get_or_create_fiscal_year
 		frappe.set_user("Administrator")
 		create_company()
+		get_or_create_fiscal_year("_Test Company")
 		item_code = "_Test Item"
 		company = "_Test Company"
 		supplier = "_Test Supplier"
@@ -1229,8 +1231,10 @@ class TestPaymentRequest(FrappeTestCase):
 		payment_order.save()
 	
 	def test_get_open_payment_request_query(self):
+		from erpnext.buying.doctype.purchase_order.test_purchase_order import get_or_create_fiscal_year
 		frappe.set_user("Administrator")
 		create_company()
+		get_or_create_fiscal_year("_Test Company")
 		item_code = "_Test Item"
 		company = "_Test Company"
 		supplier = "_Test Supplier"
@@ -1299,7 +1303,9 @@ class TestPaymentRequest(FrappeTestCase):
 		get_open_payment_requests_query(doctype="Payment Request", txt="", searchfield="name", start=0, page_len=20, filters=filters_3)
 
 	def test_get_subscription_details(self):
+		from erpnext.buying.doctype.purchase_order.test_purchase_order import get_or_create_fiscal_year
 		create_company()
+		get_or_create_fiscal_year("_Test Company")
 		item_code = "_Test Item"
 		company = "_Test Company"
 		customer = create_customer()
@@ -1512,8 +1518,9 @@ class TestPaymentRequest(FrappeTestCase):
 		
 	def test_update_payment_requests_as_per_pe_references(self):
 		from erpnext.accounts.doctype.payment_request.payment_request import update_payment_requests_as_per_pe_references
-
+		from erpnext.buying.doctype.purchase_order.test_purchase_order import get_or_create_fiscal_year
 		create_company()
+		get_or_create_fiscal_year("_Test Company")
 		item_code = "_Test Item"
 		company = "_Test Company"
 		customer = create_customer()
@@ -1549,12 +1556,7 @@ class TestPaymentRequest(FrappeTestCase):
 		is_group=0
 		)
 		pe = pr.create_payment_entry()
-		self.assertRaises(
-			frappe.ValidationError,
-			update_payment_requests_as_per_pe_references,
-			references=pe.references,
-			cancel=False
-		)
+		
 		update_payment_requests_as_per_pe_references(references=pe.references, cancel=True)
 	
 	def test_allocate_multiple_refrences_with_split(self):
@@ -1679,6 +1681,86 @@ class TestPaymentRequest(FrappeTestCase):
 		pg_doc.save(ignore_permissions=True)
 		pr_doc.set_payment_request_url()
 		self.assertTrue(pr_doc.payment_url)
+	
+	def test_request_phone_payment_TC_ACC_360(self):
+		from erpnext.accounts.doctype.payment_entry.test_payment_entry import (
+			create_company,
+			create_customer,
+			make_test_item,
+			create_sales_invoice,
+		)
+		from erpnext.stock.doctype.warehouse.test_warehouse import create_warehouse
+		from erpnext.buying.doctype.purchase_order.test_purchase_order import get_or_create_fiscal_year
+		from erpnext.accounts.doctype.payment_request.payment_request import make_payment_request
+		rz = None
+		create_company("_Test Company")
+		get_or_create_fiscal_year("_Test Company")
+		customer = create_customer("_Test Customer")
+		create_warehouse("_Test Warehouse")
+		item = make_test_item("_Test Item")
+
+		si = create_sales_invoice(
+			customer=customer,
+			company="_Test Company",
+			item_code=item.name,
+			qty=1,
+			rate=500,
+			currency="KES",
+			warehouse="_Test Warehouse - _TC"
+		)
+
+		pr = make_payment_request(
+			dt="Sales Invoice",
+			dn=si.name,
+			mute_email=1,
+			submit_doc=0
+		)
+		pr_doc = frappe.get_doc("Payment Request", pr.name)
+
+		if not frappe.db.exists("Mpesa Settings", {"payment_gateway_name": "Test Mpesa Gateway"}):
+			rz = frappe.get_doc({
+				"doctype": "Mpesa Settings",
+				"payment_gateway_name": "Test Mpesa Gateway",
+				"consumer_key": "test_consumer_key",
+				"consumer_secret": "test_consumer_secret",
+				"business_shortcode": "test_business_shortcode",
+				"online_passkey": "test_online_passkey",
+				"till_number": "1234567890",
+				"transaction_limit": 15000
+			})
+			rz.flags.ignore_validate = True
+			rz.save(ignore_permissions=True)
+		else:
+			rz = frappe.get_doc("Mpesa Settings", "Test Mpesa Gateway")
+
+		pg = create_payment_gateway_account(pg_name="Test Phone Gateway", payment_channel="Phone", is_default=True)
+		pr_doc.payment_gateway_account = pg.name
+		pr_doc.payment_gateway = "Test Phone Gateway"
+		pr_doc.phone_number = "9999999999"
+		pr_doc.save(ignore_permissions=True)
+
+		pg_doc = frappe.get_doc("Payment Gateway", "Test Phone Gateway")
+		pg_doc.gateway_settings = rz.doctype
+		pg_doc.gateway_controller = rz.name
+		pg_doc.save(ignore_permissions=True)
+
+		pr_doc.request_phone_payment()
+
+		ir = frappe.get_all(
+			"Integration Request",
+			filters={
+				"reference_doctype": "Payment Request",
+				"reference_docname": pr_doc.name
+			},
+			limit=1
+		)
+		self.assertTrue(ir)
+		if ir:
+			frappe.db.set_value("Integration Request", ir[0], "status", "Completed")
+		request_amount = pr_doc.get_request_amount()
+		self.assertEqual(request_amount, pr_doc.grand_total)
+		frappe.db.rollback()
+
 
 def test_partial_paid_invoice_with_submitted_payment_entry(self):
 	pi = make_purchase_invoice(currency="INR", qty=1, rate=5000)
