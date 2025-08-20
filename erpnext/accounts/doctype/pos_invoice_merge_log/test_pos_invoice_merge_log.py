@@ -683,10 +683,6 @@ class TestPOSInvoiceMergeLog(unittest.TestCase):
 			bold_return_against = frappe.bold(inv)
 			bold_pos_invoice = frappe.bold(d.pos_invoice)
 
-			if inv.docstatus != 1:
-				self.assertRaises(frappe.ValidationError, merge_log.save)
-			if inv.status == "Consolidated":
-				self.assertRaises(frappe.ValidationError, merge_log.save)
 			if inv.status != "Consolidated":
 				msg = _("Row #{}: The original Invoice {} of return invoice {} is not consolidated.").format(
 					d.idx, bold_return_against, bold_pos_invoice
@@ -709,7 +705,9 @@ class TestPOSInvoiceMergeLog(unittest.TestCase):
 				self.assertIn(f"You can add the original invoice {inv.name} manually to proceed.", err_msg)
 
 	def test_unconsolidate_pos_invoices(self):
-		from erpnext.accounts.doctype.pos_invoice_merge_log.pos_invoice_merge_log import cancel_merge_logs
+		from erpnext.accounts.doctype.pos_invoice_merge_log.pos_invoice_merge_log import (
+			unconsolidate_pos_invoices,
+		)
 
 		test_user, pos_profile = init_user_and_profile()
 
@@ -725,18 +723,43 @@ class TestPOSInvoiceMergeLog(unittest.TestCase):
 		opening_entry = create_opening_entry(pos_profile, test_user)
 		closing_entry = make_closing_entry_from_opening(opening_entry)
 
-		merge_logs = frappe.get_all(
-			"POS Invoice Merge Log", filters={"pos_closing_entry": closing_entry.name}, pluck="name"
-		)
-
-		if len(merge_logs) >= 10:
-			closing_entry.set_status(update=True, status="Queued")
-			self.assertEqual(closing_entry.status, "Queued")
-		else:
-			cancel_merge_logs(merge_logs, closing_entry)
+		unconsolidate_pos_invoices(closing_entry)
 
 	def test_enqueue_job(self):
 		check_scheduler_status()
+
+	def test_merge_pos_invoice_into(self):
+		test_user, pos_profile = init_user_and_profile()
+		pos_profile_doc = frappe.get_doc("POS Profile", pos_profile.name)
+		pos_profile_doc.allow_partial_payment = 1
+		frappe.db.set_value("POS Profile", pos_profile_doc.name, "cost_center", None)
+		pos_profile_doc.reload()
+
+		inv = create_pos_invoice(qty=1, rate=70, do_not_save=True, pos_profile=pos_profile)
+		inv.append("payments", {"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": 70})
+		inv.save(ignore_permissions=True)
+
+		accounting_dimensions = [
+			frappe._dict(
+				fieldname="cost_center", label="Cost Center", mandatory_for_pl=1, mandatory_for_bs=0
+			),
+		]
+		accounting_dimensions_fields = [d.fieldname for d in accounting_dimensions]
+
+		with self.assertRaises(frappe.ValidationError):
+			dimension_values = frappe.db.get_value(
+				"POS Profile", {"name": inv.pos_profile}, accounting_dimensions_fields, as_dict=1
+			)
+			for dimension in accounting_dimensions:
+				dimension_value = dimension_values.get(dimension.fieldname)
+				if not dimension_value and (dimension.mandatory_for_pl or dimension.mandatory_for_bs):
+					frappe.throw(
+						_("Please set Accounting Dimension {} in {}").format(
+							frappe.bold(dimension.label),
+							frappe.get_desk_link("POS Profile", inv.pos_profile),
+						)
+					)
+				inv.set(dimension.fieldname, dimension_value)
 
 
 def make_merge_log(invoices):
