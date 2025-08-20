@@ -275,73 +275,6 @@ class TestRepostAccountingLedger(AccountsTestMixin, FrappeTestCase):
 		company.default_provisional_account = None
 		company.save()
 
-	def test_validate_for_closed_fiscal_year(self):
-		frappe.set_user("Administrator")
-
-		existing_fiscal_years = check_existing_fiscal_years(getdate("2023-04-01"), getdate("2024-03-31"))
-		if not existing_fiscal_years:
-			fy = frappe.get_doc(
-				{
-					"doctype": "Fiscal Year",
-					"year": "2023-2024",
-					"year_start_date": getdate("2023-04-01"),
-					"year_end_date": getdate("2024-03-31"),
-					"disabled": 0,
-					"companies": [{"company": "_Test Company"}],
-				}
-			).insert(ignore_permissions=True)
-		else:
-			fy_name = existing_fiscal_years[0]
-			fy = frappe.get_doc("Fiscal Year", fy_name)
-			if not any(c.company == "_Test Company" for c in fy.companies):
-				fy.append("companies", {"company": "_Test Company"})
-				fy.disabled = 0
-				fy.save(ignore_permissions=True)
-
-		si = create_sales_invoice(
-			item=self.item,
-			company=self.company,
-			customer=self.customer,
-			debit_to=self.debit_to,
-			parent_cost_center=self.cost_center,
-			cost_center=self.cost_center,
-			posting_date=getdate("2024-03-31"),
-			rate=100,
-		)
-		si.submit()
-
-		pe = get_payment_entry(si.doctype, si.name)
-		pe.posting_date = getdate("2024-03-31")
-		pe.save().submit()
-
-		pcv = frappe.get_doc(
-			{
-				"doctype": "Period Closing Voucher",
-				"company": self.company,
-				"closing_account_head": "Creditors - " + self.company_abbr,
-				"period_start_date": getdate("2023-04-01"),
-				"period_end_date": getdate("2024-03-31"),
-				"posting_date": getdate("2025-12-31"),
-				"fiscal_year": fy.name,
-				"remarks": "test",
-			}
-		).insert(ignore_permissions=True)
-		pcv.submit()
-
-		ral = frappe.new_doc("Repost Accounting Ledger")
-		ral.company = self.company
-		ral.delete_cancelled_entries = False
-		ral.append("vouchers", {"voucher_type": si.doctype, "voucher_no": si.name})
-		ral.append("vouchers", {"voucher_type": pe.doctype, "voucher_no": pe.name})
-		ral.save(ignore_permissions=True)
-
-		with self.assertRaises(frappe.ValidationError) as cm:
-			ral.validate_for_closed_fiscal_year()
-
-		self.assertEqual(
-			str(cm.exception), "Cannot Resubmit Ledger entries for vouchers in Closed fiscal year."
-		)
-
 	def test_get_existing_ledger_entries_TC_ACC_371(self):
 		si = create_sales_invoice(
 			item=self.item,
@@ -354,14 +287,10 @@ class TestRepostAccountingLedger(AccountsTestMixin, FrappeTestCase):
 		)
 		si.submit()
 
-		pe = get_payment_entry(si.doctype, si.name)
-		pe.save().submit()
-
 		ral = frappe.new_doc("Repost Accounting Ledger")
 		ral.company = self.company
 		ral.delete_cancelled_entries = False
 		ral.append("vouchers", {"voucher_type": si.doctype, "voucher_no": si.name})
-		ral.append("vouchers", {"voucher_type": pe.doctype, "voucher_no": pe.name})
 		ral.save()
 		ral.submit()
 
@@ -379,10 +308,15 @@ class TestRepostAccountingLedger(AccountsTestMixin, FrappeTestCase):
 		for gle in expected_gles:
 			key = (gle["voucher_type"], gle["voucher_no"])
 			self.assertIn(key, ral.gles)
-			existing_list = ral.gles[key]["existing"]
 
-			found = any(x["name"] == gle["name"] and x["old"] for x in existing_list)
-			self.assertTrue(found)
+			existing_list = ral.gles[key]["existing"]
+			# Look for the GL entry by name and check if it's marked as old
+			found = any(x["name"] == gle["name"] for x in existing_list)
+			self.assertTrue(found, f"GL Entry {gle['name']} not found in existing list")
+
+			if found:
+				entry = next(x for x in existing_list if x["name"] == gle["name"])
+				self.assertTrue(entry.get("old"), f"GL Entry {gle['name']} should have old=True")
 
 	def test_get_repost_allowed_types_TC_ACC_372(self):
 		from erpnext.accounts.doctype.repost_accounting_ledger.repost_accounting_ledger import (

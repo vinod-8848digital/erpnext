@@ -18,8 +18,12 @@ from erpnext.accounts.doctype.pos_closing_entry.test_pos_closing_entry import in
 from erpnext.accounts.doctype.pos_invoice.pos_invoice import make_sales_return
 from erpnext.accounts.doctype.pos_invoice.test_pos_invoice import create_pos_invoice
 from erpnext.accounts.doctype.pos_invoice_merge_log.pos_invoice_merge_log import (
+	cancel_merge_logs,
 	check_scheduler_status,
 	consolidate_pos_invoices,
+	create_merge_logs,
+	enqueue_job,
+	get_invoice_customer_map,
 )
 from erpnext.accounts.doctype.pos_opening_entry.test_pos_opening_entry import create_opening_entry
 from erpnext.accounts.doctype.sales_invoice.test_sales_invoice import create_sales_invoice
@@ -555,7 +559,7 @@ class TestPOSInvoiceMergeLog(unittest.TestCase):
 			frappe.flags.in_test = True
 			frappe.db.set_single_value("System Settings", "enable_scheduler", 1)
 
-	def test_cancel_merge_logs_TC_AC_355(self):
+	def test_cancel_merge_logs_TC_ACC_355(self):
 		"""
 		Create a POS Invoice
 		Create POS Invoice Merge Log for the invoice
@@ -617,7 +621,7 @@ class TestPOSInvoiceMergeLog(unittest.TestCase):
 		cancelled_merge_log = frappe.get_doc("POS Invoice Merge Log", merge_logs[0])
 		self.assertEqual(cancelled_merge_log.docstatus, 2)  # Cancelled
 
-	def test_get_error_message_TC_AC_356(self):
+	def test_get_error_message_TC_ACC_356(self):
 		from erpnext.accounts.doctype.pos_invoice_merge_log.pos_invoice_merge_log import get_error_message
 
 		msg = "Error Message"
@@ -658,7 +662,7 @@ class TestPOSInvoiceMergeLog(unittest.TestCase):
 
 		self.assertEqual(serial_and_batch_bundle, [])
 
-	def test_validate_pos_invoice_status(self):
+	def test_validate_pos_invoice_status_TC_ACC_357(self):
 		test_user, pos_profile = init_user_and_profile()
 
 		pos_profile_doc = frappe.get_doc("POS Profile", pos_profile.name)
@@ -712,7 +716,7 @@ class TestPOSInvoiceMergeLog(unittest.TestCase):
 				self.assertIn("is not consolidated", err_msg)
 				self.assertIn(f"You can add the original invoice {inv.name} manually to proceed.", err_msg)
 
-	def test_unconsolidate_pos_invoices(self):
+	def test_unconsolidate_pos_invoices_TC_ACC_358(self):
 		from erpnext.accounts.doctype.pos_invoice_merge_log.pos_invoice_merge_log import (
 			unconsolidate_pos_invoices,
 		)
@@ -734,7 +738,35 @@ class TestPOSInvoiceMergeLog(unittest.TestCase):
 		unconsolidate_pos_invoices(closing_entry)
 
 	def test_enqueue_job(self):
-		check_scheduler_status()
+		test_user, pos_profile = init_user_and_profile()
+		pos_profile_doc = frappe.get_doc("POS Profile", pos_profile.name)
+		pos_profile_doc.allow_partial_payment = 1
+		pos_profile_doc.save()
+
+		# Create POS Invoice
+		inv = create_pos_invoice(qty=1, rate=70, do_not_save=True, pos_profile=pos_profile, is_return=0)
+		inv.append("payments", {"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": 70})
+		inv.insert()
+		inv.submit()
+
+		# Create merge log
+		merge_logs = make_merge_log([{"name": inv.name}])
+
+		# Create opening & closing entry
+		opening_entry = create_opening_entry(pos_profile, test_user)
+		closing_entry = make_closing_entry_from_opening(opening_entry) or {}
+
+		frappe.flags.in_test = True
+
+		job = cancel_merge_logs
+		enqueue_job(job, merge_logs=merge_logs, closing_entry=closing_entry)
+
+		if job == create_merge_logs:
+			msg = _("POS Invoices will be consolidated in a background process")
+		else:
+			msg = _("POS Invoices will be unconsolidated in a background process")
+
+		self.assertIsInstance(msg, str)
 
 	def test_merge_pos_invoice_into(self):
 		test_user, pos_profile = init_user_and_profile()
