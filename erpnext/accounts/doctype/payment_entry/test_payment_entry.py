@@ -2094,6 +2094,11 @@ class TestPaymentEntry(FrappeTestCase):
 			self.check_gl_entries()
 
 	def test_on_update_after_submit_TC_ACC_345(self):
+		customer = "_Test Customer"
+		make_test_item("_Test Item")
+
+		# Setup
+		create_customer(customer, "INR")
 		get_or_create_fiscal_year("_Test Company")
 		reposting_accounts_doc = frappe.get_doc("Repost Accounting Ledger Settings")
 		reposting_accounts_doc.append("allowed_types", {"document_type": "Payment Entry", "allowed": 1})
@@ -3166,9 +3171,3 @@ def create_user():
 	new_user.add_roles("_Test Role 2")
 	new_user.save()
 	return new_user.name
-
-
-@frappe.whitelist()
-def call_method():
-	obj_1 = TestPaymentEntry()
-	obj_1.test_allocation_for_customer_ACC_385()
