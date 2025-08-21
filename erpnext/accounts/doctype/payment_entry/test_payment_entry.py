@@ -3159,6 +3159,58 @@ class TestPaymentEntry(FrappeTestCase):
 		so.reload()
 		self.assertEqual(so.advance_paid, 500)
 
+	def test_determine_exclusive_rate_with_inclusive_tax(self):
+		company = "_Test Company"
+		customer = "_Test Customer"
+		create_customer(customer, "INR")
+		make_test_item("_Test Item")
+		get_or_create_fiscal_year(company)
+
+		# Step 1: Create Payment Entry
+		pe = frappe.new_doc("Payment Entry")
+		pe.payment_type = "Receive"
+		pe.party_type = "Customer"
+		pe.party = customer
+		pe.company = company
+		pe.base_paid_amount = 1000
+		pe.paid_amount = 1000
+		pe.received_amount = 1000
+
+		# Fix required accounts
+		pe.paid_from = frappe.get_value("Company", company, "default_receivable_account")
+		pe.paid_to = frappe.get_value("Company", company, "default_cash_account")
+		pe.paid_from_account_currency = "INR"
+		pe.paid_to_account_currency = "INR"
+		pe.source_exchange_rate = 1.0
+		pe.target_exchange_rate = 1.0
+
+		# Step 2: Add a tax row with "included_in_paid_amount = 1"
+		pe.append(
+			"taxes",
+			{
+				"charge_type": "Actual",
+				"account_head": "_Test Account Tax",
+				"rate": 10,
+				"included_in_paid_amount": 1,  # ✅ trigger condition
+			},
+		)
+		pe.append(
+			"taxes",
+			{
+				"charge_type": "Actual",
+				"account_head": "_Test Account Tax",
+				"rate": 10,
+				"included_in_paid_amount": 1,  # inclusive tax triggers calculation
+			},
+		)
+
+		# Step 3: Run determine_exclusive_rate()
+		pe.determine_exclusive_rate()
+
+		# Step 4: Assert
+		self.assertTrue(hasattr(pe, "paid_amount_after_tax"))
+		self.assertEqual(pe.paid_amount_after_tax, pe.base_paid_amount)
+
 
 def create_payment_order_against_payment_entry(ref_doc, order_type, bank_account):
 	payment_order = frappe.get_doc(
@@ -3556,4 +3608,4 @@ def create_user():
 @frappe.whitelist()
 def call_method():
 	obj_1 = TestPaymentEntry()
-	obj_1.test_update_advance_paid_calls_set_total_advance_paid()
+	obj_1.test_determine_exclusive_rate_with_inclusive_tax()
