@@ -1729,14 +1729,28 @@ class TestPaymentRequest(FrappeTestCase):
 				"transaction_limit": 15000
 			})
 			rz.flags.ignore_validate = True
-			rz.save(ignore_permissions=True)
+			rz.insert(ignore_permissions=True)
 		else:
 			rz = frappe.get_doc("Mpesa Settings", "Test Mpesa Gateway New")
-		create_payment_gateway_account(
-			pg_name="Test Mpesa Gateway New",
+		m_pg = create_payment_gateway_account(
+			pg_name="Mpesa-" + rz.payment_gateway_name,
 			payment_channel="Phone",
-			is_default=True
+			is_default=True,
 		)
+		payment_account = frappe.get_value(
+			"Payment Gateway Account",
+			{"payment_gateway": "Mpesa-" + rz.payment_gateway_name},
+			["name", "payment_account"],
+			as_dict=1
+		)
+  
+		if payment_account and payment_account.payment_account != 'Cash - _TC':
+			frappe.db.set_value(
+				"Payment Gateway Account",
+				payment_account.name,
+				"payment_account",
+				"Cash - _TC"
+			)
 		pg = create_payment_gateway_account(pg_name="Test Phone Gateway", payment_channel="Phone", is_default=True)
 		pr_doc.payment_gateway_account = pg.name
 		pr_doc.payment_gateway = "Test Phone Gateway"
@@ -1768,7 +1782,6 @@ class TestPaymentRequest(FrappeTestCase):
 		frappe.delete_doc("Payment Gateway", "Test Phone Gateway" ,force=True)
 		frappe.delete_doc("Mpesa Settings", "Test Mpesa Gateway New" ,force=True)
 		frappe.db.rollback()
-
 
 def test_partial_paid_invoice_with_submitted_payment_entry(self):
 	pi = make_purchase_invoice(currency="INR", qty=1, rate=5000)
