@@ -14,6 +14,7 @@ from erpnext.accounts.doctype.bank_transaction.test_bank_transaction import (
 	create_gl_account,
 )
 from erpnext.accounts.doctype.payment_entry.payment_entry import (
+	get_company_defaults,
 	get_outstanding_of_references_with_payment_term,
 	get_outstanding_reference_documents,
 	get_paid_amount,
@@ -3237,6 +3238,21 @@ class TestPaymentEntry(FrappeTestCase):
 		self.assertIn(expected_key, result)
 		self.assertEqual(result[expected_key], 100)
 
+	def test_get_company_default(self):
+		company = "_Test Company"
+		company_doc = frappe.get_doc("Company", company)
+		# Call the function under test
+		company_default_details = get_company_defaults(company)
+
+		# Assert: should not be None and should be a dict
+		self.assertIsInstance(company_default_details, dict)
+
+		self.assertEqual(company_default_details.get("write_off_account"), company_doc.write_off_account)
+		self.assertEqual(
+			company_default_details.get("exchange_gain_loss_account"), company_doc.exchange_gain_loss_account
+		)
+		self.assertEqual(company_default_details.get("cost_center"), company_doc.cost_center)
+
 
 def create_payment_order_against_payment_entry(ref_doc, order_type, bank_account):
 	payment_order = frappe.get_doc(
@@ -3634,4 +3650,4 @@ def create_user():
 @frappe.whitelist()
 def call_method():
 	obj_1 = TestPaymentEntry()
-	obj_1.test_get_outstanding_of_references_with_payment_term()
+	obj_1.test_get_company_default()
