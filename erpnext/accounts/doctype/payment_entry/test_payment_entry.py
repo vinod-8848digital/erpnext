@@ -3104,6 +3104,61 @@ class TestPaymentEntry(FrappeTestCase):
 		value_3 = pe.get_value_in_transaction_currency("EUR", gl_dict, "non_existent_field")
 		self.assertEqual(value_3, 0.0)
 
+	def test_update_advance_paid_calls_set_total_advance_paid_TC_ACC_524(self):
+		"""
+		Test that update_advance_paid calls set_total_advance_paid
+		and updates the advance_paid field correctly.
+		"""
+		customer = "_Test Customer"
+		company = "_Test Company"
+		create_customer(customer, "INR")
+		make_test_item("_Test Item")
+		get_or_create_fiscal_year(company)
+
+		so = make_sales_order(
+			customer=customer,
+			company=company,
+			grand_total=1000,
+			do_not_submit=False,
+		)
+		self.assertEqual(so.advance_paid, None)
+
+		# Step 2: Create Payment Entry against Sales Order (advance)
+		pe = frappe.new_doc("Payment Entry")
+		pe.payment_type = "Receive"
+		pe.party_type = "Customer"
+		pe.party = customer
+		pe.company = company
+		pe.paid_amount = 500
+		pe.received_amount = 500
+
+		# Reference row pointing to SO (advance_payment_doctype)
+		pe.append(
+			"references",
+			{
+				"reference_doctype": "Sales Order",
+				"reference_name": so.name,
+				"allocated_amount": 500,
+			},
+		)
+
+		pe.paid_from = frappe.get_value("Company", company, "default_receivable_account")
+		pe.paid_to = frappe.get_value("Company", company, "default_cash_account")
+
+		pe.paid_from_account_currency = "INR"
+		pe.paid_to_account_currency = "INR"
+		pe.source_exchange_rate = 1.0
+		pe.target_exchange_rate = 1.0
+		pe.insert()
+		pe.submit()
+
+		# Step 3: Trigger update_advance_paid explicitly
+		pe.update_advance_paid()
+
+		# Reload SO and verify advance updated
+		so.reload()
+		self.assertEqual(so.advance_paid, 500)
+
 
 def create_payment_order_against_payment_entry(ref_doc, order_type, bank_account):
 	payment_order = frappe.get_doc(
@@ -3501,4 +3556,4 @@ def create_user():
 @frappe.whitelist()
 def call_method():
 	obj_1 = TestPaymentEntry()
-	obj_1.test_get_value_in_transaction_currency()
+	obj_1.test_update_advance_paid_calls_set_total_advance_paid()
