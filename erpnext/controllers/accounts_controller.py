@@ -4,7 +4,6 @@
 
 import json
 from collections import defaultdict
-from frappe.utils.data import getdate as convert_to_date
 
 import frappe
 from frappe import _, bold, qb, throw
@@ -27,6 +26,7 @@ from frappe.utils import (
 	parse_json,
 	today,
 )
+from frappe.utils.data import getdate as convert_to_date
 
 import erpnext
 from erpnext.accounts.doctype.accounting_dimension.accounting_dimension import (
@@ -243,7 +243,7 @@ class AccountsController(TransactionBase):
 		if self.meta.get_field("taxes_and_charges"):
 			self.validate_enabled_taxes_and_charges()
 			self.validate_tax_account_company()
- 
+
 		self.set_taxes_and_charges()
 
 		if self.meta.get_field("currency"):
@@ -381,7 +381,6 @@ class AccountsController(TransactionBase):
 					repost_doc.flags.ignore_links = True
 					repost_doc.save(ignore_permissions=True)
 
-
 	def _remove_advance_payment_ledger_entries(self):
 		adv = qb.DocType("Advance Payment Ledger Entry")
 		qb.from_(adv).delete().where(adv.voucher_type.eq(self.doctype) & adv.voucher_no.eq(self.name)).run()
@@ -405,7 +404,7 @@ class AccountsController(TransactionBase):
 		if frappe.db.get_single_value("Accounts Settings", "delete_linked_ledger_entries"):
 			# delete linked exchange gain/loss journal
 			delete_exchange_gain_loss_journal(self)
-			
+
 			ple = frappe.qb.DocType("Payment Ledger Entry")
 			frappe.qb.from_(ple).delete().where(
 				(ple.voucher_type == self.doctype) & (ple.voucher_no == self.name)
@@ -440,7 +439,6 @@ class AccountsController(TransactionBase):
 		for row in batches:
 			frappe.delete_doc("Batch", row.name)
 
-	
 	def validate_company_in_accounting_dimension(self):
 		doc_field = DocType("DocField")
 		accounting_dimension = DocType("Accounting Dimension")
@@ -886,12 +884,15 @@ class AccountsController(TransactionBase):
 									and item.get("use_serial_batch_fields")
 								)
 							):
+								if fieldname == "batch_no" and not item.batch_no:
+									item.set("rate", ret.get("rate"))
+									item.set("price_list_rate", ret.get("price_list_rate"))
 								item.set(fieldname, value)
 
 								if fieldname == "batch_no" and item.batch_no and not item.is_free_item:
 									if ret.get("rate"):
 										item.set("rate", ret.get("rate"))
- 
+
 									if not item.get("price_list_rate") and ret.get("price_list_rate"):
 										item.set("price_list_rate", ret.get("price_list_rate"))
 
@@ -1368,7 +1369,7 @@ class AccountsController(TransactionBase):
 		journal_entries = get_advance_journal_entries(
 			party_type, party, party_account, amount_field, order_doctype, order_list, include_unallocated
 		)
-		if (frappe.db.db_type == 'postgres') and (include_unallocated == True or False):
+		if (frappe.db.db_type == "postgres") and (include_unallocated == True or False):
 			include_unallocated = "IS NOT NULL"
 
 		payment_entries = get_advance_payment_entries_for_regional(
@@ -1378,7 +1379,7 @@ class AccountsController(TransactionBase):
 			order_doctype,
 			order_list=order_list,
 			default_advance_account=default_advance_account,
-			include_unallocated=include_unallocated
+			include_unallocated=include_unallocated,
 		)
 
 		res = journal_entries + payment_entries
@@ -2093,12 +2094,12 @@ class AccountsController(TransactionBase):
 
 	def set_total_advance_paid(self):
 		party = self.customer if self.doctype == "Sales Order" else self.supplier
-		
-		advance =frappe.db.sql(
-			f"""SELECT 
-				(ARRAY_AGG(ple.account_currency))[1] as account_currency, 
+
+		advance = frappe.db.sql(
+			f"""SELECT
+				(ARRAY_AGG(ple.account_currency))[1] as account_currency,
 				ABS(SUM(ple.amount_in_account_currency)) AS amount
-			FROM 
+			FROM
 				"tabPayment Ledger Entry" as ple
 			WHERE
 				ple.against_voucher_type = '{self.doctype}'
@@ -2106,8 +2107,9 @@ class AccountsController(TransactionBase):
 				AND ple.party = '{party}'
 				AND ple.delinked = 0
 				AND ple.company = '{self.company}'
-			"""
-		,as_dict=True)
+			""",
+			as_dict=True,
+		)
 
 		if advance:
 			advance = advance[0]
@@ -2128,7 +2130,6 @@ class AccountsController(TransactionBase):
 			else:
 				order_total = self.get("base_rounded_total") or self.base_grand_total
 				precision = "base_rounded_total" if self.get("base_rounded_total") else "base_grand_total"
-				
 
 			formatted_order_total = fmt_money(
 				order_total, precision=self.precision(precision), currency=advance.account_currency
@@ -2257,7 +2258,7 @@ class AccountsController(TransactionBase):
 			if adv.reference_name == linked_doc_name:
 				doctype = frappe.qb.DocType(self.doctype + " Advance")
 				frappe.qb.from_(doctype).delete().where(doctype.name == adv.name).run()
-				
+
 				consider_for_total_advance = False
 
 			if consider_for_total_advance:
@@ -2490,7 +2491,6 @@ class AccountsController(TransactionBase):
 		if self.doctype == "Sales Invoice" and self.is_pos:
 			return
 
-
 		for d in self.get("payment_schedule"):
 			d.validate_from_to_dates("discount_date", "due_date")
 			if self.doctype == "Sales Order" and getdate(d.due_date) < getdate(self.transaction_date):
@@ -2510,7 +2510,7 @@ class AccountsController(TransactionBase):
 	def validate_payment_schedule_amount(self):
 		if (self.doctype == "Sales Invoice" and self.is_pos) or self.get("is_opening") == "Yes":
 			return
-		
+
 		party_account_currency = self.get("party_account_currency")
 		if not party_account_currency:
 			party_type, party = self.get_party()
@@ -2684,7 +2684,6 @@ class AccountsController(TransactionBase):
 				)
 			)
 
-
 			# Convert outstanding amount from secondary to primary account currency, if needed
 			os_in_default_currency = self.outstanding_amount * exc_rate_secondary_to_default
 			os_in_primary_currency = self.outstanding_amount * exc_rate_secondary_to_primary
@@ -2762,7 +2761,7 @@ class AccountsController(TransactionBase):
 		repost_ledger.flags.ignore_permissions = True
 		repost_ledger.insert()
 		repost_ledger.submit()
-	
+
 	def get_advance_payment_doctypes(self) -> list:
 		return frappe.get_hooks("advance_payment_doctypes")
 
@@ -2828,6 +2827,7 @@ class AccountsController(TransactionBase):
 		for x in gl_entries:
 			x["transaction_currency"] = self.currency
 			x["transaction_exchange_rate"] = self.get("conversion_rate") or 1
+
 
 @frappe.whitelist()
 def get_tax_rate(account_head):
@@ -3044,7 +3044,7 @@ def get_advance_journal_entries(
 	if include_unallocated:
 		reference_or_condition.append(journal_acc.reference_name.isnull())
 		reference_or_condition.append(journal_acc.reference_name == "")
-	
+
 	if order_list:
 		reference_or_condition.append(
 			(journal_acc.reference_type == order_doctype) & ((journal_acc.reference_name).isin(order_list))
@@ -3075,7 +3075,6 @@ def get_advance_payment_entries(
 	limit=None,
 	condition=None,
 ):
-	
 	payment_entries = []
 	payment_entry = frappe.qb.DocType("Payment Entry")
 
