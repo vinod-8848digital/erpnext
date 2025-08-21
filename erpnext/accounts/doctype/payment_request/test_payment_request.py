@@ -1732,7 +1732,11 @@ class TestPaymentRequest(FrappeTestCase):
 			rz.save(ignore_permissions=True)
 		else:
 			rz = frappe.get_doc("Mpesa Settings", "Test Mpesa Gateway New")
-
+		create_payment_gateway_account(
+			pg_name="Test Mpesa Gateway New",
+			payment_channel="Phone",
+			is_default=True
+		)
 		pg = create_payment_gateway_account(pg_name="Test Phone Gateway", payment_channel="Phone", is_default=True)
 		pr_doc.payment_gateway_account = pg.name
 		pr_doc.payment_gateway = "Test Phone Gateway"
@@ -1793,11 +1797,11 @@ def test_partial_paid_invoice_with_submitted_payment_entry(self):
 def create_payment_gateway_account(pg_name, payment_channel=None, is_default=False, currency="INR"):
 	default_channel = "Email"
 	if not frappe.db.exists("Payment Gateway", pg_name):
-		frappe.get_doc(dict(
+		p = frappe.get_doc(dict(
 			doctype="Payment Gateway",
 			gateway=pg_name
 		)).insert()
-	if not frappe.db.exists("Payment Gateway Account", {"payment_gateway": pg_name, "currency": currency}):
+	if not frappe.db.exists("Payment Gateway Account", {"payment_gateway": pg_name}):
 		pg = frappe.get_doc(dict(
 				doctype = "Payment Gateway Account",
 				payment_gateway=pg_name,
