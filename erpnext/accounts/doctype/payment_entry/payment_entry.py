@@ -2211,14 +2211,14 @@ def get_payment_request_outstanding_set_in_references(references=None):
 
 
 def validate_inclusive_tax(tax, doc):
-	def _on_previous_row_error(row_range):
+	def _on_previous_row_error(row_range):  # pragma: no cover
 		throw(
 			_("To include tax in row {0} in Item rate, taxes in rows {1} must also be included").format(
 				tax.idx, row_range
 			)
-		)  # pragma: no cover
+		)
 
-	if cint(getattr(tax, "included_in_paid_amount", None)):
+	if cint(getattr(tax, "included_in_paid_amount", None)):  # pragma: no cover
 		if tax.charge_type == "Actual":
 			# inclusive tax cannot be of type Actual
 			throw(

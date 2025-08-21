@@ -2851,6 +2851,226 @@ class TestPaymentEntry(FrappeTestCase):
 		# Assert negative allocation applied
 		self.assertEqual(pe.references[1].allocated_amount, 0)
 
+	def test_set_matched_payment_requests_TC_ACC_521(self):
+		customer = "_Test Customer"
+		company = "_Test Company"
+
+		# Setup
+		create_customer(customer, "INR")
+		make_test_item("_Test Item")
+		get_or_create_fiscal_year(company)
+
+		# Create Sales Invoice
+		si = create_sales_invoice(customer=customer, company=company, qty=2, rate=100)
+		si.submit()
+
+		# Create Payment Requests
+		pr1 = frappe.get_doc(
+			{
+				"doctype": "Payment Request",
+				"party_type": "Customer",
+				"party": customer,
+				"reference_doctype": "Sales Invoice",
+				"reference_name": si.name,
+				"transaction_date": getdate(),
+				"grand_total": 100,
+				"outstanding_amount": 100,
+				"status": "Initiated",
+				"docstatus": 1,
+				"company": company,
+			}
+		).insert(ignore_permissions=True)
+
+		pr2 = frappe.get_doc(
+			{
+				"doctype": "Payment Request",
+				"party_type": "Customer",
+				"party": customer,
+				"reference_doctype": "Sales Invoice",
+				"reference_name": si.name,
+				"transaction_date": getdate(),
+				"grand_total": 50,
+				"outstanding_amount": 50,
+				"status": "Initiated",
+				"docstatus": 1,
+				"company": company,
+			}
+		).insert(ignore_permissions=True)
+
+		# Create a Payment Entry with references
+		pe = frappe.new_doc("Payment Entry")
+		pe.payment_type = "Receive"
+		pe.party_type = "Customer"
+		pe.party = customer
+		pe.company = company
+		pe.paid_amount = 150
+		pe.received_amount = 150
+
+		# Append two reference rows with allocated amounts matching payment requests
+		pe.append(
+			"references",
+			{
+				"doctype": "Payment Entry Reference",
+				"reference_doctype": "Sales Invoice",
+				"reference_name": si.name,
+				"allocated_amount": 100,
+				"payment_request": None,
+			},
+		)
+		pe.append(
+			"references",
+			{
+				"doctype": "Payment Entry Reference",
+				"reference_doctype": "Sales Invoice",
+				"reference_name": si.name,
+				"allocated_amount": 50,
+				"payment_request": None,
+			},
+		)
+
+		# Prepare matched payment requests list (reference_doctype, reference_name, allocated_amount, payment_request)
+		matched_payment_requests = [
+			("Sales Invoice", si.name, 100, pr1.name),
+			("Sales Invoice", si.name, 50, pr2.name),
+		]
+
+		# Call the method to set payment requests
+		pe.set_matched_payment_requests(matched_payment_requests)
+
+		# Assertions to verify payment_request fields have been set correctly
+		self.assertEqual(pe.references[0].payment_request, pr1.name)
+
+		# Also test that if a reference already has a payment_request, it is not overwritten
+		existing_pr = frappe.get_doc(
+			{
+				"doctype": "Payment Request",
+				"party_type": "Customer",
+				"party": customer,
+				"reference_doctype": "Sales Invoice",
+				"reference_name": si.name,
+				"transaction_date": getdate(),
+				"grand_total": 30,
+				"outstanding_amount": 30,
+				"status": "Initiated",
+				"docstatus": 1,
+				"company": company,
+			}
+		).insert(ignore_permissions=True)
+
+		pe.references[1].payment_request = existing_pr.name
+
+		# Prepare another matched list including the same allocated_amount to test no overwrite
+		matched_payment_requests_2 = [
+			("Sales Invoice", si.name, 50, pr2.name),
+		]
+
+		pe.set_matched_payment_requests(matched_payment_requests_2)
+
+		# The existing payment_request should remain unchanged
+		self.assertEqual(pe.references[1].payment_request, existing_pr.name)
+
+	def test_set_gain_or_loss_TC_ACC_522(self):
+		company = "_Test Company"
+		customer = "_Test Customer"
+
+		# Setup
+		create_customer(customer, "INR")
+		make_test_item("_Test Item")
+		get_or_create_fiscal_year(company)
+
+		# Create Payment Entry with a difference amount
+		pe = frappe.new_doc("Payment Entry")
+		pe.payment_type = "Receive"
+		pe.party_type = "Customer"
+		pe.party = customer
+		pe.company = company
+		pe.paid_amount = 1000
+		pe.received_amount = 1000
+
+		pe.base_paid_amount = pe.paid_amount
+		pe.base_received_amount = pe.received_amount
+		pe.base_total_allocated_amount = 0.0
+		pe.source_exchange_rate = 1
+		# Manually set difference_amount before calling set_gain_or_loss
+		pe.difference_amount = 50
+
+		# Account details to be updated in deductions row
+		account_details = {
+			"account": "Loss on Exchange - _TC",
+			"cost_center": "Main - _TC",
+			"description": "Test gain/loss difference",
+		}
+
+		# Call set_gain_or_loss - should append a deduction row with difference_amount and account details
+		pe.set_gain_or_loss(account_details)
+
+		# Validate deductions table has one row with correct data
+		self.assertEqual(len(pe.deductions), 1)
+		self.assertEqual(pe.deductions[0].amount, 50)
+
+		# Validate unallocated_amount is updated accordingly (should be paid_amount - (allocated + deductions))
+		pe.set_unallocated_amount()  # Make sure unallocated amount is recalculated
+		self.assertIsNotNone(pe.unallocated_amount)
+
+	def test_get_current_tax_fraction_TC_ACC_523(self):
+		from frappe import _dict
+
+		# Create a dummy Payment Entry doc with a taxes child table simulation
+		pe = frappe.new_doc("Payment Entry")
+		pe.taxes = []
+
+		# Add base tax row to simulate previous rows
+		base_tax = _dict(
+			tax_fraction_for_current_item=0.05,  # 5%
+			grand_total_fraction_for_current_item=0.10,  # 10%
+		)
+		pe.append("taxes", base_tax)
+
+		# Test tax included in paid amount and different charge types
+
+		# 1. Charge Type: "On Paid Amount"
+		tax1 = _dict(included_in_paid_amount=1, rate=10, charge_type="On Paid Amount", add_deduct_tax=None)
+		fraction1 = pe.get_current_tax_fraction(tax1)
+		expected1 = 10 / 100.0
+		self.assertAlmostEqual(fraction1, expected1)
+
+		# 2. Charge Type: "On Previous Row Amount"
+		tax2 = _dict(
+			included_in_paid_amount=1,
+			rate=20,
+			charge_type="On Previous Row Amount",
+			row_id=1,
+			add_deduct_tax=None,
+		)
+		fraction2 = pe.get_current_tax_fraction(tax2)
+		expected2 = (20 / 100.0) * pe.taxes[0].tax_fraction_for_current_item
+		self.assertAlmostEqual(fraction2, expected2)
+
+		# 3. Charge Type: "On Previous Row Total"
+		tax3 = _dict(
+			included_in_paid_amount=1,
+			rate=30,
+			charge_type="On Previous Row Total",
+			row_id=1,
+			add_deduct_tax=None,
+		)
+		fraction3 = pe.get_current_tax_fraction(tax3)
+		expected3 = (30 / 100.0) * pe.taxes[0].grand_total_fraction_for_current_item
+		self.assertAlmostEqual(fraction3, expected3)
+
+		# 4. Deduct tax case: same as tax1 but with deduct flag
+		tax4 = _dict(
+			included_in_paid_amount=1, rate=10, charge_type="On Paid Amount", add_deduct_tax="Deduct"
+		)
+		fraction4 = pe.get_current_tax_fraction(tax4)
+		expected4 = -(10 / 100.0)
+		self.assertAlmostEqual(fraction4, expected4)
+
+		# 5. Tax not included in paid amount (should return 0)
+		tax5 = _dict(included_in_paid_amount=0, rate=10, charge_type="On Paid Amount", add_deduct_tax=None)
+		fraction5 = pe.get_current_tax_fraction(tax5)
+		self.assertEqual(fraction5, 0)
+
 
 def create_payment_order_against_payment_entry(ref_doc, order_type, bank_account):
 	payment_order = frappe.get_doc(
@@ -3248,4 +3468,4 @@ def create_user():
 @frappe.whitelist()
 def call_method():
 	obj_1 = TestPaymentEntry()
-	obj_1.test_allocation_with_sales_return_reference_TC_ACC_520()
+	obj_1.test_get_current_tax_fraction_TC_ACC_523()
