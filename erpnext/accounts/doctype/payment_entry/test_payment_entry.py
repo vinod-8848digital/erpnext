@@ -3071,6 +3071,39 @@ class TestPaymentEntry(FrappeTestCase):
 		fraction5 = pe.get_current_tax_fraction(tax5)
 		self.assertEqual(fraction5, 0)
 
+	def test_get_value_in_transaction_currency_TC_ACC_524(self):
+		from frappe.utils import flt
+
+		# Create Payment Entry doc with necessary attributes
+		pe = frappe.new_doc("Payment Entry")
+		pe.company = "_Test Company"
+
+		# Set paid_from_account_currency and exchange rates
+		pe.paid_from_account_currency = "INR"
+		pe.target_exchange_rate = 75.0  # Example exchange rate
+		pe.source_exchange_rate = 80.0
+
+		# Set company currency using actual erpnext function
+		# Ensure company "_Test Company" has currency set to "INR" in your test data
+
+		# GL dict sample values
+		gl_dict = {"debit": 7500, "credit": 0}
+
+		# Case 1: If paid_from_account_currency == company currency, uses target_exchange_rate
+		value_1 = pe.get_value_in_transaction_currency("INR", gl_dict, "debit")
+		expected_1 = flt(7500 / 75.0)
+		self.assertEqual(value_1, expected_1)
+
+		# Case 2: If paid_from_account_currency != company currency, uses source_exchange_rate
+		pe.paid_from_account_currency = "EUR"
+		value_2 = pe.get_value_in_transaction_currency("EUR", gl_dict, "debit")
+		expected_2 = flt(7500 / 80.0)
+		self.assertEqual(value_2, expected_2)
+
+		# Case 3: If the field does not exist in gl_dict, returns 0.0
+		value_3 = pe.get_value_in_transaction_currency("EUR", gl_dict, "non_existent_field")
+		self.assertEqual(value_3, 0.0)
+
 
 def create_payment_order_against_payment_entry(ref_doc, order_type, bank_account):
 	payment_order = frappe.get_doc(
@@ -3468,4 +3501,4 @@ def create_user():
 @frappe.whitelist()
 def call_method():
 	obj_1 = TestPaymentEntry()
-	obj_1.test_get_current_tax_fraction_TC_ACC_523()
+	obj_1.test_get_value_in_transaction_currency()

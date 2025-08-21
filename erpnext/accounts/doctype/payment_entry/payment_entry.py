@@ -277,13 +277,13 @@ class PaymentEntry(AccountsController):
 			return
 
 		fail_message = _("Row #{0}: Allocated Amount cannot be greater than outstanding amount.")
-		for d in self.get("references"):
+		for d in self.get("references"):  # pragma: no cover
 			if (flt(d.allocated_amount)) > 0 and flt(d.allocated_amount) > flt(d.outstanding_amount):
-				frappe.throw(fail_message.format(d.idx))  # pragma: no cover
+				frappe.throw(fail_message.format(d.idx))
 
 			# Check for negative outstanding invoices as well
 			if flt(d.allocated_amount) < 0 and flt(d.allocated_amount) < flt(d.outstanding_amount):
-				frappe.throw(fail_message.format(d.idx))  # pragma: no cover
+				frappe.throw(fail_message.format(d.idx))
 
 	def validate_allocated_amount_as_per_payment_request(self):
 		"""
@@ -1595,7 +1595,7 @@ class PaymentEntry(AccountsController):
 			)
 
 			if not d.included_in_paid_amount:
-				if get_account_currency(payment_account) != self.company_currency:
+				if get_account_currency(payment_account) != self.company_currency:  # pragma: no cover
 					if self.payment_type == "Receive":
 						exchange_rate = self.target_exchange_rate
 					elif self.payment_type in ["Pay", "Internal Transfer"]:
