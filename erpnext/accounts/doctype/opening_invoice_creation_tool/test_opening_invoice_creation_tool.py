@@ -271,7 +271,7 @@ class TestOpeningInvoiceCreationTool(FrappeTestCase):
 		self.assertIsInstance(temp_account, str)
 		self.assertTrue(temp_account.startswith("ACC") or temp_account.startswith("Temp"))
 
-	def test_make_invoices_path_TC_ACC_505(self):
+	def test_make_invoices_path_TC_ACC_517(self):
 		company = "_Test Company"
 		tool = frappe.new_doc("Opening Invoice Creation Tool")
 		tool.company = company
@@ -305,7 +305,7 @@ class TestOpeningInvoiceCreationTool(FrappeTestCase):
 
 		frappe.flags.in_test = False
 
-	def test_make_invoices_creating_missing_customer_TC_ACC_506(self):
+	def test_make_invoices_creating_missing_customer_TC_ACC_518(self):
 		company = "_Test Company"
 		tool = frappe.new_doc("Opening Invoice Creation Tool")
 		tool.company = company
@@ -333,7 +333,7 @@ class TestOpeningInvoiceCreationTool(FrappeTestCase):
 
 		frappe.flags.in_test = False
 
-	def test_make_invoices_creating_missing_supplier_TC_ACC_507(self):
+	def test_make_invoices_creating_missing_supplier_TC_ACC_519(self):
 		company = "_Test Company"
 		tool = frappe.new_doc("Opening Invoice Creation Tool")
 		tool.company = company
