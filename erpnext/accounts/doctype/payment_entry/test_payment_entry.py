@@ -2969,6 +2969,49 @@ class TestPaymentEntry(FrappeTestCase):
 		# The existing payment_request should remain unchanged
 		self.assertEqual(pe.references[1].payment_request, existing_pr.name)
 
+	def test_set_gain_or_loss_TC_ACC_522(self):
+		company = "_Test Company"
+		customer = "_Test Customer"
+
+		# Setup
+		create_customer(customer, "INR")
+		make_test_item("_Test Item")
+		get_or_create_fiscal_year(company)
+
+		# Create Payment Entry with a difference amount
+		pe = frappe.new_doc("Payment Entry")
+		pe.payment_type = "Receive"
+		pe.party_type = "Customer"
+		pe.party = customer
+		pe.company = company
+		pe.paid_amount = 1000
+		pe.received_amount = 1000
+
+		pe.base_paid_amount = pe.paid_amount
+		pe.base_received_amount = pe.received_amount
+		pe.base_total_allocated_amount = 0.0
+		pe.source_exchange_rate = 1
+		# Manually set difference_amount before calling set_gain_or_loss
+		pe.difference_amount = 50
+
+		# Account details to be updated in deductions row
+		account_details = {
+			"account": "Loss on Exchange - _TC",
+			"cost_center": "Main - _TC",
+			"description": "Test gain/loss difference",
+		}
+
+		# Call set_gain_or_loss - should append a deduction row with difference_amount and account details
+		pe.set_gain_or_loss(account_details)
+
+		# Validate deductions table has one row with correct data
+		self.assertEqual(len(pe.deductions), 1)
+		self.assertEqual(pe.deductions[0].amount, 50)
+
+		# Validate unallocated_amount is updated accordingly (should be paid_amount - (allocated + deductions))
+		pe.set_unallocated_amount()  # Make sure unallocated amount is recalculated
+		self.assertIsNotNone(pe.unallocated_amount)
+
 
 def create_payment_order_against_payment_entry(ref_doc, order_type, bank_account):
 	payment_order = frappe.get_doc(
@@ -3366,4 +3409,4 @@ def create_user():
 @frappe.whitelist()
 def call_method():
 	obj_1 = TestPaymentEntry()
-	obj_1.test_set_matched_payment_requests_TC_ACC_521()
+	obj_1.test_set_gain_or_loss_TC_ACC_522()
