@@ -2,7 +2,7 @@
 # For license information, please see license.txt
 
 # import frappe
-from frappe.model.document import Document 
+from frappe.model.document import Document # pragma: no cover
 
  
 class ERPTransaction(Document): # pragma: no cover
