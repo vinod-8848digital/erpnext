@@ -14,6 +14,7 @@ from erpnext.accounts.doctype.bank_transaction.test_bank_transaction import (
 	create_gl_account,
 )
 from erpnext.accounts.doctype.payment_entry.payment_entry import (
+	get_outstanding_of_references_with_payment_term,
 	get_outstanding_reference_documents,
 	get_paid_amount,
 	get_party_details,
@@ -3211,6 +3212,31 @@ class TestPaymentEntry(FrappeTestCase):
 		self.assertTrue(hasattr(pe, "paid_amount_after_tax"))
 		self.assertEqual(pe.paid_amount_after_tax, pe.base_paid_amount)
 
+	def test_get_outstanding_of_references_with_payment_term(self):
+		company = "_Test Company"
+		customer = "_Test Customer"
+		create_customer(customer, "INR")
+		item = make_test_item("_Test Item")
+		get_or_create_fiscal_year(company)
+		# Step 1: Create a Sales Invoice with Payment Terms
+		si = create_sales_invoice(customer=customer, company=company, qty=2, rate=100)
+		si.payment_term = "_Test Payment Term"
+		si.submit()
+
+		# Step 2: Build references like Payment Entry would
+		references = [
+			frappe._dict(
+				reference_doctype="Sales Invoice", reference_name=si.name, payment_term="_Test Payment Term"
+			)
+		]
+		# Step 3: Call function
+		result = get_outstanding_of_references_with_payment_term(references)
+
+		# Step 4: Assert mapping exists and matches outstanding
+		expected_key = ("Sales Invoice", si.name, "_Test Payment Term")
+		self.assertIn(expected_key, result)
+		self.assertEqual(result[expected_key], 100)
+
 
 def create_payment_order_against_payment_entry(ref_doc, order_type, bank_account):
 	payment_order = frappe.get_doc(
@@ -3608,4 +3634,4 @@ def create_user():
 @frappe.whitelist()
 def call_method():
 	obj_1 = TestPaymentEntry()
-	obj_1.test_determine_exclusive_rate_with_inclusive_tax()
+	obj_1.test_get_outstanding_of_references_with_payment_term()
