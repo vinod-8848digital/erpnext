@@ -14,6 +14,8 @@ from erpnext.accounts.doctype.bank_transaction.test_bank_transaction import (
 	create_gl_account,
 )
 from erpnext.accounts.doctype.payment_entry.payment_entry import (
+	get_company_defaults,
+	get_outstanding_of_references_with_payment_term,
 	get_outstanding_reference_documents,
 	get_paid_amount,
 	get_party_details,
@@ -3071,6 +3073,186 @@ class TestPaymentEntry(FrappeTestCase):
 		fraction5 = pe.get_current_tax_fraction(tax5)
 		self.assertEqual(fraction5, 0)
 
+	def test_get_value_in_transaction_currency_TC_ACC_524(self):
+		from frappe.utils import flt
+
+		# Create Payment Entry doc with necessary attributes
+		pe = frappe.new_doc("Payment Entry")
+		pe.company = "_Test Company"
+
+		# Set paid_from_account_currency and exchange rates
+		pe.paid_from_account_currency = "INR"
+		pe.target_exchange_rate = 75.0  # Example exchange rate
+		pe.source_exchange_rate = 80.0
+
+		# Set company currency using actual erpnext function
+		# Ensure company "_Test Company" has currency set to "INR" in your test data
+
+		# GL dict sample values
+		gl_dict = {"debit": 7500, "credit": 0}
+
+		# Case 1: If paid_from_account_currency == company currency, uses target_exchange_rate
+		value_1 = pe.get_value_in_transaction_currency("INR", gl_dict, "debit")
+		expected_1 = flt(7500 / 75.0)
+		self.assertEqual(value_1, expected_1)
+
+		# Case 2: If paid_from_account_currency != company currency, uses source_exchange_rate
+		pe.paid_from_account_currency = "EUR"
+		value_2 = pe.get_value_in_transaction_currency("EUR", gl_dict, "debit")
+		expected_2 = flt(7500 / 80.0)
+		self.assertEqual(value_2, expected_2)
+
+		# Case 3: If the field does not exist in gl_dict, returns 0.0
+		value_3 = pe.get_value_in_transaction_currency("EUR", gl_dict, "non_existent_field")
+		self.assertEqual(value_3, 0.0)
+
+	def test_update_advance_paid_calls_set_total_advance_paid_TC_ACC_524(self):
+		"""
+		Test that update_advance_paid calls set_total_advance_paid
+		and updates the advance_paid field correctly.
+		"""
+		customer = "_Test Customer"
+		company = "_Test Company"
+		create_customer(customer, "INR")
+		make_test_item("_Test Item")
+		get_or_create_fiscal_year(company)
+
+		so = make_sales_order(
+			customer=customer,
+			company=company,
+			grand_total=1000,
+			do_not_submit=False,
+		)
+		self.assertEqual(so.advance_paid, None)
+
+		# Step 2: Create Payment Entry against Sales Order (advance)
+		pe = frappe.new_doc("Payment Entry")
+		pe.payment_type = "Receive"
+		pe.party_type = "Customer"
+		pe.party = customer
+		pe.company = company
+		pe.paid_amount = 500
+		pe.received_amount = 500
+
+		# Reference row pointing to SO (advance_payment_doctype)
+		pe.append(
+			"references",
+			{
+				"reference_doctype": "Sales Order",
+				"reference_name": so.name,
+				"allocated_amount": 500,
+			},
+		)
+
+		pe.paid_from = frappe.get_value("Company", company, "default_receivable_account")
+		pe.paid_to = frappe.get_value("Company", company, "default_cash_account")
+
+		pe.paid_from_account_currency = "INR"
+		pe.paid_to_account_currency = "INR"
+		pe.source_exchange_rate = 1.0
+		pe.target_exchange_rate = 1.0
+		pe.insert()
+		pe.submit()
+
+		# Step 3: Trigger update_advance_paid explicitly
+		pe.update_advance_paid()
+
+		# Reload SO and verify advance updated
+		so.reload()
+		self.assertEqual(so.advance_paid, 500)
+
+	def test_determine_exclusive_rate_with_inclusive_tax(self):
+		company = "_Test Company"
+		customer = "_Test Customer"
+		create_customer(customer, "INR")
+		make_test_item("_Test Item")
+		get_or_create_fiscal_year(company)
+
+		# Step 1: Create Payment Entry
+		pe = frappe.new_doc("Payment Entry")
+		pe.payment_type = "Receive"
+		pe.party_type = "Customer"
+		pe.party = customer
+		pe.company = company
+		pe.base_paid_amount = 1000
+		pe.paid_amount = 1000
+		pe.received_amount = 1000
+
+		# Fix required accounts
+		pe.paid_from = frappe.get_value("Company", company, "default_receivable_account")
+		pe.paid_to = frappe.get_value("Company", company, "default_cash_account")
+		pe.paid_from_account_currency = "INR"
+		pe.paid_to_account_currency = "INR"
+		pe.source_exchange_rate = 1.0
+		pe.target_exchange_rate = 1.0
+
+		# Step 2: Add a tax row with "included_in_paid_amount = 1"
+		pe.append(
+			"taxes",
+			{
+				"charge_type": "Actual",
+				"account_head": "_Test Account Tax",
+				"rate": 10,
+				"included_in_paid_amount": 1,  # ✅ trigger condition
+			},
+		)
+		pe.append(
+			"taxes",
+			{
+				"charge_type": "Actual",
+				"account_head": "_Test Account Tax",
+				"rate": 10,
+				"included_in_paid_amount": 1,  # inclusive tax triggers calculation
+			},
+		)
+
+		# Step 3: Run determine_exclusive_rate()
+		pe.determine_exclusive_rate()
+
+		# Step 4: Assert
+		self.assertTrue(hasattr(pe, "paid_amount_after_tax"))
+		self.assertEqual(pe.paid_amount_after_tax, pe.base_paid_amount)
+
+	def test_get_outstanding_of_references_with_payment_term(self):
+		company = "_Test Company"
+		customer = "_Test Customer"
+		create_customer(customer, "INR")
+		item = make_test_item("_Test Item")
+		get_or_create_fiscal_year(company)
+		# Step 1: Create a Sales Invoice with Payment Terms
+		si = create_sales_invoice(customer=customer, company=company, qty=2, rate=100)
+		si.payment_term = "_Test Payment Term"
+		si.submit()
+
+		# Step 2: Build references like Payment Entry would
+		references = [
+			frappe._dict(
+				reference_doctype="Sales Invoice", reference_name=si.name, payment_term="_Test Payment Term"
+			)
+		]
+		# Step 3: Call function
+		result = get_outstanding_of_references_with_payment_term(references)
+
+		# Step 4: Assert mapping exists and matches outstanding
+		expected_key = ("Sales Invoice", si.name, "_Test Payment Term")
+		self.assertIn(expected_key, result)
+		self.assertEqual(result[expected_key], 100)
+
+	def test_get_company_default(self):
+		company = "_Test Company"
+		company_doc = frappe.get_doc("Company", company)
+		# Call the function under test
+		company_default_details = get_company_defaults(company)
+
+		# Assert: should not be None and should be a dict
+		self.assertIsInstance(company_default_details, dict)
+
+		self.assertEqual(company_default_details.get("write_off_account"), company_doc.write_off_account)
+		self.assertEqual(
+			company_default_details.get("exchange_gain_loss_account"), company_doc.exchange_gain_loss_account
+		)
+		self.assertEqual(company_default_details.get("cost_center"), company_doc.cost_center)
+
 
 def create_payment_order_against_payment_entry(ref_doc, order_type, bank_account):
 	payment_order = frappe.get_doc(
@@ -3468,4 +3650,4 @@ def create_user():
 @frappe.whitelist()
 def call_method():
 	obj_1 = TestPaymentEntry()
-	obj_1.test_get_current_tax_fraction_TC_ACC_523()
+	obj_1.test_get_company_default()
