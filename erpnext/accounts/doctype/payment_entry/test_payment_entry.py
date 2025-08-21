@@ -2851,6 +2851,124 @@ class TestPaymentEntry(FrappeTestCase):
 		# Assert negative allocation applied
 		self.assertEqual(pe.references[1].allocated_amount, 0)
 
+	def test_set_matched_payment_requests_TC_ACC_521(self):
+		customer = "_Test Customer"
+		company = "_Test Company"
+
+		# Setup
+		create_customer(customer, "INR")
+		make_test_item("_Test Item")
+		get_or_create_fiscal_year(company)
+
+		# Create Sales Invoice
+		si = create_sales_invoice(customer=customer, company=company, qty=2, rate=100)
+		si.submit()
+
+		# Create Payment Requests
+		pr1 = frappe.get_doc(
+			{
+				"doctype": "Payment Request",
+				"party_type": "Customer",
+				"party": customer,
+				"reference_doctype": "Sales Invoice",
+				"reference_name": si.name,
+				"transaction_date": getdate(),
+				"grand_total": 100,
+				"outstanding_amount": 100,
+				"status": "Initiated",
+				"docstatus": 1,
+				"company": company,
+			}
+		).insert(ignore_permissions=True)
+
+		pr2 = frappe.get_doc(
+			{
+				"doctype": "Payment Request",
+				"party_type": "Customer",
+				"party": customer,
+				"reference_doctype": "Sales Invoice",
+				"reference_name": si.name,
+				"transaction_date": getdate(),
+				"grand_total": 50,
+				"outstanding_amount": 50,
+				"status": "Initiated",
+				"docstatus": 1,
+				"company": company,
+			}
+		).insert(ignore_permissions=True)
+
+		# Create a Payment Entry with references
+		pe = frappe.new_doc("Payment Entry")
+		pe.payment_type = "Receive"
+		pe.party_type = "Customer"
+		pe.party = customer
+		pe.company = company
+		pe.paid_amount = 150
+		pe.received_amount = 150
+
+		# Append two reference rows with allocated amounts matching payment requests
+		pe.append(
+			"references",
+			{
+				"doctype": "Payment Entry Reference",
+				"reference_doctype": "Sales Invoice",
+				"reference_name": si.name,
+				"allocated_amount": 100,
+				"payment_request": None,
+			},
+		)
+		pe.append(
+			"references",
+			{
+				"doctype": "Payment Entry Reference",
+				"reference_doctype": "Sales Invoice",
+				"reference_name": si.name,
+				"allocated_amount": 50,
+				"payment_request": None,
+			},
+		)
+
+		# Prepare matched payment requests list (reference_doctype, reference_name, allocated_amount, payment_request)
+		matched_payment_requests = [
+			("Sales Invoice", si.name, 100, pr1.name),
+			("Sales Invoice", si.name, 50, pr2.name),
+		]
+
+		# Call the method to set payment requests
+		pe.set_matched_payment_requests(matched_payment_requests)
+
+		# Assertions to verify payment_request fields have been set correctly
+		self.assertEqual(pe.references[0].payment_request, pr1.name)
+
+		# Also test that if a reference already has a payment_request, it is not overwritten
+		existing_pr = frappe.get_doc(
+			{
+				"doctype": "Payment Request",
+				"party_type": "Customer",
+				"party": customer,
+				"reference_doctype": "Sales Invoice",
+				"reference_name": si.name,
+				"transaction_date": getdate(),
+				"grand_total": 30,
+				"outstanding_amount": 30,
+				"status": "Initiated",
+				"docstatus": 1,
+				"company": company,
+			}
+		).insert(ignore_permissions=True)
+
+		pe.references[1].payment_request = existing_pr.name
+
+		# Prepare another matched list including the same allocated_amount to test no overwrite
+		matched_payment_requests_2 = [
+			("Sales Invoice", si.name, 50, pr2.name),
+		]
+
+		pe.set_matched_payment_requests(matched_payment_requests_2)
+
+		# The existing payment_request should remain unchanged
+		self.assertEqual(pe.references[1].payment_request, existing_pr.name)
+
 
 def create_payment_order_against_payment_entry(ref_doc, order_type, bank_account):
 	payment_order = frappe.get_doc(
@@ -3248,4 +3366,4 @@ def create_user():
 @frappe.whitelist()
 def call_method():
 	obj_1 = TestPaymentEntry()
-	obj_1.test_allocation_with_sales_return_reference_TC_ACC_520()
+	obj_1.test_set_matched_payment_requests_TC_ACC_521()
