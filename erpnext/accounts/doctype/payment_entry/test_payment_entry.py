@@ -2779,6 +2779,78 @@ class TestPaymentEntry(FrappeTestCase):
 		self.assertEqual(len(pe.references), 1)
 		self.assertEqual(pe.references[0].allocated_amount, 1200)
 
+	def test_allocation_with_sales_return_reference_TC_ACC_520(self):
+		customer = "_Test Customer"
+		company = "_Test Company"
+
+		create_customer(customer, "INR")
+		make_test_item("_Test Item")
+		get_or_create_fiscal_year(company)
+
+		# Original Sales Invoice (1000)
+		si = create_sales_invoice(customer=customer, company=company, qty=5, rate=200)
+		si.submit()
+
+		# Sales Return (credit note of -300)
+		credit_note = frappe.get_doc(
+			{
+				"doctype": "Sales Invoice",
+				"customer": customer,
+				"company": company,
+				"is_return": 1,
+				"return_against": si.name,
+				"currency": si.currency,
+				"conversion_rate": si.conversion_rate,
+				"items": [
+					{
+						"item_code": "_Test Item",
+						"qty": -1,
+						"rate": 300,
+					}
+				],
+			}
+		)
+		credit_note.submit()
+
+		# Payment Entry (1000)
+		pe = frappe.new_doc("Payment Entry")
+		pe.payment_type = "Receive"
+		pe.party_type = "Customer"
+		pe.party = customer
+		pe.company = company
+		pe.paid_amount = 1000
+		pe.received_amount = 1000
+
+		# Reference to original SI (positive outstanding)
+		pe.append(
+			"references",
+			{
+				"reference_doctype": "Sales Invoice",
+				"reference_name": si.name,
+				"outstanding_amount": 1000,
+			},
+		)
+
+		# Reference to Sales Return (negative outstanding)
+		pe.append(
+			"references",
+			{
+				"reference_doctype": "Sales Invoice",
+				"reference_name": credit_note.name,
+				"outstanding_amount": 1000,
+			},
+		)
+
+		# Trigger allocation
+		pe.allocate_amount_to_references(
+			paid_amount=1000,
+			paid_amount_change=True,
+			allocate_payment_amount=True,
+		)
+
+		# Assert negative allocation applied
+		self.assertEqual(pe.references[1].allocated_amount, 0)
+
 
 def create_payment_order_against_payment_entry(ref_doc, order_type, bank_account):
 	payment_order = frappe.get_doc(
@@ -3171,3 +3243,9 @@ def create_user():
 	new_user.add_roles("_Test Role 2")
 	new_user.save()
 	return new_user.name
+
+
+@frappe.whitelist()
+def call_method():
+	obj_1 = TestPaymentEntry()
+	obj_1.test_allocation_with_sales_return_reference_TC_ACC_520()
