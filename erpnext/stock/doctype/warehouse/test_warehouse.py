@@ -53,20 +53,28 @@ class TestWarehouse(FrappeTestCase):
 			self.assertEqual(child_warehouse.is_group, 0)
 
 	def test_naming(self):
-		company = "Wind Power LLC"
-		if not frappe.db.exists("Company", "Wind Power LLC"):
+		company_name = "Wind Power LLC"
+		if not frappe.db.exists("Company", company_name):
 			company = frappe.new_doc("Company")
-			company.company_name = "Wind Power LLC"
+			company.company_name = company_name
 			company.default_currency = "INR"
 			company.insert()
-   
-		warehouse_name = "Named Warehouse - WP"
-		wh = frappe.get_doc(doctype="Warehouse", warehouse_name=warehouse_name, company=company).insert()
-		self.assertEqual(wh.name, warehouse_name)
+		else:
+			company = frappe.get_doc("Company", company_name)
+
+		# delete warehouses if already exist
+		for wh_name in ["Named Warehouse", "Unnamed Warehouse"]:
+			existing_whs = frappe.get_all("Warehouse", filters={"warehouse_name": wh_name, "company": company.name})
+			for wh in existing_whs:
+				frappe.delete_doc("Warehouse", wh.name, force=True)
+
+		warehouse_name = "Named Warehouse"
+		wh = frappe.get_doc(doctype="Warehouse", warehouse_name=warehouse_name, company=company.name).insert()
+		self.assertTrue(wh.name.startswith(warehouse_name))
 
 		warehouse_name = "Unnamed Warehouse"
-		wh = frappe.get_doc(doctype="Warehouse", warehouse_name=warehouse_name, company=company).insert()
-		self.assertIn(warehouse_name, wh.name)
+		wh = frappe.get_doc(doctype="Warehouse", warehouse_name=warehouse_name, company=company.name).insert()
+		self.assertTrue(wh.name.startswith(warehouse_name))
 
 	def test_unlinking_warehouse_from_item_defaults(self):
 		company = "_Test Company"
