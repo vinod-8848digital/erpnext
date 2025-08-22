@@ -253,7 +253,7 @@ class TestLoyaltyProgram(unittest.TestCase):
 
 		self.test_customer.delete()
 
-	def test_get_redeemption_factor(self):
+	def test_get_redeemption_factor_TC_ACC_529(self):
 		# Create a test Loyalty Program
 		self.loyalty_program = frappe.get_doc(
 			{
