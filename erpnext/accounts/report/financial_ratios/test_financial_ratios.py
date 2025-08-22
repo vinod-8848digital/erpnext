@@ -134,12 +134,12 @@ class TestFinancialRatios(FrappeTestCase):
         self.assertIn("period_end_date", filters)
         self.assertEqual(filters["filter_based_on"], "Fiscal Year")
 
-    def test_calculate_ratio_and_zero_guard_TC_ACC_524(self):
+    def test_calculate_ratio_and_zero_guard_TC_ACC_388(self):
         with patch.object(fr.frappe.db, "get_single_value", return_value=2):
             self.assertEqual(fr.calculate_ratio(10, 4, 2), 2.5)
             self.assertEqual(fr.calculate_ratio(10, 0, 2), 0)
 
-    def test_setup_filters_sets_dates_from_fiscal_year_TC_ACC_525(self):
+    def test_setup_filters_sets_dates_from_fiscal_year_TC_ACC_389(self):
         filters = frappe._dict({"from_fiscal_year": "2024-2025", "to_fiscal_year": "2025-2026"})
         with patch.object(fr, "get_fiscal_year", side_effect=self._fake_get_fiscal_year):
             fr.setup_filters(filters)
