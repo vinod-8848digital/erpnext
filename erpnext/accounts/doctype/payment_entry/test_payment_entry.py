@@ -2738,7 +2738,7 @@ class TestPaymentEntry(FrappeTestCase):
 
 		self.assertEqual(pe.references[0].allocated_amount, 500)
 
-	def test_allocation_for_customer_ACC_385(self):
+	def test_allocation_for_customer_TC_ACC_385(self):
 		customer = "_Test Customer"
 		company = "_Test Company"
 
