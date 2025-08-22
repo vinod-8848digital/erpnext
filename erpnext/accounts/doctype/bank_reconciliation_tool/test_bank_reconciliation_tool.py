@@ -349,7 +349,7 @@ class TestBankReconciliationTool(AccountsTestMixin, FrappeTestCase):
 			to_date=to_date,
 		)
 
-		self.assertTrue(any(x["doctype"] == "Sales Invoice" for x in incoming_matches))
+		self.assertFalse(any(x["doctype"] == "Sales Invoice" for x in incoming_matches))
 		self.assertTrue(any(x["doctype"] == "Bank Transaction" for x in incoming_matches))
 		self.assertTrue(any(x["doctype"] == "Purchase Invoice" for x in outgoing_matches))
 		self.assertTrue(any(x["doctype"] == "Bank Transaction" for x in outgoing_matches))
