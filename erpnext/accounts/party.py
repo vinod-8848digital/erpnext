@@ -172,7 +172,7 @@ def _get_party_details(
 				"allocated_percentage": d.allocated_percentage or None,
 				"commission_rate": d.commission_rate,
 			}
-			for d in (party.get("sales_team") or []) 
+			for d in (party.get("sales_team") or [])
 		]
 
 	if party_type == "Supplier" and party:
@@ -182,6 +182,7 @@ def _get_party_details(
 		party_details["tax_category"] = frappe.get_value("POS Profile", pos_profile, "tax_category")
 
 	return party_details
+
 
 def set_address_details(
 	party_details,
@@ -289,6 +290,7 @@ def set_address_details(
 
 	return party_billing, party_shipping
 
+
 @erpnext.allow_regional
 def get_regional_address_details(party_details, doctype, company):
 	pass
@@ -321,6 +323,7 @@ def complete_contact_details(party_details):
 		contact_details = frappe.db.get_value("Contact", party_details.contact_person, fields, as_dict=True)
 
 		party_details.update(contact_details)
+
 
 def set_contact_details(party_details, party, party_type):
 	party_details.contact_person = get_default_contact(party_type, party.name)
@@ -436,6 +439,12 @@ def get_party_account(party_type, party=None, company=None, include_advance=Fals
 			account_currency = frappe.get_cached_value("Account", account, "account_currency")
 		if (account and account_currency != existing_gle_currency) or not account:
 			account = get_party_gle_account(party_type, party, company)
+
+	# get default account on the basis of party typeAdd commentMore actions
+	if not account:
+		account_type = frappe.get_cached_value("Party Type", party_type, "account_type")
+		default_account_name = "default_" + account_type.lower() + "_account"
+		account = frappe.get_cached_value("Company", company, default_account_name)
 
 	if include_advance and party_type in ["Customer", "Supplier", "Student"]:
 		advance_account = get_party_advance_account(party_type, party, company)
@@ -664,6 +673,7 @@ def validate_due_date_with_template(posting_date, due_date, bill_date, template_
 		else:
 			frappe.throw(_("Due / Reference Date cannot be after {0}").format(formatdate(default_due_date)))
 
+
 @frappe.whitelist()
 def get_address_tax_category(tax_category=None, billing_address=None, shipping_address=None):
 	addr_tax_category_from = frappe.db.get_single_value(
@@ -777,8 +787,6 @@ def validate_party_frozen_disabled(party_type, party_name):
 				frappe.msgprint(_("{0} {1} is not active").format(party_type, party_name), alert=True)
 
 
-
-
 def validate_account_party_type(self):
 	if self.party_type and self.party:
 		account_type = frappe.get_cached_value("Account", self.account, "account_type")
@@ -790,7 +798,6 @@ def validate_account_party_type(self):
 			)
 
 
-			
 def get_dashboard_info(party_type, party, loyalty_program=None):
 	current_fiscal_year = get_fiscal_year(nowdate(), as_dict=True)
 
@@ -822,18 +829,21 @@ def get_dashboard_info(party_type, party, loyalty_program=None):
 
 	loyalty_point_details = []
 	if party_type == "Customer":
-		loyalty_point_details = frappe._dict({
-			d[0]: d[1] for d in frappe.get_all(
-				"Loyalty Point Entry",
-				filters={
-					"customer": party,
-					"expiry_date": (">=", getdate()),
-				},
-				group_by="company",
-				fields=["company", "sum(loyalty_points) as loyalty_points"],
-				as_list=1,
-			)
-	})
+		loyalty_point_details = frappe._dict(
+			{
+				d[0]: d[1]
+				for d in frappe.get_all(
+					"Loyalty Point Entry",
+					filters={
+						"customer": party,
+						"expiry_date": (">=", getdate()),
+					},
+					group_by="company",
+					fields=["company", "sum(loyalty_points) as loyalty_points"],
+					as_list=1,
+				)
+			}
+		)
 
 	company_wise_billing_this_year = frappe._dict()
 
@@ -867,7 +877,6 @@ def get_dashboard_info(party_type, party, loyalty_program=None):
 
 		if loyalty_point_details:
 			loyalty_points = loyalty_point_details.get(d.company)
-
 
 		info = {}
 		info["billing_this_year"] = flt(billing_this_year) if billing_this_year else 0

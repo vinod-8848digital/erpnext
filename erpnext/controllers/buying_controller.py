@@ -9,6 +9,7 @@ from frappe.utils import cint, flt, getdate
 from frappe.utils.data import nowtime
 
 import erpnext
+from erpnext.accounts.doctype.accounting_dimension.accounting_dimension import get_dimensions
 from erpnext.accounts.doctype.budget.budget import validate_expense_against_budget
 from erpnext.accounts.party import get_party_details
 from erpnext.buying.utils import update_last_purchase_rate, validate_for_items
@@ -16,7 +17,7 @@ from erpnext.controllers.sales_and_purchase_return import get_rate_for_return
 from erpnext.controllers.subcontracting_controller import SubcontractingController
 from erpnext.stock.get_item_details import get_conversion_factor
 from erpnext.stock.utils import get_incoming_rate
-from erpnext.accounts.doctype.accounting_dimension.accounting_dimension import get_dimensions
+
 
 class QtyMismatchError(ValidationError):
 	pass
@@ -67,6 +68,14 @@ class BuyingController(SubcontractingController):
 			"backflush_based_on",
 			frappe.db.get_single_value("Buying Settings", "backflush_raw_materials_of_subcontract_based_on"),
 		)
+
+		if self.docstatus == 1 and self.doctype in ["Purchase Receipt", "Purchase Invoice"]:
+			self.set_onload(
+				"allow_to_make_qc_after_submission",
+				frappe.db.get_single_value(
+					"Stock Settings", "allow_to_make_quality_inspection_after_purchase_or_delivery"
+				),
+			)
 
 	def create_package_for_transfer(self) -> None:
 		"""Create serial and batch package for Sourece Warehouse in case of inter transfer."""
@@ -364,7 +373,6 @@ class BuyingController(SubcontractingController):
 		)
 		if allow_at_arms_length_price:
 			return
-
 
 		for d in self.get("items"):
 			d.discount_percentage = 0.0
@@ -760,6 +768,7 @@ class BuyingController(SubcontractingController):
 		else:
 			validate_item_type(self, "is_purchase_item", "purchase")
 
+
 def validate_item_type(doc, fieldname, message):
 	# iterate through items and check if they are valid sales or purchase items
 	items = [d.item_code for d in doc.items if d.item_code]
@@ -794,11 +803,13 @@ def validate_item_type(doc, fieldname, message):
 
 		frappe.throw(error_message)
 
+
 def get_asset_items(doc):
 	if doc.doctype not in ["Purchase Order", "Purchase Invoice", "Purchase Receipt"]:
 		return []
 
 	return [d.item_code for d in doc.items if d.get("is_fixed_asset")]
+
 
 @erpnext.allow_regional
 def update_regional_item_valuation_rate(doc):
