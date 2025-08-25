@@ -42,7 +42,7 @@ class TestBankTransaction(FrappeTestCase):
 		bank_account = create_bank_account(
 			gl_account=gl_account, bank_account_name="Checking Account " + uniq_identifier
 		)
-
+		frappe.db.set_value("Company", "_Test Company", "stock_received_but_not_billed",f"Stock Received But Not Billed - _TC")
 		add_transactions(bank_account=bank_account)
 		add_vouchers(gl_account=gl_account)
 
