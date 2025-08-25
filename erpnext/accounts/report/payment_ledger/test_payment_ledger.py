@@ -3,6 +3,11 @@ from frappe import qb
 from frappe.tests.utils import FrappeTestCase
 
 from erpnext.accounts.doctype.payment_entry.payment_entry import get_payment_entry
+from erpnext.accounts.doctype.payment_entry.test_payment_entry import (
+	create_customer,
+	get_or_create_fiscal_year,
+	make_test_item,
+)
 from erpnext.accounts.doctype.sales_invoice.test_sales_invoice import create_sales_invoice
 from erpnext.accounts.report.payment_ledger.payment_ledger import execute
 
@@ -10,6 +15,9 @@ from erpnext.accounts.report.payment_ledger.payment_ledger import execute
 class TestPaymentLedger(FrappeTestCase):
 	def setUp(self):
 		self.create_company()
+		create_customer("_Test Customer", "INR")
+		make_test_item("_Test Item")
+		get_or_create_fiscal_year(company="Test Payment Ledger")
 		self.cleanup()
 
 	def cleanup(self):
