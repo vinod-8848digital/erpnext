@@ -40,8 +40,10 @@ class TestPaymentPeriodBasedOnInvoiceDate(FrappeTestCase):
 		filters = frappe._dict(
 			{
 				"payment_type": "Incoming",
-				"party_type": "Customer",
 				"company": self.company,
+				"party": self.customer,
+				"from_date": self.sales_invoice.posting_date,
+				"to_date": self.sales_invoice.posting_date,
 			}
 		)
 

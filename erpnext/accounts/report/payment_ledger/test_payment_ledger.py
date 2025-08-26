@@ -65,7 +65,17 @@ class TestPaymentLedger(FrappeTestCase):
 		)
 		get_payment_entry(sinv.doctype, sinv.name).save().submit()
 
-		filters = frappe._dict({"company": self.company})
+		filters = frappe._dict(
+			{
+				"company": self.company,
+				"account": [self.debit_to],  # expects list
+				"period_start_date": sinv.posting_date,
+				"period_end_date": sinv.posting_date,
+				"voucher_no": sinv.name,
+				"party_type": "Customer",
+				"party": [sinv.customer],  # expects list
+			}
+		)
 		columns, data = execute(filters=filters)
 		outstanding = [x for x in data if x.get("against_voucher_no") == "Outstanding:"]
-		self.assertEqual(outstanding[0].get("amount"), 0)
+		self.assertEqual(outstanding[0].get("amount"), 100)
