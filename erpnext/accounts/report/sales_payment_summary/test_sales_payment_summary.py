@@ -17,8 +17,7 @@ test_dependencies = ["Sales Invoice"]
 
 
 class TestSalesPaymentSummary(unittest.TestCase):
-	@classmethod
-	def setUpClass(self):
+	def setUp(self):
 		create_records()
 		pes = frappe.get_all("Payment Entry")
 		jes = frappe.get_all("Journal Entry")
