@@ -11,7 +11,11 @@ def execute():
 			continue
 
 		try:
-			frappe.db.sql_ddl(f"ALTER TABLE `{table}` DROP INDEX `{index}`")
+			if frappe.db.db_type == "postgres":
+				frappe.db.sql_ddl(f'DROP INDEX IF EXISTS "{index}"')
+			else:
+				frappe.db.sql_ddl(f"ALTER TABLE `{table}` DROP INDEX `{index}`")
+
 			click.echo(f"✓ dropped {index} index from {table}")
-		except Exception:
-			frappe.log_error("Failed to drop index")
+		except Exception as e:
+			frappe.log_error(f"Failed to drop index {index}: {e}")
