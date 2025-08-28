@@ -8,6 +8,7 @@ from collections import Counter, defaultdict
 import frappe
 from frappe import _, _dict, bold
 from frappe.model.document import Document
+from frappe.model.naming import make_autoname
 from frappe.query_builder import DocType
 from frappe.query_builder.functions import CombineDatetime, Sum
 from frappe.utils import (
@@ -498,7 +499,6 @@ class SerialandBatchBundle(Document):
 				"item_code": self.item_code,
 				"warehouse": self.warehouse,
 				"serial_and_batch_bundle": self.name,
-				"actual_qty": self.total_qty,
 				"company": self.company,
 				"serial_nos": [row.serial_no for row in self.entries if row.serial_no],
 				"batch_nos": {row.batch_no: row for row in self.entries if row.batch_no},
@@ -1532,7 +1532,7 @@ def get_excluded_serial_numbers(child_row):
 		frappe.qb.from_(SerialAndBatchBundle)
 		.join(SerialAndBatchEntry)
 		.on(SerialAndBatchBundle.name == SerialAndBatchEntry.parent)
-		.select((SerialAndBatchEntry.serial_no))
+		.select(SerialAndBatchEntry.serial_no)
 		.where(SerialAndBatchBundle.returned_against == reference_name)
 	)
 
