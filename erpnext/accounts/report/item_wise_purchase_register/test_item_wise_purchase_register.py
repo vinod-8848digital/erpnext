@@ -63,13 +63,13 @@ class TestItemWisePurchaseRegister(AccountsTestMixin, FrappeTestCase):
 		report_output = {k: v for k, v in report[1][0].items() if k in expected_result}
 		self.assertDictEqual(report_output, expected_result)
 
-	def test_execute_without_filters_TC_ACC_418(self):
+	def test_execute_without_filters_TC_ACC_419(self):
 		filters = frappe._dict({"company": self.company})
 		cols, data, *_ = report._execute(filters)
 		self.assertIsInstance(cols, list)
 		self.assertIsInstance(data, list)
 
-	def test_group_by_with_grand_total_TC_ACC_419(self):
+	def test_group_by_with_grand_total_TC_ACC_420(self):
 		self.create_purchase_invoice()
 		filters = frappe._dict({
 		"from_date": today(),
@@ -80,14 +80,14 @@ class TestItemWisePurchaseRegister(AccountsTestMixin, FrappeTestCase):
 		cols, data, *_ = report._execute(filters)
 		self.assertTrue(any("percent_gt" in row for row in data))
 
-	def test_additional_table_columns_0TC_ACC_420(self):
+	def test_additional_table_columns_0TC_ACC_421(self):
 		self.create_purchase_invoice()
 		filters = frappe._dict({"from_date": today(), "to_date": today(), "company": self.company})
 		additional_columns = [{"fieldname": "supplier", "label": "Supp Name"}]
 		cols, data, *_ = report._execute(filters, additional_table_columns=additional_columns)
 		self.assertIn("supplier", data[0])
 	
-	def test_apply_conditions_item_code_and_group_TC_ACC_421(self):
+	def test_apply_conditions_item_code_and_group_TC_ACC_422(self):
 		from frappe import _dict
 		pi = frappe.qb.DocType("Purchase Invoice")
 		pii = frappe.qb.DocType("Purchase Invoice Item")
