@@ -4,9 +4,9 @@ import frappe
 from frappe.tests.utils import FrappeTestCase
 from frappe.utils import today
 
-from erpnext.stock.doctype.stock_entry.test_stock_entry import get_or_create_fiscal_year
 from erpnext.stock.doctype.warehouse.test_warehouse import create_warehouse
 from erpnext.stock.report.available_batch_report import available_batch_report
+from erpnext.stock.utils import get_or_create_fiscal_year
 
 
 class TestAvailableBatchReport(FrappeTestCase):

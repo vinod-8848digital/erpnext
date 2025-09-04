@@ -3,9 +3,9 @@ from frappe.tests.utils import FrappeTestCase
 
 from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_company
 from erpnext.stock.doctype.item.test_item import create_item
-from erpnext.stock.doctype.stock_entry.test_stock_entry import get_or_create_fiscal_year
 from erpnext.stock.doctype.warehouse.test_warehouse import create_warehouse
 from erpnext.stock.report.stock_and_account_value_comparison.stock_and_account_value_comparison import execute
+from erpnext.stock.utils import get_or_create_fiscal_year
 
 
 class TestStockAndAccountValueComparison(FrappeTestCase):

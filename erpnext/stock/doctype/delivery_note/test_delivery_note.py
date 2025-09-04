@@ -3585,11 +3585,10 @@ class TestDeliveryNote(FrappeTestCase):
 
 	@if_app_installed("erpnext_crm")
 	def test_dn_submission_TC_SCK_148(self):
-		from erpnext.selling.doctype.sales_order.test_sales_order import get_or_create_fiscal_year
-
 		# from erpnext_crm.erpnext_crm.doctype.lead.lead import make_customer
 		from erpnext.stock.doctype.delivery_note.test_delivery_note import create_delivery_note
 		from erpnext.stock.doctype.warehouse.test_warehouse import create_warehouse
+		from erpnext.stock.utils import get_or_create_fiscal_year
 
 		"""Test Purchase Receipt Creation, Submission, and Stock Ledger Update"""
 		from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_company, create_customer

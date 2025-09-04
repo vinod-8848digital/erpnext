@@ -41,7 +41,7 @@ class TestStockLedgerEntry(FrappeTestCase, StockTestMixin):
 
 		create_company()
 
-		from erpnext.buying.doctype.purchase_order.test_purchase_order import get_or_create_fiscal_year
+		from erpnext.stock.utils import get_or_create_fiscal_year
 
 		get_or_create_fiscal_year("_Test Company")
 
@@ -608,7 +608,7 @@ class TestStockLedgerEntry(FrappeTestCase, StockTestMixin):
 
 	def test_batch_wise_valuation_across_warehouse(self):
 		from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_company
-		from erpnext.selling.doctype.sales_order.test_sales_order import get_or_create_fiscal_year
+		from erpnext.stock.utils import get_or_create_fiscal_year
 
 		create_company()
 		get_or_create_fiscal_year("_Test Company")

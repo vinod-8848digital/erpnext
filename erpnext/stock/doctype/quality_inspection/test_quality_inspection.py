@@ -291,8 +291,8 @@ class TestQualityInspection(FrappeTestCase):
 
 	def test_qa_for_pr_TC_SCK_159(self):
 		from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_company
-		from erpnext.buying.doctype.purchase_order.test_purchase_order import get_or_create_fiscal_year
 		from erpnext.buying.doctype.supplier.test_supplier import create_supplier
+		from erpnext.stock.utils import get_or_create_fiscal_year
 
 		create_company()
 		company = "_Test Company"
@@ -342,7 +342,7 @@ class TestQualityInspection(FrappeTestCase):
 
 		from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_company
 		from erpnext.buying.doctype.supplier.test_supplier import create_supplier
-		from erpnext.selling.doctype.sales_order.test_sales_order import get_or_create_fiscal_year
+		from erpnext.stock.utils import get_or_create_fiscal_year
 
 		create_company()
 		company = "_Test Company"
@@ -425,8 +425,8 @@ class TestQualityInspection(FrappeTestCase):
 
 	def test_qa_for_pr_out_TC_SCK_162(self):
 		from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_company
-		from erpnext.buying.doctype.purchase_order.test_purchase_order import get_or_create_fiscal_year
 		from erpnext.buying.doctype.supplier.test_supplier import create_supplier
+		from erpnext.stock.utils import get_or_create_fiscal_year
 
 		create_company()
 		company = "_Test Company"
@@ -533,8 +533,8 @@ class TestQualityInspection(FrappeTestCase):
 
 	def test_qa_for_pr_proc_TC_SCK_166(self):
 		from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_company
-		from erpnext.buying.doctype.purchase_order.test_purchase_order import get_or_create_fiscal_year
 		from erpnext.buying.doctype.supplier.test_supplier import create_supplier
+		from erpnext.stock.utils import get_or_create_fiscal_year
 
 		create_company()
 		company = "_Test Company"

@@ -15,7 +15,8 @@ from erpnext.stock.doctype.item.test_item import create_item
 
 class TestPaymentLedgerEntry(FrappeTestCase):
 	def setUp(self):
-		from erpnext.buying.doctype.purchase_order.test_purchase_order import get_or_create_fiscal_year
+		from erpnext.stock.utils import get_or_create_fiscal_year
+
 		self.ple = qb.DocType("Payment Ledger Entry")
 		self.create_company()
 		self.create_item()

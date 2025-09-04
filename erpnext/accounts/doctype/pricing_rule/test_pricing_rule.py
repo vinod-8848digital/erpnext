@@ -25,7 +25,7 @@ class TestPricingRule(FrappeTestCase):
 			setup_pricing_rule_data()
 
 		from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_company
-		from erpnext.buying.doctype.purchase_order.test_purchase_order import get_or_create_fiscal_year
+		from erpnext.stock.utils import get_or_create_fiscal_year
 
 		create_company()
 		get_or_create_fiscal_year("_Test Company")

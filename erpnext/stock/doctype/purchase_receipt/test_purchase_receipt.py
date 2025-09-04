@@ -4261,7 +4261,7 @@ class TestPurchaseReceipt(FrappeTestCase):
 	def test_purchase_order_and_receipt_TC_SCK_073(self):
 		from datetime import datetime, timedelta
 
-		from erpnext.buying.doctype.purchase_order.test_purchase_order import get_or_create_fiscal_year
+		from erpnext.stock.utils import get_or_create_fiscal_year
 
 		create_supplier(supplier_name="_Test Supplier", default_currency="INR")
 		company = "_Test Indian Registered Company"
@@ -4344,7 +4344,7 @@ class TestPurchaseReceipt(FrappeTestCase):
 	def test_purchase_order_and_receipt_TC_SCK_074(self):
 		from datetime import datetime, timedelta
 
-		from erpnext.buying.doctype.purchase_order.test_purchase_order import get_or_create_fiscal_year
+		from erpnext.stock.utils import get_or_create_fiscal_year
 
 		create_supplier(supplier_name="_Test Supplier", default_currency="INR")
 		company = "_Test Indian Registered Company"
@@ -4550,7 +4550,7 @@ class TestPurchaseReceipt(FrappeTestCase):
 
 	def test_purchase_receipt_with_serialized_item_TC_SCK_145(self):
 		from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_company
-		from erpnext.buying.doctype.purchase_order.test_purchase_order import get_or_create_fiscal_year
+		from erpnext.stock.utils import get_or_create_fiscal_year
 
 		create_company()
 		supplier = create_supplier(supplier_name="Test Supplier 1")
@@ -5303,7 +5303,7 @@ class TestPurchaseReceipt(FrappeTestCase):
 
 		# Create Purchase Receipt
 		from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_company
-		from erpnext.buying.doctype.purchase_order.test_purchase_order import get_or_create_fiscal_year
+		from erpnext.stock.utils import get_or_create_fiscal_year
 
 		create_company()
 		create_warehouse(
@@ -5390,7 +5390,7 @@ class TestPurchaseReceipt(FrappeTestCase):
 
 	def test_stock_ledger_report_TC_SCK_225(self):
 		from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_company
-		from erpnext.buying.doctype.purchase_order.test_purchase_order import get_or_create_fiscal_year
+		from erpnext.stock.utils import get_or_create_fiscal_year
 
 		create_company()
 		item = []
@@ -5445,7 +5445,7 @@ class TestPurchaseReceipt(FrappeTestCase):
 
 	def test_stock_ledger_report_TC_SCK_226(self):
 		from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_company
-		from erpnext.buying.doctype.purchase_order.test_purchase_order import get_or_create_fiscal_year
+		from erpnext.stock.utils import get_or_create_fiscal_year
 
 		create_company()
 		item = []
@@ -7382,59 +7382,6 @@ def create_company(company):
 		company_doc.country = ("India",)
 		company_doc.default_currency = ("INR",)
 		company_doc.insert()
-
-
-def get_or_create_fiscal_year(company):
-	from datetime import date, datetime
-
-	import frappe
-
-	current_date = datetime.today().date()
-
-	matching_fy_list = frappe.get_all(
-		"Fiscal Year",
-		filters={
-			"disabled": 0,
-			"year_start_date": ["<=", current_date],
-			"year_end_date": [">=", current_date],
-		},
-		fields=["name"],
-	)
-	is_company = False
-	if len(matching_fy_list) > 0:
-		for fy in matching_fy_list:
-			fiscal_year = frappe.get_doc("Fiscal Year", fy["name"])
-			for years in fiscal_year.companies:
-				if years.company == company:
-					is_company = True
-					break
-			if is_company:
-				break
-
-		if not is_company:
-			for rows in matching_fy_list:
-				try:
-					fiscal_year = frappe.get_doc("Fiscal Year", rows.name)
-					fiscal_year.append("companies", {"company": company})
-					fiscal_year.save()
-					break
-				except Exception as e:
-					print(f"Failed to get Fiscal Year {fy['name']}: {e}")
-					continue
-
-	else:
-		# No fiscal year includes current date — create a new one
-		current_year = current_date.year
-		first_date = date(current_year, 1, 1)
-		last_date = date(current_year, 12, 31)
-
-		fiscal_year = frappe.new_doc("Fiscal Year")
-		fiscal_year.year = f"{current_year}-{company}"
-		fiscal_year.year_start_date = first_date
-		fiscal_year.year_end_date = last_date
-		fiscal_year.company = company  # Required to avoid overlap error
-		fiscal_year.append("companies", {"company": company})
-		fiscal_year.save()
 
 
 def ensure_parent_account(account_name, company, abbr, root_type="Asset", currency="INR"):
