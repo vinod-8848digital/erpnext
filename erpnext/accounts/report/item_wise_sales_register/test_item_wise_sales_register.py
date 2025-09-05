@@ -63,8 +63,6 @@ class TestItemWiseSalesRegister(AccountsTestMixin, FrappeTestCase):
 			"currency": "INR",
 		}
 		report_row = report[1][0]
-
-		print(f"{report_row}report_output")
 		if isinstance(report_row, dict):
 			report_output = {k: v for k, v in report[1][0].items() if k in expected_result}
 		self.assertDictEqual(report_output, expected_result)
