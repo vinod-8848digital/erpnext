@@ -6,7 +6,7 @@ import unittest
 
 import frappe
 from frappe.tests.utils import change_settings
-from frappe.utils import flt, nowdate
+from frappe.utils import flt, nowdate, getdate
 
 from erpnext.accounts.doctype.account.test_account import get_inventory_account
 from erpnext.accounts.doctype.journal_entry.journal_entry import StockAccountInvalidTransaction
@@ -1805,7 +1805,364 @@ class TestJournalEntry(unittest.TestCase):
 		self.assertEqual(jd1.reference_name, pi.name)
 		self.assertEqual(jd1.debit_in_account_currency, pi.outstanding_amount)
 		self.assertEqual(jd2.credit_in_account_currency, pi.outstanding_amount)
-	
+  
+	def test_validate_cheque_info_errors_TC_ACC_553(self):
+		from erpnext.accounts.doctype.sales_invoice.test_sales_invoice import create_company
+
+		create_company(company_name = "_Test Company")
+		company = "_Test Company"
+		abbr = frappe.get_cached_value("Company", company, "abbr")
+
+		bank_account = get_or_create_account("Bank", company, f"Current Assets - {abbr}", "Bank", "Asset")
+		expense_account = get_or_create_account("Round Off", company, f"Expenses - {abbr}", "Expense Account", "Expense")
+
+		je1 = make_journal_entry(account1=bank_account, account2=expense_account, amount=200.0, exchange_rate=2.0, save=False, submit=False)
+		je1.company = company
+		je1.voucher_type = "Bank Entry"
+		je1.insert()
+  
+		with self.assertRaises(frappe.ValidationError):
+			je1.validate_cheque_info()
+
+		je2 = make_journal_entry(account1=bank_account, account2=expense_account, amount=200.0, exchange_rate=2.0, save=False, submit=False)
+		je2.company = company
+		je2.cheque_date = nowdate()
+		je2.insert()
+  
+		with self.assertRaises(frappe.ValidationError):
+			je2.validate_cheque_info()
+   
+	def test_get_values_TC_ACC_554(self):
+		from erpnext.accounts.doctype.purchase_invoice.test_purchase_invoice import make_purchase_invoice
+		from erpnext.accounts.doctype.sales_invoice.test_sales_invoice import create_company
+
+		create_company(company_name="_Test Company")
+		company = "_Test Company"
+		abbr = frappe.get_cached_value("Company", company, "abbr")
+
+		supplier_name = get_or_create_supplier("_Test Supplier Values")
+		customer_name = get_or_create_customer("_Test Customer Values")
+		warehouse_name = get_or_create_warehouse("_Test Warehouse Values - _TC", company)
+		expense_account_name = get_or_create_account("Cost of Goods Sold", company, f"Direct Expenses - {abbr}", "Expense Account", "Expense")
+
+		pi = make_purchase_invoice(
+			company=company,
+			supplier=supplier_name,
+			rate=100,
+			qty=1,
+			warehouse=warehouse_name,
+			uom="Nos",
+			expense_account=expense_account_name,
+			do_not_submit=False,
+		)
+
+		si = frappe.get_doc({
+			"doctype": "Sales Invoice",
+			"customer": customer_name,
+			"company": company,
+			"due_date": nowdate(),
+			"debit_to": f"Debtors - {abbr}",
+			"currency": "INR",
+			"items": [{
+				"item_code": "_Test Item",
+				"qty": 1,
+				"rate": 100
+			}]
+		})
+		si.insert(ignore_permissions=True)
+		si.submit()
+
+		je1 = make_journal_entry(account1=pi.credit_to, account2=f"Cash - {abbr}", amount=pi.grand_total, save=False)
+		je1.company = company
+		je1.voucher_type = "Write Off Entry"
+		je1.write_off_based_on = "Accounts Payable"
+		je1.write_off_amount = 0
+
+		values1 = je1.get_values()
+		self.assertTrue(any(v["party"] == pi.supplier for v in values1))
+
+		je2 = make_journal_entry(account1=si.debit_to, account2=f"Cash - {abbr}", amount=si.grand_total, save=False)
+		je2.company = company
+		je2.voucher_type = "Write Off Entry"
+		je2.write_off_based_on = "Accounts Receivable"
+		je2.write_off_amount = 0
+
+		values2 = je2.get_values()
+		self.assertTrue(any(v["party"] == si.customer for v in values2))
+  
+	def test_validate_credit_debit_note_TC_ACC_555(self):
+		from erpnext.stock.doctype.stock_entry.test_stock_entry import make_stock_entry
+		from erpnext.accounts.doctype.sales_invoice.test_sales_invoice import create_company
+		from erpnext.stock.doctype.item.test_item import create_item
+
+		create_company(company_name="_Test Company")
+		company = "_Test Company"
+		item = create_item(item_code = "_Test Item SE")
+		item.is_stock_item = 1
+		item.save()
+		get_or_create_supplier("_Test Supplier")
+		get_or_create_customer("_Test Customer")
+
+		se1 = make_stock_entry(item_code=item.name, target="_Test Warehouse - _TC", qty=1, basic_rate=100, company=company,do_not_submit=True)
+		se1.save()
+
+		je1 = make_journal_entry(account1=f"Debtors - _TC", account2=f"Creditors - _TC", amount=100, save=False, submit=False)
+		je1.company = company
+		je1.voucher_type = "Credit Note"
+		je1.stock_entry = se1.name
+
+		with self.assertRaises(frappe.ValidationError):
+			je1.validate_credit_debit_note()
+
+		se2 = make_stock_entry(item_code=item.name, target="_Test Warehouse - _TC", qty=1, basic_rate=100, company=company, do_not_submit=False,)
+		se2.submit()
+  
+		je2a = make_journal_entry(account1=f"Debtors - _TC", account2=f"Creditors - _TC", amount=100, save=False)
+		je2a.company = company
+		je2a.voucher_type = "Credit Note"
+		je2a.stock_entry = se2.name
+		je2a.accounts[0].party_type = "Customer"
+		je2a.accounts[0].party = "_Test Customer"
+		je2a.accounts[1].party_type = "Supplier"
+		je2a.accounts[1].party = "_Test Supplier"
+		je2a.save()
+		je2a.submit()
+
+		je2b = make_journal_entry(account1=f"Debtors - _TC", account2=f"Creditors - _TC", amount=50, save=False, submit=False)
+		je2b.company = company
+		je2b.voucher_type = "Debit Note"
+		je2b.stock_entry = se2.name
+  
+		je2b.validate_credit_debit_note()
+  
+	def test_get_outstanding_sales_and_purchase_TC_ACC_556(self):
+		from erpnext.accounts.doctype.sales_invoice.test_sales_invoice import create_sales_invoice, create_company
+		from erpnext.accounts.doctype.purchase_invoice.test_purchase_invoice import make_purchase_invoice
+		from erpnext.accounts.doctype.journal_entry.journal_entry import get_outstanding
+
+		create_company(company_name="_Test Company")
+		company = "_Test Company"
+		abbr = frappe.get_cached_value("Company", company, "abbr")
+
+		customer = get_or_create_customer("_Test Customer OUT")
+		si = create_sales_invoice(company=company, customer=customer, debit_to=f"Debtors - {abbr}", item="_Test Item", qty=1, rate=150.0,)
+		args = {
+			"doctype": "Sales Invoice",
+			"docname": si.name,
+			"account": si.debit_to,
+			"company": company,
+			"account_currency": "INR",
+		}
+		result = get_outstanding(args)
+
+		self.assertIn("credit_in_account_currency", result)
+		self.assertEqual(result["credit_in_account_currency"], 150.0)
+		self.assertEqual(result["party_type"], "Customer")
+		self.assertEqual(result["party"], si.customer)
+
+		supplier = get_or_create_supplier("_Test Supplier OUT")
+		pi = make_purchase_invoice(company=company, supplier=supplier, rate=200, qty=1,
+			warehouse=get_or_create_warehouse("_Test Warehouse OUT - _TC", company), uom="Nos",
+			expense_account=get_or_create_account("COGS OUT", company, f"Direct Expenses - {abbr}", "Expense Account", "Expense"),
+			do_not_submit=False,
+		)
+		args = {
+			"doctype": "Purchase Invoice",
+			"docname": pi.name,
+			"account": pi.credit_to,
+			"company": company,
+			"account_currency": "INR",
+		}
+		result = get_outstanding(args)
+
+		self.assertIn("debit_in_account_currency", result)
+		self.assertEqual(result["debit_in_account_currency"], 200.0)
+		self.assertEqual(result["party_type"], "Supplier")
+		self.assertEqual(result["party"], pi.supplier)
+
+	def test_get_party_account_and_currency_TC_ACC_557(self):
+		from erpnext.accounts.doctype.journal_entry.journal_entry import get_party_account_and_currency
+		from erpnext.accounts.doctype.sales_invoice.test_sales_invoice import create_company
+
+		company = "_Test Company"
+		create_company(company_name=company)
+
+		customer = get_or_create_customer("_Test Customer JE")
+		supplier = get_or_create_supplier("_Test Supplier JE")
+
+		receivable_account = get_or_create_account("Debtors - TC1", company, f"Accounts Receivable - _TC", "Receivable", "Asset")
+		payable_account = get_or_create_account("Creditors - TC1", company, f"Accounts Payable - _TC", "Payable", "Liability")
+
+		customer_doc = frappe.get_doc("Customer", customer)
+		if not any(d.company == company for d in customer_doc.get("accounts")):
+			customer_doc.append("accounts", {
+				"company": company,
+				"account": receivable_account
+			})
+			customer_doc.save()
+
+		supplier_doc = frappe.get_doc("Supplier", supplier)
+		if not any(d.company == company for d in supplier_doc.get("accounts")):
+			supplier_doc.append("accounts", {
+				"company": company,
+				"account": payable_account
+			})
+			supplier_doc.save()
+
+		result = get_party_account_and_currency(company, "Customer", customer)
+		self.assertEqual(result["account"], receivable_account)
+		self.assertIsNotNone(result["account_currency"])
+
+		result = get_party_account_and_currency(company, "Supplier", supplier)
+		self.assertEqual(result["account"], payable_account)
+		self.assertIsNotNone(result["account_currency"])
+  
+	def test_get_payment_entry_against_order_TC_ACC_558(self):
+		from erpnext.accounts.doctype.journal_entry.journal_entry import get_payment_entry_against_order
+		from erpnext.accounts.doctype.sales_invoice.test_sales_invoice import create_company
+		from erpnext.selling.doctype.sales_order.test_sales_order import make_sales_order
+
+		company = "_Test Company"
+		create_company(company_name=company)
+		abbr = frappe.get_cached_value("Company", company, "abbr")
+
+		customer = get_or_create_customer("_Test Customer PE")
+		receivable_account = get_or_create_account(
+			"Debtors - PE1", company, f"Accounts Receivable - {abbr}", "Receivable", "Asset"
+		)
+  
+		cust_doc = frappe.get_doc("Customer", customer)
+		if not any(d.company == company for d in cust_doc.get("accounts")):
+			cust_doc.append("accounts", {"company": company, "account": receivable_account})
+			cust_doc.save()
+
+		so = make_sales_order(customer=customer, company=company, item="_Test Item", qty=1, rate=100)
+		so.submit()
+		so.per_billed = 0
+		so.save()
+
+		pe_doc = get_payment_entry_against_order("Sales Order", so.name)
+  
+		accounts = pe_doc.accounts
+		self.assertTrue(any(d.party == customer and d.party_type == "Customer" for d in accounts))
+		self.assertTrue(any("Debtors" in d.account for d in accounts))
+		self.assertTrue(any(d.debit_in_account_currency > 0 or d.credit_in_account_currency > 0 for d in accounts))
+		
+		self.assertEqual(pe_doc.accounts[0].is_advance, "Yes")
+  
+	def test_validate_party_exceptions_TC_ACC_559(self):
+		company = "_Test Company"
+		abbr = frappe.get_cached_value("Company", company, "abbr")
+
+		if not frappe.db.exists("Account", f"Accounts Receivable - {abbr}"):
+			frappe.get_doc({
+				"doctype": "Account",
+				"account_name": "Accounts Receivable",
+				"parent_account": f"Debtors - {abbr}",
+				"company": company,
+				"is_group": 1,
+				"root_type": "Asset",
+			}).insert(ignore_permissions=True)
+
+		if not frappe.db.exists("Account", f"Cash and Bank - {abbr}"):
+			frappe.get_doc({
+				"doctype": "Account",
+				"account_name": "Cash and Bank",
+				"parent_account": f"Application of Funds (Assets) - {abbr}",
+				"company": company,
+				"is_group": 1,
+				"root_type": "Asset",
+			}).insert(ignore_permissions=True)
+
+		receivable_account = get_or_create_account("Debtors - VP1", company, f"Accounts Receivable - {abbr}", "Receivable", "Asset")
+		bank_account = get_or_create_account("Bank - VP1", company, f"Cash and Bank - {abbr}", "Bank", "Asset")
+
+		je1 = make_journal_entry(
+			account1=receivable_account,
+			account2=bank_account,
+			amount=100,
+			save=False
+		)
+		for d in je1.accounts:
+			d.party_type = None
+			d.party = None
+
+		with self.assertRaises(frappe.ValidationError) as cm1:
+			je1.validate_party()
+		self.assertIn("Party Type and Party is required", str(cm1.exception))
+
+		supplier = get_or_create_supplier("_Test Supplier VP")
+
+		je2 = make_journal_entry(
+			account1=receivable_account,
+			account2=bank_account,
+			amount=200,
+			save=False
+		)
+		je2.accounts[0].party_type = "Supplier"
+		je2.accounts[0].party = supplier
+
+		with self.assertRaises(frappe.ValidationError) as cm2:
+			je2.validate_party()
+		self.assertIn("have different account types", str(cm2.exception))
+  
+	def test_validate_entries_for_advance_exceptions_TC_ACC_560(self):
+		company = "_Test Company"
+		abbr = frappe.get_cached_value("Company", company, "abbr")
+
+		if not frappe.db.exists("Account", f"Accounts Receivable - {abbr}"):
+			frappe.get_doc({
+				"doctype": "Account",
+				"account_name": "Accounts Receivable",
+				"parent_account": f"Debtors - {abbr}",
+				"company": company,
+				"is_group": 1,
+				"root_type": "Asset",
+			}).insert(ignore_permissions=True)
+
+		if not frappe.db.exists("Account", f"Creditors - {abbr}"):
+			frappe.get_doc({
+				"doctype": "Account",
+				"account_name": "Creditors",
+				"parent_account": f"Current Liabilities - {abbr}",
+				"company": company,
+				"is_group": 1,
+				"root_type": "Liability",
+			}).insert(ignore_permissions=True)
+
+		receivable_account = get_or_create_account("Debtors - ADV", company, f"Accounts Receivable - {abbr}", "Receivable", "Asset")
+		payable_account = get_or_create_account("Creditors - ADV", company, f"Creditors - {abbr}", "Payable", "Liability")
+
+		je1 = make_journal_entry(account1=receivable_account, account2=payable_account, amount=300, save=False)
+		je1.accounts[0].party_type = "Customer"
+		je1.accounts[0].credit = 300
+		je1.accounts[0].is_advance = "" 
+		je1.accounts[0].reference_type = "Sales Order"
+
+		with self.assertRaises(frappe.ValidationError) as cm1:
+			je1.validate_entries_for_advance()
+		self.assertIn("Payment against Sales/Purchase Order should always be marked as advance", str(cm1.exception))
+
+		je2 = make_journal_entry(account1=receivable_account, account2=payable_account, amount=400, save=False)
+		je2.accounts[0].party_type = "Customer"
+		je2.accounts[0].is_advance = "Yes"
+		je2.accounts[0].debit = 400
+		je2.accounts[0].credit = 0
+
+		with self.assertRaises(frappe.ValidationError) as cm2:
+			je2.validate_entries_for_advance()
+		self.assertIn("Advance against Customer must be credit", str(cm2.exception))
+
+		je3 = make_journal_entry(account1=receivable_account, account2=payable_account, amount=500, save=False)
+		je3.accounts[0].party_type = "Supplier"
+		je3.accounts[0].is_advance = "Yes"
+		je3.accounts[0].credit = 500
+		je3.accounts[0].debit = 0
+
+		with self.assertRaises(frappe.ValidationError) as cm3:
+			je3.validate_entries_for_advance()
+		self.assertIn("Advance against Supplier must be debit", str(cm3.exception))
+
 def make_journal_entry(
 	account1,
 	account2,
