@@ -1565,6 +1565,8 @@ class TestJournalEntry(unittest.TestCase):
 		self.assertEqual(jv.accounts[0].debit_in_account_currency, jv.accounts[1].credit_in_account_currency)
  
 	def test_apply_tax_withholding_TC_ACC_543(self):
+		from erpnext.accounts.doctype.sales_invoice.test_sales_invoice import create_company
+		create_company(company_name = "_Test Company")
 		company = "_Test Company"
 		abbr = frappe.get_cached_value("Company", company, "abbr")
 
@@ -1589,8 +1591,9 @@ class TestJournalEntry(unittest.TestCase):
 
 	def test_get_outstanding_invoices_TC_ACC_544(self):
 		from frappe import _dict
-		from erpnext.accounts.doctype.sales_invoice.test_sales_invoice import create_sales_invoice
+		from erpnext.accounts.doctype.sales_invoice.test_sales_invoice import create_sales_invoice, create_company
 
+		create_company(company_name = "_Test Company")
 		company = "_Test Company"
 		abbr = frappe.get_cached_value("Company", company, "abbr")
 		customer = get_or_create_customer("_Test Customer JE")
@@ -1619,7 +1622,9 @@ class TestJournalEntry(unittest.TestCase):
 
 	def test_get_average_exchange_rate_TC_ACC_545(self):
 		from erpnext.accounts.doctype.journal_entry.journal_entry import get_average_exchange_rate
+		from erpnext.accounts.doctype.sales_invoice.test_sales_invoice import create_company
 
+		create_company(company_name = "_Test Company")
 		company = "_Test Company"
 		abbr = frappe.get_cached_value("Company", company, "abbr")
 
@@ -1640,8 +1645,11 @@ class TestJournalEntry(unittest.TestCase):
 
 	def test_make_inter_company_journal_entry_TC_ACC_546(self):
 		from erpnext.accounts.doctype.journal_entry.journal_entry import make_inter_company_journal_entry
+		from erpnext.accounts.doctype.sales_invoice.test_sales_invoice import create_company
 
+		create_company(company_name = "_Test Company")
 		company1 = "_Test Company"
+		create_company(company_name = "_Test Company")
 		company2 = "_Test Company with perpetual inventory"
 		abbr1 = frappe.get_cached_value("Company", company1, "abbr")
 		abbr2 = frappe.get_cached_value("Company", company2, "abbr")
@@ -1667,8 +1675,9 @@ class TestJournalEntry(unittest.TestCase):
 
 	def test_validate_orders_TC_ACC_547(self):
 		from erpnext.selling.doctype.sales_order.test_sales_order import make_sales_order
-		from frappe.utils import nowdate
+		from erpnext.accounts.doctype.sales_invoice.test_sales_invoice import create_company
 
+		create_company(company_name = "_Test Company")
 		company = "_Test Company"
 		abbr = frappe.get_cached_value("Company", company, "abbr")
 
@@ -1699,6 +1708,8 @@ class TestJournalEntry(unittest.TestCase):
 			setup_je(so3, total=0).validate_orders()
 
 	def test_validate_inter_company_accounts_TC_ACC_548(self):
+		from erpnext.accounts.doctype.sales_invoice.test_sales_invoice import create_company
+		create_company(company_name = "_Test Company")
 		company = "_Test Company"
 		abbr = frappe.get_cached_value("Company", company, "abbr")
 		account1 = get_or_create_account("Bank", company, f"Current Assets - {abbr}", "Bank", "Asset")
@@ -1713,6 +1724,8 @@ class TestJournalEntry(unittest.TestCase):
 			je2.validate_inter_company_accounts()
 
 	def test_update_invoice_discounting_else_branch_TC_ACC_551(self):
+		from erpnext.accounts.doctype.sales_invoice.test_sales_invoice import create_company
+		create_company(company_name = "_Test Company")
 		company = "_Test Company"
 		abbr = frappe.get_cached_value("Company", company, "abbr")
 
@@ -1757,7 +1770,9 @@ class TestJournalEntry(unittest.TestCase):
 
 	def test_get_outstanding_invoices_accounts_payable_TC_ACC_552(self):
 		from erpnext.accounts.doctype.purchase_invoice.test_purchase_invoice import make_purchase_invoice
+		from erpnext.accounts.doctype.sales_invoice.test_sales_invoice import create_company
 
+		create_company(company_name = "_Test Company")
 		company = "_Test Company"
 		abbr = frappe.get_cached_value("Company", company, "abbr")
 
@@ -1850,7 +1865,7 @@ def create_custom_test_accounts():
 		["_Test Account Cost for Goods Sold", "Expenses", 0, None, None],
 		["_Test Bank", "Bank Accounts", 0, "Bank", None],
 		["_Test Account IGST", "_Test Account Tax Assets", 0, "Tax", None],
-		# Newly added accounts
+
 		["Input Tax CGST", "_Test Account Tax Assets", 0, "Tax", None],
 		["Input Tax SGST", "_Test Account Tax Assets", 0, "Tax", None],
 		["Input Tax IGST", "_Test Account Tax Assets", 0, "Tax", None],
@@ -1872,7 +1887,7 @@ def create_custom_test_accounts():
 				"is_group": is_group,
 				"account_type": account_type,
 				"account_currency": currency or frappe.get_cached_value("Company", company, "default_currency"),
-				"account_number": "",  # Prevents autoname error
+				"account_number": "", 
 			})
 			doc.insert(ignore_permissions=True)
    
