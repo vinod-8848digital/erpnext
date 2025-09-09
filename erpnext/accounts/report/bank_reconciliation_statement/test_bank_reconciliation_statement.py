@@ -45,7 +45,7 @@ class TestBankReconciliationStatement(FrappeTestCase):
 
 		self.assertEqual(result[1][0].payment_entry, repayment_entry.name)
 
-	def test_execute_full_paths(self):
+	def test_execute_full_paths_TC_ACC_448(self):
 		# No filters
 		cols, data = execute(None)
 		self.assertIsInstance(cols, list)
