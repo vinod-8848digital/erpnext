@@ -2123,6 +2123,8 @@ class TestJournalEntry(unittest.TestCase):
 				"is_group": 1,  
 				"root_type": "Asset",
 			}).insert(ignore_permissions=True)
+		else:
+			frappe.db.set_value("Account", f"Accounts Receivable - {abbr}", "is_group", 1)
 
 		if not frappe.db.exists("Account", f"Creditors - {abbr}"):
 			frappe.get_doc({
@@ -2133,6 +2135,8 @@ class TestJournalEntry(unittest.TestCase):
 				"is_group": 1,  
 				"root_type": "Liability",
 			}).insert(ignore_permissions=True)
+		else:
+			frappe.db.set_value("Account", f"Creditors - {abbr}", "is_group", 1)
 
 		receivable_account = get_or_create_account(
 			"Debtors - ADV",
@@ -2235,6 +2239,8 @@ class TestJournalEntry(unittest.TestCase):
 				"is_group": 1,
 				"root_type": "Asset",
 			}).insert(ignore_permissions=True)
+		else:
+			frappe.db.set_value("Account", f"Debtors - {abbr}", "is_group", 1)
 
 		if not frappe.db.exists("Account", f"Current Liabilities - {abbr}"):
 			frappe.get_doc({
@@ -2245,6 +2251,8 @@ class TestJournalEntry(unittest.TestCase):
 				"is_group": 1,
 				"root_type": "Liability",
 			}).insert(ignore_permissions=True)
+		else:
+			frappe.db.set_value("Account", f"Current Liabilities - {abbr}", "is_group", 1)
 
 		asset_account = get_or_create_account("Debtors - JV", company, f"Debtors - {abbr}", "Receivable", "Asset")
 
