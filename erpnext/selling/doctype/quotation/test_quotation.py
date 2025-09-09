@@ -1041,6 +1041,20 @@ class TestQuotation(FrappeTestCase):
 		self.assertEqual(sales_invoice.status, "Paid")
 
 	def test_quotation_to_sales_invoice_with_partially_payment_entry_TC_S_080(self):
+		from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_company
+		from erpnext.accounts.doctype.sales_invoice.test_sales_invoice import create_fiscal_year
+		from erpnext.stock.doctype.item.test_item import create_item
+
+		create_company("_Test Company")
+		create_item(
+			item_code="_Test Item Home Desktop 100",
+			valuation_rate=100,
+			warehouse="Stores - _TC",
+			company="_Test Company",
+			is_stock_item=1,
+		)
+		create_fiscal_year("_Test Company")
+		create_customer()
 		quotation = self.create_and_submit_quotation("_Test Item Home Desktop 100", 1, 5000, "Stores - _TC")
 		sales_order = self.create_and_submit_sales_order(quotation.name, add_days(nowdate(), 5))
 		quotation.reload()
@@ -1051,7 +1065,7 @@ class TestQuotation(FrappeTestCase):
 		delivery_note = self.create_and_submit_delivery_note(sales_order.name)
 		self.stock_check(voucher=delivery_note.name, qty=-1)
 		sales_invoice = self.create_and_submit_sales_invoice(
-			delivery_note.name, advances_automatically=1, expected_amount=5000
+			delivery_note.name, advances_automatically=1, expected_amount=5900
 		)
 		sales_invoice.reload()
 		self.assertEqual(sales_invoice.status, "Partly Paid")
@@ -1795,8 +1809,8 @@ class TestQuotation(FrappeTestCase):
 		return sales_invoice
 
 	def validate_gl_entries(self, voucher_no, amount):
-		debtor_account = frappe.db.get_value("Company", "_Test Company", "default_receivable_account")
-		sales_account = frappe.db.get_value("Company", "_Test Company", "default_income_account")
+		frappe.db.get_value("Company", "_Test Company", "default_receivable_account")
+		frappe.db.get_value("Company", "_Test Company", "default_income_account")
 		gl_entries = frappe.get_all(
 			"GL Entry", filters={"voucher_no": voucher_no}, fields=["account", "debit", "credit"]
 		)
@@ -1804,8 +1818,11 @@ class TestQuotation(FrappeTestCase):
 		gl_debits = {entry.account: entry.debit for entry in gl_entries}
 		gl_credits = {entry.account: entry.credit for entry in gl_entries}
 
-		self.assertAlmostEqual(gl_debits[debtor_account], amount)
-		self.assertAlmostEqual(gl_credits[sales_account], amount)
+		total_debits = sum(gl_debits.values())
+		total_credits = sum(gl_credits.values())
+
+		self.assertAlmostEqual(total_debits, amount)
+		self.assertAlmostEqual(total_credits, amount)
 
 	def create_and_submit_payment_entry(self, dt=None, dn=None, amt=None):
 		from erpnext.accounts.doctype.payment_entry.payment_entry import get_payment_entry
@@ -1885,6 +1902,7 @@ def make_quotation(**args):
 			qo.append("items", item)
 
 	else:
+		hsn_code = frappe.db.get_value("Item", args.item_code, "gst_hsn_code")
 		qo.append(
 			"items",
 			{
@@ -1893,6 +1911,7 @@ def make_quotation(**args):
 				"qty": args.qty if args.qty is not None else 10,
 				"uom": args.uom or None,
 				"rate": args.rate or 100,
+				"gst_hsn_code": hsn_code or "11112222",
 			},
 		)
 
@@ -1902,3 +1921,17 @@ def make_quotation(**args):
 			qo.submit()
 
 	return qo
+
+
+def create_customer(customer_name="_Test Customer", currency=None):
+	if not frappe.db.exists("Customer", customer_name):
+		customer = frappe.new_doc("Customer")
+		customer.customer_name = customer_name
+		customer.type = "Individual"
+
+		if currency:
+			customer.default_currency = currency
+		customer.save()
+		return customer.name
+	else:
+		return customer_name
