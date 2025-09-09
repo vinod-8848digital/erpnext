@@ -2051,7 +2051,9 @@ class TestJournalEntry(unittest.TestCase):
 		self.assertEqual(pe_doc.accounts[0].is_advance, "Yes")
   
 	def test_validate_party_exceptions_TC_ACC_559(self):
+		from erpnext.accounts.doctype.sales_invoice.test_sales_invoice import create_company
 		company = "_Test Company"
+		create_company(company_name=company)
 		abbr = frappe.get_cached_value("Company", company, "abbr")
 
 		if not frappe.db.exists("Account", f"Accounts Receivable - {abbr}"):
@@ -2107,7 +2109,9 @@ class TestJournalEntry(unittest.TestCase):
 		self.assertIn("have different account types", str(cm2.exception))
   
 	def test_validate_entries_for_advance_exceptions_TC_ACC_560(self):
+		from erpnext.accounts.doctype.sales_invoice.test_sales_invoice import create_company
 		company = "_Test Company"
+		create_company(company_name=company)
 		abbr = frappe.get_cached_value("Company", company, "abbr")
 
 		if not frappe.db.exists("Account", f"Accounts Receivable - {abbr}"):
@@ -2116,7 +2120,7 @@ class TestJournalEntry(unittest.TestCase):
 				"account_name": "Accounts Receivable",
 				"parent_account": f"Debtors - {abbr}",
 				"company": company,
-				"is_group": 1,
+				"is_group": 1,  
 				"root_type": "Asset",
 			}).insert(ignore_permissions=True)
 
@@ -2126,17 +2130,30 @@ class TestJournalEntry(unittest.TestCase):
 				"account_name": "Creditors",
 				"parent_account": f"Current Liabilities - {abbr}",
 				"company": company,
-				"is_group": 1,
+				"is_group": 1,  
 				"root_type": "Liability",
 			}).insert(ignore_permissions=True)
 
-		receivable_account = get_or_create_account("Debtors - ADV", company, f"Accounts Receivable - {abbr}", "Receivable", "Asset")
-		payable_account = get_or_create_account("Creditors - ADV", company, f"Creditors - {abbr}", "Payable", "Liability")
+		receivable_account = get_or_create_account(
+			"Debtors - ADV",
+			company,
+			f"Accounts Receivable - {abbr}",
+			"Receivable",
+			"Asset"
+		)
+
+		payable_account = get_or_create_account(
+			"Creditors - ADV",
+			company,
+			f"Creditors - {abbr}",
+			"Payable",
+			"Liability"
+		)
 
 		je1 = make_journal_entry(account1=receivable_account, account2=payable_account, amount=300, save=False)
 		je1.accounts[0].party_type = "Customer"
 		je1.accounts[0].credit = 300
-		je1.accounts[0].is_advance = "" 
+		je1.accounts[0].is_advance = ""
 		je1.accounts[0].reference_type = "Sales Order"
 
 		with self.assertRaises(frappe.ValidationError) as cm1:
@@ -2162,6 +2179,283 @@ class TestJournalEntry(unittest.TestCase):
 		with self.assertRaises(frappe.ValidationError) as cm3:
 			je3.validate_entries_for_advance()
 		self.assertIn("Advance against Supplier must be debit", str(cm3.exception))
+
+  
+	def test_validate_stock_accounts_exceptions_TC_ACC_561(self):
+		from erpnext.accounts.doctype.sales_invoice.test_sales_invoice import create_company
+		company = "_Test Company"
+		create_company(company_name=company)
+		abbr = frappe.get_cached_value("Company", company, "abbr")
+
+		if not frappe.db.exists("Account", f"Stock In Hand - {abbr}"):
+			frappe.get_doc({
+				"doctype": "Account",
+				"account_name": "Stock In Hand",
+				"parent_account": f"Current Assets - {abbr}",
+				"company": company,
+				"is_group": 0,
+				"root_type": "Asset",
+			}).insert(ignore_permissions=True)
+
+		if not frappe.db.exists("Account", f"Cash - {abbr}"):
+			frappe.get_doc({
+				"doctype": "Account",
+				"account_name": "Cash",
+				"parent_account": f"Current Assets - {abbr}",
+				"company": company,
+				"is_group": 0,
+				"root_type": "Asset",
+			}).insert(ignore_permissions=True)
+
+		je = make_journal_entry(
+			account1=f"Stock In Hand - {abbr}",
+			account2=f"Cash - {abbr}",
+			amount=100,
+			save=True
+		)
+		with self.assertRaises(frappe.ValidationError) as cm:
+			je.validate_stock_accounts()
+
+		self.assertIn("can only be updated via Stock Transactions", str(cm.exception))
+  
+	def test_validate_against_jv_exceptions_TC_ACC_562(self):
+		from erpnext.accounts.doctype.sales_invoice.test_sales_invoice import create_company
+		company = "_Test Company"
+		create_company(company_name=company)
+		abbr = frappe.get_cached_value("Company", company, "abbr")
+		get_or_create_supplier("_Test Supplier")
+		get_or_create_customer("_Test Customer")
+
+		if not frappe.db.exists("Account", f"Debtors - {abbr}"):
+			frappe.get_doc({
+				"doctype": "Account",
+				"account_name": "Debtors",
+				"parent_account": f"Accounts Receivable - {abbr}",
+				"company": company,
+				"is_group": 1,
+				"root_type": "Asset",
+			}).insert(ignore_permissions=True)
+
+		if not frappe.db.exists("Account", f"Current Liabilities - {abbr}"):
+			frappe.get_doc({
+				"doctype": "Account",
+				"account_name": "Current Liabilities",
+				"parent_account": f"Liabilities - {abbr}",
+				"company": company,
+				"is_group": 1,
+				"root_type": "Liability",
+			}).insert(ignore_permissions=True)
+
+		asset_account = get_or_create_account("Debtors - JV", company, f"Debtors - {abbr}", "Receivable", "Asset")
+
+		liability_account = get_or_create_account("Creditors - JV", company, f"Current Liabilities - {abbr}", "Payable", "Liability")
+
+		je1 = make_journal_entry(account1=asset_account, account2=liability_account, amount=200, save=False)
+		je1.accounts[0].reference_type = "Journal Entry"
+		je1.accounts[0].debit = 200
+		je1.accounts[0].credit = 0
+		with self.assertRaises(frappe.ValidationError) as cm1:
+			je1.validate_against_jv()
+		self.assertIn("you can select reference document only if account gets credited", str(cm1.exception))
+
+		je2 = make_journal_entry(account1=liability_account, account2=asset_account, amount=300, save=False)
+		je2.accounts[0].reference_type = "Journal Entry"
+		je2.accounts[0].credit = 300
+		je2.accounts[0].debit = 0
+		with self.assertRaises(frappe.ValidationError) as cm2:
+			je2.validate_against_jv()
+		self.assertIn("you can select reference document only if account gets debited", str(cm2.exception))
+  
+		je3 = make_journal_entry(account1=asset_account, account2=liability_account, amount=400, save=False)
+		je3.accounts[0].party_type = "Customer"
+		je3.accounts[0].party = "_Test Customer"
+		je3.accounts[0].reference_type = "Journal Entry"
+		je3.accounts[0].reference_name = je3.name
+		with self.assertRaises(frappe.ValidationError) as cm3:
+			je3.validate_against_jv()
+		self.assertIn("You can not enter current voucher in 'Against Journal Entry' column", str(cm3.exception))
+  
+		ref_je = make_journal_entry(account1=asset_account, account2=liability_account, amount=500, save=False)
+		ref_je.accounts[0].party_type = "Customer"
+		ref_je.accounts[0].party = "_Test Customer"
+		ref_je.accounts[1].party_type = "Supplier"
+		ref_je.accounts[1].party = "_Test Supplier"
+		ref_je.submit()
+
+		je4 = make_journal_entry(account1=asset_account, account2=liability_account, amount=500, save=False)
+		je4.accounts[0].reference_type = "Journal Entry"
+		je4.accounts[0].reference_name = ref_je.name
+		je4.accounts[0].party_type = "Customer"
+		je4.accounts[0].party = "_Test Customer"
+
+		with self.assertRaises(frappe.ValidationError) as cm4:
+			je4.validate_against_jv()
+		self.assertIn("does not have any unmatched", str(cm4.exception)) 
+
+	def test_get_outstanding_for_journal_entry_TC_ACC_563(self):
+		from erpnext.accounts.doctype.journal_entry.journal_entry import get_outstanding
+		from erpnext.accounts.doctype.sales_invoice.test_sales_invoice import create_company
+  
+		company = "_Test Company"
+		create_company(company_name=company)
+		abbr = frappe.get_cached_value("Company", company, "abbr")
+		get_or_create_customer("_Test Customer")
+
+		if not frappe.db.exists("Account", f"Accounts Receivable - {abbr}"):
+			frappe.get_doc({
+				"doctype": "Account",
+				"account_name": "Accounts Receivable",
+				"parent_account": f"Current Assets - {abbr}",
+				"company": company,
+				"is_group": 1,
+				"root_type": "Asset",
+			}).insert(ignore_permissions=True)
+
+		if not frappe.db.exists("Account", f"Cash In Hand - {abbr}"):
+			frappe.get_doc({
+				"doctype": "Account",
+				"account_name": "Cash In Hand",
+				"parent_account": f"Current Assets - {abbr}",
+				"company": company,
+				"is_group": 1,
+				"root_type": "Asset",
+			}).insert(ignore_permissions=True)
+
+		asset_account = get_or_create_account("Debtors - OUT", company, f"Accounts Receivable - {abbr}", "Receivable", "Asset")
+
+		cash_account = get_or_create_account("Cash - OUT", company, f"Cash In Hand - {abbr}", "Cash", "Asset")
+		je = make_journal_entry(account1=asset_account, account2=cash_account, amount=250, save=False)
+		je.accounts[0].party_type = "Customer"
+		je.accounts[0].party = "_Test Customer"
+		je.save()
+
+		args = {"doctype": "Journal Entry","docname": je.name, "account": asset_account, "company": company,}
+		out = get_outstanding(args)
+
+		self.assertTrue(
+			"debit_in_account_currency" in out or "credit_in_account_currency" in out,
+			"Outstanding dict must include debit_in_account_currency or credit_in_account_currency",
+		)
+		self.assertEqual(abs(out.get("debit_in_account_currency", 0) or out.get("credit_in_account_currency", 0)), 250)
+  
+	def test_get_payment_entry_against_invoice_TC_ACC_564(self):
+		from erpnext.accounts.doctype.journal_entry.journal_entry import get_payment_entry_against_invoice
+		from erpnext.accounts.doctype.sales_invoice.test_sales_invoice import create_sales_invoice, create_company
+		from erpnext.accounts.doctype.purchase_invoice.test_purchase_invoice import make_purchase_invoice
+
+		company = "_Test Company"
+		create_company(company_name=company)
+		abbr = frappe.get_cached_value("Company", company, "abbr")
+
+		receivable_acc = frappe.db.get_value("Account", {"account_type": "Receivable", "company": company})
+		if not receivable_acc:
+			receivable_acc = frappe.get_doc({
+				"doctype": "Account",
+				"account_name": "Test Receivable",
+				"parent_account": f"Accounts Receivable - {abbr}",
+				"company": company,
+				"is_group": 0,
+				"account_type": "Receivable",
+				"root_type": "Asset"
+			}).insert(ignore_permissions=True).name
+
+		payable_acc = frappe.db.get_value("Account", {"account_type": "Payable", "company": company})
+		if not payable_acc:
+			payable_acc = frappe.get_doc({
+				"doctype": "Account",
+				"account_name": "Test Payable",
+				"parent_account": f"Creditors - {abbr}",
+				"company": company,
+				"is_group": 0,
+				"account_type": "Payable",
+				"root_type": "Liability"
+			}).insert(ignore_permissions=True).name
+
+		si = create_sales_invoice(
+			customer="_Test Customer",
+			company=company,
+			posting_date=frappe.utils.nowdate(),
+			debit_to=receivable_acc,
+			outstanding_amount=100
+		)
+		get_payment_entry_against_invoice("Sales Invoice", si.name)
+
+		create_sales_invoice(
+			customer="_Test Customer",
+			company=company,
+			posting_date=frappe.utils.nowdate(),
+			debit_to=receivable_acc,
+			outstanding_amount=0
+		)
+
+		pi = make_purchase_invoice(
+			company=company,
+			supplier="_Test Supplier",
+			rate=100,
+			qty=1,
+			uom="Nos",
+			do_not_submit=True,
+		)
+		get_payment_entry_against_invoice("Purchase Invoice", pi.name)
+
+		pi2 = make_purchase_invoice(
+			supplier="_Test Supplier",
+			company=company,
+			posting_date=frappe.utils.nowdate(),
+			credit_to=payable_acc,
+			uom="Nos",
+			outstanding_amount=100
+		)
+		get_payment_entry_against_invoice("Purchase Invoice", pi2.name)
+  
+	def test_get_exchange_rate_TC_ACC_565(self):
+		from erpnext.accounts.doctype.journal_entry.journal_entry import get_exchange_rate
+		from erpnext.accounts.doctype.journal_entry.test_journal_entry import get_or_create_account
+		from erpnext.accounts.doctype.sales_invoice.test_sales_invoice import create_company
+		from frappe.utils import nowdate
+
+		company = "_Test Company"
+		create_company(company_name=company)
+		abbr = frappe.get_cached_value("Company", company, "abbr")
+
+		if not frappe.db.exists("Account", f"Current Assets - {abbr}"):
+			frappe.get_doc({
+				"doctype": "Account",
+				"account_name": "Current Assets",
+				"parent_account": f"Assets - {abbr}" if frappe.db.exists("Account", f"Assets - {abbr}") else None,
+				"company": company,
+				"is_group": 1,
+				"root_type": "Asset",
+			}).insert(ignore_permissions=True)
+
+		cash_acc = get_or_create_account(
+			"Test Cash",
+			company,
+			f"Current Assets - {abbr}",
+			"Cash",
+			"Asset",
+		)
+  
+		with self.assertRaises(frappe.ValidationError):
+			get_exchange_rate(nowdate(), account="_Nonexistent Account")
+
+		rate_company_none = get_exchange_rate(nowdate(), account=cash_acc, company=None)
+		self.assertTrue(rate_company_none is not None)
+		self.assertEqual(rate_company_none, 1)
+
+		rate_currency_none = get_exchange_rate(nowdate(), account=cash_acc, company=company, account_currency=None)
+		self.assertTrue(rate_currency_none is not None)
+		self.assertEqual(rate_currency_none, 1)
+
+		foreign_acc = get_or_create_account(
+			"Test USD Account",
+			company,
+			f"Current Assets - {abbr}",
+			"Bank",
+			"Asset",
+		)
+		rate_foreign = get_exchange_rate(nowdate(), account=foreign_acc, company=company, account_currency="USD")
+		self.assertTrue(rate_foreign > 0)
 
 def make_journal_entry(
 	account1,
