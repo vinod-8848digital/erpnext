@@ -5,7 +5,7 @@ from erpnext.accounts.report.billed_items_to_be_received import billed_items_to_
 
 
 class TestBilledItemsToBeReceived(FrappeTestCase):
-    def test_execute_triggers_all(self):
+    def test_execute_triggers_all_TC_ACC_449(self):
         filters = {
             "company": "Test Co",
             "posting_date": "2024-12-31",
@@ -45,7 +45,7 @@ class TestBilledItemsToBeReceived(FrappeTestCase):
 
             self.assertEqual(data[0]["name"], "PINV-0001")
 
-    def test_execute_without_purchase_invoice(self):
+    def test_execute_without_purchase_invoice_TC_ACC_450(self):
         filters = {
             "company": "Test Co",
             "posting_date": "2024-12-31",
