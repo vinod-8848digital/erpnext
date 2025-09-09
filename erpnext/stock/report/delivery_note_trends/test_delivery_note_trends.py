@@ -31,7 +31,7 @@ class TestDeliveryNoteTrendsReport(unittest.TestCase):
 			}
 		).insert(ignore_permissions=True)
 		self.dn.submit()
-		from erpnext.buying.doctype.purchase_order.test_purchase_order import get_or_create_fiscal_year
+		from erpnext.stock.utils import get_or_create_fiscal_year
 
 		get_or_create_fiscal_year("_Test Company")
 

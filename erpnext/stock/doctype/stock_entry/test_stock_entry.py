@@ -46,6 +46,7 @@ from erpnext.stock.doctype.stock_reconciliation.test_stock_reconciliation import
 from erpnext.stock.doctype.warehouse.test_warehouse import create_warehouse
 from erpnext.stock.serial_batch_bundle import SerialBatchCreation
 from erpnext.stock.stock_ledger import NegativeStockError, get_previous_sle
+from erpnext.stock.utils import get_or_create_fiscal_year
 
 
 def get_sle(**args):
@@ -2426,8 +2427,7 @@ class TestStockEntry(FrappeTestCase):
 		self.assertEqual(reserved_qty, 5)
 
 	def test_stock_ent_TC_SCK_233(self):
-		from erpnext.buying.doctype.purchase_order.test_purchase_order import get_or_create_fiscal_year
-		from erpnext.stock.utils import get_bin
+		from erpnext.stock.utils import get_bin, get_or_create_fiscal_year
 
 		if not frappe.db.exists("Company", "_Test Company"):
 			company = frappe.new_doc("Company")
@@ -3689,8 +3689,8 @@ class TestStockEntry(FrappeTestCase):
 
 	def test_partial_material_issue_TC_SCK_205(self):
 		from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_company, create_customer
-		from erpnext.buying.doctype.purchase_order.test_purchase_order import get_or_create_fiscal_year
 		from erpnext.stock.doctype.material_request.test_material_request import make_material_request
+		from erpnext.stock.utils import get_or_create_fiscal_year
 
 		create_company()
 		company = "_Test Company"
@@ -3783,8 +3783,8 @@ class TestStockEntry(FrappeTestCase):
 
 	def test_partial_material_issue_TC_SCK_206(self):
 		from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_company, create_customer
-		from erpnext.buying.doctype.purchase_order.test_purchase_order import get_or_create_fiscal_year
 		from erpnext.stock.doctype.material_request.test_material_request import make_material_request
+		from erpnext.stock.utils import get_or_create_fiscal_year
 
 		create_company()
 		company = "_Test Company"
@@ -3883,9 +3883,9 @@ class TestStockEntry(FrappeTestCase):
 	def test_partial_material_transfer_TC_SCK_207(self):
 		from erpnext.accounts.doctype.account.test_account import create_account
 		from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_company, create_customer
-		from erpnext.buying.doctype.purchase_order.test_purchase_order import get_or_create_fiscal_year
 		from erpnext.stock import get_warehouse_account_map
 		from erpnext.stock.doctype.material_request.test_material_request import make_material_request
+		from erpnext.stock.utils import get_or_create_fiscal_year
 
 		create_company()
 		create_account(
@@ -3994,9 +3994,9 @@ class TestStockEntry(FrappeTestCase):
 
 	def test_partial_material_transfer_TC_SCK_208(self):
 		from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_company, create_customer
-		from erpnext.buying.doctype.purchase_order.test_purchase_order import get_or_create_fiscal_year
 		from erpnext.stock import get_warehouse_account_map
 		from erpnext.stock.doctype.material_request.test_material_request import make_material_request
+		from erpnext.stock.utils import get_or_create_fiscal_year
 
 		create_company()
 		company = "_Test Company"
@@ -4093,8 +4093,8 @@ class TestStockEntry(FrappeTestCase):
 
 	def test_partial_material_transfer_TC_SCK_209(self):
 		from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_company, create_customer
-		from erpnext.buying.doctype.purchase_order.test_purchase_order import get_or_create_fiscal_year
 		from erpnext.stock.doctype.material_request.test_material_request import make_material_request
+		from erpnext.stock.utils import get_or_create_fiscal_year
 
 		create_company()
 		company = "_Test Company"
@@ -6418,55 +6418,6 @@ def generate_serial_nos(item_code, qty):
 		).insert(ignore_permissions=True)
 
 	return serial_nos
-
-
-def get_or_create_fiscal_year(company):
-	current_date = datetime.today().date()
-
-	matching_fy_list = frappe.get_all(
-		"Fiscal Year",
-		filters={
-			"disabled": 0,
-			"year_start_date": ["<=", current_date],
-			"year_end_date": [">=", current_date],
-		},
-		fields=["name", "year_start_date", "year_end_date"],
-	)
-	is_company = False
-	if len(matching_fy_list) > 0:
-		for fy in matching_fy_list:
-			fiscal_year = frappe.get_doc("Fiscal Year", fy["name"])
-			for years in fiscal_year.companies:
-				if years.company == company:
-					is_company = True
-					break
-			if is_company:
-				break
-
-		if not is_company:
-			for rows in matching_fy_list:
-				try:
-					fiscal_year = frappe.get_doc("Fiscal Year", rows.name)
-					fiscal_year.append("companies", {"company": company})
-					fiscal_year.save()
-					break
-				except Exception as e:
-					print(f"Failed to get Fiscal Year {fy['name']}: {e}")
-					continue
-
-	else:
-		# No fiscal year includes current date — create a new one
-		current_year = current_date.year
-		first_date = date(current_year, 1, 1)
-		last_date = date(current_year, 12, 31)
-
-		fiscal_year = frappe.new_doc("Fiscal Year")
-		fiscal_year.year = f"{current_year}-{company}"
-		fiscal_year.year_start_date = first_date
-		fiscal_year.year_end_date = last_date
-		fiscal_year.company = company  # Required to avoid overlap error
-		fiscal_year.append("companies", {"company": company})
-		fiscal_year.save()
 
 
 def create_company_se():

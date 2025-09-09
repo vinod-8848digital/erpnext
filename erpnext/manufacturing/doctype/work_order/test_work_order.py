@@ -6,7 +6,6 @@ import frappe
 from frappe.tests.utils import FrappeTestCase, change_settings, timeout
 from frappe.utils import add_days, add_months, add_to_date, cint, flt, now, today
 
-from erpnext.buying.doctype.purchase_order.test_purchase_order import get_or_create_fiscal_year
 from erpnext.manufacturing.doctype.job_card.job_card import JobCardCancelError
 from erpnext.manufacturing.doctype.job_card.job_card import make_stock_entry as make_stock_entry_from_jc
 from erpnext.manufacturing.doctype.production_plan.test_production_plan import make_bom
@@ -31,7 +30,7 @@ from erpnext.stock.doctype.serial_and_batch_bundle.test_serial_and_batch_bundle 
 from erpnext.stock.doctype.serial_no.serial_no import get_serial_nos
 from erpnext.stock.doctype.stock_entry import test_stock_entry
 from erpnext.stock.doctype.warehouse.test_warehouse import create_warehouse
-from erpnext.stock.utils import get_bin
+from erpnext.stock.utils import get_bin, get_or_create_fiscal_year
 
 test_dependencies = ["BOM"]
 
