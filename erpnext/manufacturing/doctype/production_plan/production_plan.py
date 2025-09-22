@@ -1391,6 +1391,7 @@ def get_material_request_items(
 			"sales_order": sales_order,
 			"description": row.get("description"),
 			"uom": row.get("purchase_uom") or row.get("stock_uom"),
+			"main_bom_item": row.get("main_bom_item"),
 		}
 
 
