@@ -68,12 +68,10 @@ class TestSalesInvoice(FrappeTestCase):
 
 		from erpnext.accounts.doctype.sales_invoice.sales_invoice import make_inter_company_purchase_invoice
 
-		# frappe.get_cached_doc("Company", "_Test Company")
 		si = create_sales_invoice(
 			customer="_Test Internal Customer 3", company="_Test Company", is_internal_customer=1, rate=100
 		)
-		frappe.get_cached_doc("Customer", "_Test Internal Customer 3")
-		pi = make_inter_company_purchase_invoice(si)
+		pi = make_inter_company_purchase_invoice(si.name)
 		pi.items[0].rate = 120
 
 		with self.assertRaises(ValidationError) as e:
