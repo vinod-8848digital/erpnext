@@ -21,6 +21,7 @@
   "purchase_order",
   "production_plan_item",
   "column_break_7",
+  "ordered_qty",
   "received_qty",
   "indent",
   "section_break_19",
@@ -203,6 +204,33 @@
    "fieldname": "wo_produced_qty",
    "fieldtype": "Float",
    "label": "Produced Qty",
+   "read_only": 1
+  },
+  {
+   "columns": 2,
+   "fieldname": "required_qty",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Required Qty"
+  },
+  {
+   "fieldname": "subcontracting_section",
+   "fieldtype": "Section Break",
+   "label": "Subcontracting"
+  },
+  {
+   "fieldname": "stock_reserved_qty",
+   "fieldtype": "Float",
+   "label": "Stock Reserved Qty",
+   "no_copy": 1,
+   "print_hide": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "ordered_qty",
+   "fieldtype": "Float",
+   "label": "Ordered Qty",
+   "no_copy": 1,
    "read_only": 1
   }
  ],
