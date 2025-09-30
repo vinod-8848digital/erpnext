@@ -7,7 +7,7 @@ import unittest
 import frappe
 
 test_records = frappe.get_test_records("Monthly Distribution")
-
+from frappe.utils import flt
 
 class TestMonthlyDistribution(unittest.TestCase):
 	def tearDown(self):
