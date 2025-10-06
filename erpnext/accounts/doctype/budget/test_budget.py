@@ -408,8 +408,6 @@ class TestBudget(unittest.TestCase):
 			for entry in expected_entries:
 				self.assertIn(entry, gl_entries, msg=f"Expected GL Entry {entry} not found in {gl_entries}")
 
-			print(f"Provisional Accounting validated for {pr.name}")
-
 		finally:
 			# Step 6: Cleanup
 			if pr and pr.docstatus == 1:
