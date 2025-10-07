@@ -51,19 +51,52 @@ class TestWbsSummaryReport(FrappeTestCase):
 		self.assertEqual(data[0]["amt_allocated"], 200)
 
 	def test_get_data_direct(self):
-		"""Directly test get_data() with sample filters (integration style)"""
+		# Create a unique suffix to avoid duplicate names across tests
+		unique_suffix = frappe.generate_hash(length=5)
 
-		# you can adjust filters according to available records in your DB
-		filters = {"company": "Test Company", "project": "Test Project", "wbs_name": "Planning"}
+		#  Create temporary Company
+		company = frappe.get_doc(
+			{
+				"doctype": "Company",
+				"company_name": f"Test Company {unique_suffix}",
+				"abbr": f"TC{unique_suffix}",
+				"default_currency": "INR",
+			}
+		).insert(ignore_permissions=True)
 
+		#  Create temporary Project (use custom name to bypass auto series)
+		project = frappe.get_doc(
+			{
+				"doctype": "Project",
+				"name": f"Test-Project-{unique_suffix}",
+				"project_name": f"Test Project {unique_suffix}",
+				"company": company.name,
+			}
+		).insert(ignore_permissions=True, ignore_if_duplicate=True)
+
+		#  Create Work Breakdown Structure linked to the above
+		frappe.get_doc(
+			{
+				"doctype": "Work Breakdown Structure",
+				"company": company.name,
+				"project": project.name,
+				"wbs_name": "Planning",
+				"overall_budget": 100,
+				"assigned_overall_budget": 40,
+				"is_group": 0,
+				"wbs_level": "Level 1",
+			}
+		).insert(ignore_permissions=True)
+
+		#  Call your function
+		filters = {"company": company.name, "project": project.name, "wbs_name": "Planning"}
 		result = wbs_summary_report.get_data(filters)
 
-		# basic structural checks
+		#  Assertions
 		self.assertIsInstance(result, list)
-		if result:  # only if some rows are returned
-			self.assertIn("name", result[0])
-			self.assertIn("amt_allocated", result[0])
-			self.assertIn("amt_balanced", result[0])
+		self.assertGreater(len(result), 0)
+		self.assertIn("name", result[0])
+		self.assertEqual(result[0]["wbs_name"], "Planning")
 
 	def test_get_columns_and_add_to_tree(self):
 		"""Test get_columns() and add_to_tree() logic"""
