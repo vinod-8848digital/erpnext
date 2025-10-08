@@ -95,7 +95,7 @@ class TestProcessDeferredAccounting(unittest.TestCase):
 		start_date = get_first_day(add_months(backdate, 4))
 		end_date = get_last_day(add_months(backdate, 6))
 		posting_date = get_first_day(add_months(backdate, 6))
-		create_fiscal_year("_Test Company", date(backdate.year, 1, 1), date(backdate.year, 12, 31))
+		create_fiscal_year("_Test Company", date(posting_date.year, 1, 1), date(posting_date.year, 12, 31))
 		# Step 2: Set Accounting Settings
 		change_acc_settings(acc_frozen_upto=start_date, book_deferred_entries_based_on="Months")
 
