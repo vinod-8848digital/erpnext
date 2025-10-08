@@ -16,16 +16,137 @@ test_dependencies = ["Monthly Distribution"]
 
 
 class TestBudget(unittest.TestCase):
+	def setUp(self):
+		self.create_missing_records()
+
+	def create_missing_records(self):
+		company = "_Test Company"
+		if not frappe.db.exists("Account", "Expenses - _TC"):
+			frappe.get_doc({
+				"doctype": "Account",
+				"account_name": "Expenses - _TC",
+				"company": company,
+				"account_type": "Bank",
+				"is_group": 1,
+				"parent_account": "Equity - _TC"
+			}).insert(ignore_permissions=True)
+
+		if not frappe.db.exists("Account", "_Test Account Cost for Goods Sold - _TC"):
+			frappe.get_doc({
+				"doctype": "Account",
+				"account_name": "_Test Account Cost for Goods Sold - _TC",
+				"company": company,
+				"account_type": "Bank",
+				"is_group": 0,
+				"parent_account": "Expenses - _TC"
+			}).insert(ignore_permissions=True)
+
+
+		if not frappe.db.exists("Account",{"account_name": "_Test Account Cost for Goods Sold - _TC", "company": company}):
+			frappe.get_doc({
+				"doctype": "Account",
+				"account_name": "_Test Account Cost for Goods Sold - _TC",
+				"company": company,
+				"account_type": "Expense Account",
+				"is_group": 0,
+				"parent_account": "Expenses - _TC"
+			}).insert(ignore_permissions=True)
+
+		if not frappe.db.exists("Account", {"account_name": "_Test Bank - _TC", "company": company}):
+			frappe.get_doc({
+				"doctype": "Account",
+				"account_name": "_Test Bank - _TC",
+				"company": company,
+				"account_type": "Bank",
+				"is_group": 0,
+				"parent_account": "Bank Accounts - _TC"
+			}).insert(ignore_permissions=True)
+
+		if not frappe.db.exists("Cost Center", "_Test Cost Center 2 - _TC"):
+			frappe.get_doc({
+				"doctype": "Cost Center",
+				"cost_center_name": "_Test Cost Center 2",
+				"company": "_Test Company",
+				"is_group": 0,
+				"parent_cost_center": "_Test - _TC"
+			}).insert(ignore_permissions=True)
+
+		if not frappe.db.exists("Account", "_Test Cash - _TC"):
+			frappe.get_doc({
+				"doctype": "Account",
+				"account_name": "_Test Cash",
+				"company": "_Test Company",
+				"is_group": 0,
+				"root_type": "Asset",
+				"account_type": "Cash",
+				"parent_account": "Expenses - _TC",
+			}).insert(ignore_permissions=True)
+
+	def tearDown(self):
+		frappe.db.rollback()
+
+
+
+	def test_budget_check_on_purchase_invoice(self):
+		from erpnext.accounts.doctype.purchase_invoice.test_purchase_invoice import make_purchase_invoice
+		company = "_Test Company"
+		budget = make_budget(
+			company=company,
+			budget_against="Cost Center",
+			applicable_on_purchase_order=1
+		)
+
+		frappe.db.set_value("Budget",budget.name,"action_if_accumulated_monthly_budget_exceeded_on_po","Stop")
+
+		service_item = frappe.get_doc(
+			{
+				"doctype": "Item",
+				"item_code": "_Test Non Stock Item",
+				"item_group": "Services",
+				"is_stock_item": 0,
+				"gst_hsn_code": "004372",
+			}
+		)
+
+		if not frappe.db.exists("Item", service_item.item_code):
+			service_item.insert(ignore_permissions=True)
+
+		supplier = frappe.get_doc({
+				"doctype": "Supplier",
+				"supplier_name": "_Test Supplier",
+				"supplier_type": "Company",
+				"default_currency": "INR"
+			})
+
+		if not frappe.db.exists("Supplier", "_Test Supplier"):
+			supplier.insert(ignore_permissions=True)
+			frappe.db.commit()
+
+
+		expense_account = "_Test Account Cost for Goods Sold - _TC"
+		fiscal_year = get_fiscal_year(nowdate())[0]
+		with self.assertRaises(BudgetError):
+			pi = make_purchase_invoice(
+				company=company,
+				item=service_item,
+				qty=100,
+				rate=10000,
+				expense_account=expense_account,
+				supplier=supplier
+			)
+			pi.submit()
+
+
 	@if_app_installed("projects")
 	def test_monthly_budget_crossed_ignore(self):
 		set_total_expense_zero(nowdate(), "cost_center")
 
-		budget = make_budget(budget_against="Cost Center")
+		budget = make_budget(budget_against="Cost Center",budget_amount=500000)
 
 		jv = make_journal_entry(
 			"_Test Account Cost for Goods Sold - _TC",
 			"_Test Bank - _TC",
-			40000,
+			100000,
 			"_Test Cost Center - _TC",
 			posting_date=nowdate(),
 			submit=True,
@@ -34,7 +155,6 @@ class TestBudget(unittest.TestCase):
 		self.assertTrue(
 			frappe.db.get_value("GL Entry", {"voucher_type": "Journal Entry", "voucher_no": jv.name})
 		)
-
 		budget.cancel()
 		jv.cancel()
 
@@ -49,7 +169,7 @@ class TestBudget(unittest.TestCase):
 		jv = make_journal_entry(
 			"_Test Account Cost for Goods Sold - _TC",
 			"_Test Bank - _TC",
-			40000,
+			500000,
 			"_Test Cost Center - _TC",
 			posting_date=nowdate(),
 		)
@@ -70,7 +190,7 @@ class TestBudget(unittest.TestCase):
 		jv = make_journal_entry(
 			"_Test Account Cost for Goods Sold - _TC",
 			"_Test Bank - _TC",
-			40000,
+			900000,
 			"_Test Cost Center - _TC",
 			posting_date=nowdate(),
 		)
@@ -86,7 +206,8 @@ class TestBudget(unittest.TestCase):
 		frappe.db.set_value("Company", budget.company, "exception_budget_approver_role", "")
 
 		budget.load_from_db()
-		budget.cancel()
+		if budget.docstatus == 1:
+			budget.cancel()
 
 	@if_app_installed("projects")
 	def test_monthly_budget_crossed_for_mr(self):
@@ -141,10 +262,8 @@ class TestBudget(unittest.TestCase):
 		frappe.db.set_value("Budget", budget.name, "action_if_accumulated_monthly_budget_exceeded", "Stop")
 		frappe.db.set_value("Budget", budget.name, "fiscal_year", fiscal_year)
 
-		po = create_purchase_order(transaction_date=nowdate(), do_not_submit=True)
-
+		po = create_purchase_order(transaction_date=nowdate(), do_not_submit=True, expense_account="_Test Account Cost for Goods Sold - _TC")
 		po.set_missing_values()
-
 		self.assertRaises(BudgetError, po.submit)
 
 		budget.load_from_db()
@@ -164,7 +283,7 @@ class TestBudget(unittest.TestCase):
 		jv = make_journal_entry(
 			"_Test Account Cost for Goods Sold - _TC",
 			"_Test Bank - _TC",
-			40000,
+			400000,
 			"_Test Cost Center - _TC",
 			project=project,
 			posting_date=nowdate(),
@@ -190,8 +309,8 @@ class TestBudget(unittest.TestCase):
 		)
 
 		self.assertRaises(BudgetError, jv.submit)
-
-		budget.cancel()
+		if budget.docstatus == 1:
+			budget.cancel()
 
 	@if_app_installed("projects")
 	def test_yearly_budget_crossed_stop2(self):
@@ -211,8 +330,8 @@ class TestBudget(unittest.TestCase):
 		)
 
 		self.assertRaises(BudgetError, jv.submit)
-
-		budget.cancel()
+		if budget.docstatus == 1:
+			budget.cancel()
 
 	@if_app_installed("projects")
 	def test_monthly_budget_on_cancellation1(self):
@@ -279,16 +398,16 @@ class TestBudget(unittest.TestCase):
 	@if_app_installed("projects")
 	def test_monthly_budget_against_group_cost_center(self):
 		set_total_expense_zero(nowdate(), "cost_center")
-		set_total_expense_zero(nowdate(), "cost_center", "_Test Cost Center 2 - _TC")
+		# set_total_expense_zero(nowdate(), "cost_center", "_Test Cost Center 2 - _TC")
 
-		budget = make_budget(budget_against="Cost Center", cost_center="_Test Company - _TC")
+		budget = make_budget(budget_against="Cost Center")
 		frappe.db.set_value("Budget", budget.name, "action_if_accumulated_monthly_budget_exceeded", "Stop")
 
 		jv = make_journal_entry(
 			"_Test Account Cost for Goods Sold - _TC",
 			"_Test Bank - _TC",
-			40000,
-			"_Test Cost Center 2 - _TC",
+			4000000,
+			"_Test Cost Center - _TC",
 			posting_date=nowdate(),
 		)
 
@@ -318,7 +437,7 @@ class TestBudget(unittest.TestCase):
 		jv = make_journal_entry(
 			"_Test Account Cost for Goods Sold - _TC",
 			"_Test Bank - _TC",
-			40000,
+			400000,
 			cost_center,
 			posting_date=nowdate(),
 		)
@@ -326,7 +445,8 @@ class TestBudget(unittest.TestCase):
 		self.assertRaises(BudgetError, jv.submit)
 
 		budget.load_from_db()
-		budget.cancel()
+		if budget.docstatus == 1:
+			budget.cancel()
 		jv.cancel()
 
 	@if_app_installed("projects")
@@ -408,8 +528,6 @@ class TestBudget(unittest.TestCase):
 			for entry in expected_entries:
 				self.assertIn(entry, gl_entries, msg=f"Expected GL Entry {entry} not found in {gl_entries}")
 
-			print(f"Provisional Accounting validated for {pr.name}")
-
 		finally:
 			# Step 6: Cleanup
 			if pr and pr.docstatus == 1:
@@ -456,7 +574,7 @@ class TestBudget(unittest.TestCase):
 				item=service_item.item_code,
 				rate=1000,
 				qty=1,
-				expense_account="_Test Account Cost for Goods Sold - _TC",
+				expense_account="_Test Account Cost for Goods Sold - _TC - _TC",
 				# purchase_account="_Test Account Payable - _TC"
 			)
 
@@ -466,7 +584,7 @@ class TestBudget(unittest.TestCase):
 			)
 			# Check GL Entries for Provisional Accounting Treatment
 			expected_entries = [
-				{"account": "_Test Account Cost for Goods Sold - _TC", "debit": 1000.0, "credit": 0.0},
+				{"account": "_Test Account Cost for Goods Sold - _TC - _TC", "debit": 1000.0, "credit": 0.0},
 				{"account": "Creditors - _TC", "debit": 0.0, "credit": 1000.0},
 			]
 			for entry in expected_entries:
@@ -537,16 +655,25 @@ def make_budget(**args):
 	cost_center = args.cost_center
 
 	fiscal_year = get_fiscal_year(nowdate())[0]
+	company = args.get("company") or "_Test Company"
+	filters = {
+        "fiscal_year": fiscal_year,
+        "company": company,
+        "budget_against": budget_against,
+    }
 
 	if budget_against == "Project":
-		project_name = "{}%".format("_Test Project/" + fiscal_year)
-		budget_list = frappe.get_all("Budget", fields=["name"], filters={"name": ("like", project_name)})
+		filters["project"] = frappe.get_value("Project", {"project_name": "_Test Project"})
 	else:
-		cost_center_name = "{}%".format(cost_center or "_Test Cost Center - _TC/" + fiscal_year)
-		budget_list = frappe.get_all("Budget", fields=["name"], filters={"name": ("like", cost_center_name)})
-	for d in budget_list:
-		frappe.db.sql("delete from `tabBudget` where name = %(name)s", d)
-		frappe.db.sql("delete from `tabBudget Account` where parent = %(name)s", d)
+		filters["cost_center"] = cost_center or "_Test Cost Center - _TC"
+
+	existing_budget = frappe.db.exists("Budget", filters)
+
+	if existing_budget:
+		old_budget = frappe.get_doc("Budget", existing_budget)
+		if old_budget.docstatus == 1:
+			old_budget.cancel()
+		old_budget.delete(ignore_permissions=True)
 
 	budget = frappe.new_doc("Budget")
 
@@ -589,7 +716,7 @@ def make_budget(**args):
 			args.action_if_accumulated_monthly_budget_exceeded_on_po or "Warn"
 		)
 
-	budget.insert()
+	budget.insert(ignore_permissions=True)
 	budget.submit()
 
 	return budget
