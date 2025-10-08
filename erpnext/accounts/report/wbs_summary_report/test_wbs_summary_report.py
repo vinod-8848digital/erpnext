@@ -7,7 +7,7 @@ from erpnext.accounts.report.wbs_summary_report import wbs_summary_report
 
 
 class TestWbsSummaryReport(FrappeTestCase):
-	def test_execute_with_empty_filters(self):
+	def test_execute_with_empty_filters_TC_ACC_589(self):
 		"""Test execute() with no filters (just checks structure)"""
 
 		fake_data = [
@@ -29,7 +29,7 @@ class TestWbsSummaryReport(FrappeTestCase):
 		self.assertIn("label", columns[0])
 		self.assertEqual(data[0]["name"], "WBS-001")
 
-	def test_execute_with_filters(self):
+	def test_execute_with_filters_TC_ACC_590(self):
 		"""Test execute() with filters covering branch where filters exist"""
 
 		fake_data = [
@@ -50,7 +50,7 @@ class TestWbsSummaryReport(FrappeTestCase):
 		self.assertEqual(data[0]["name"], "WBS-002")
 		self.assertEqual(data[0]["amt_allocated"], 200)
 
-	def test_get_data_direct(self):
+	def test_get_data_direct_TC_ACC_591(self):
 		# Create a unique suffix to avoid duplicate names across tests
 		unique_suffix = frappe.generate_hash(length=5)
 
@@ -98,7 +98,7 @@ class TestWbsSummaryReport(FrappeTestCase):
 		self.assertIn("name", result[0])
 		self.assertEqual(result[0]["wbs_name"], "Planning")
 
-	def test_get_columns_and_add_to_tree(self):
+	def test_get_columns_and_add_to_tree_TC_ACC_592(self):
 		"""Test get_columns() and add_to_tree() logic"""
 
 		# 1. Test get_columns()
