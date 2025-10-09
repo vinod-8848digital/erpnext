@@ -232,11 +232,3 @@ def create_tcs_journal_entry():
 	)
 	jv.insert()
 	return jv.submit()
-
-
-@frappe.whitelist()
-def call_method():
-	obj_1 = TestTaxWithholdingDetails()
-	obj_1.setUp()
-	obj_1.test_tds_TC_ACC_597()
-	return "called"
