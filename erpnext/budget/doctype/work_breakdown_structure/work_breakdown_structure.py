@@ -127,7 +127,8 @@ def after_insert(self):
     if self.is_wbs == 1:
         data = frappe.new_doc("Work Breakdown Structure")
         data.name = self.name
-        print(self.name)
+        data.project= "Demo Project"
+        data.wbs_name= "After Insert WBS"
         if "projects" in frappe.get_installed_apps():
             data.project_type = self.project_type
             data.project_name = self.project_name
