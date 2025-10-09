@@ -17,7 +17,7 @@ class TestWorkBreakdownStructure(FrappeTestCase):
 		else:
 			frappe._original_get_doc = frappe.get_doc
 
-		# Now safely create your test data
+		# Create test company if not exists
 		if not frappe.db.exists("Company", "Test WBS Company"):
 			self.company = frappe.get_doc({
 				"doctype": "Company",
@@ -28,6 +28,7 @@ class TestWorkBreakdownStructure(FrappeTestCase):
 		else:
 			self.company = frappe.get_doc("Company", "Test WBS Company")
 
+		# Create root WBS
 		self.root_wbs = frappe.get_doc({
 			"doctype": "Work Breakdown Structure",
 			"company": self.company.name,
@@ -37,6 +38,7 @@ class TestWorkBreakdownStructure(FrappeTestCase):
 			"wbs_level": "Level 1",
 		}).insert(ignore_permissions=True)
 
+		# Create child WBS
 		self.child_wbs = frappe.get_doc({
 			"doctype": "Work Breakdown Structure",
 			"company": self.company.name,
@@ -47,21 +49,30 @@ class TestWorkBreakdownStructure(FrappeTestCase):
 			"wbs_level": "Level 2",
 		}).insert(ignore_permissions=True)
 
-    
-	def test_get_children_TC_WBS_001(self):
+	def test_get_children_TC_BUD_001(self):
 		"""Covers get_children() fully for root and non-root branches"""
 
-		# Test case 1: Root level (is_root=True)
-		root_result = get_children("Work Breakdown Structure", parent=None, project="Demo Project", is_root=True)
+		# --- Case 1: Root level (is_root=True) ---
+		root_result = get_children(
+			"Work Breakdown Structure",
+			parent=None,
+			project="Demo Project",
+			is_root=True
+		)
 
 		self.assertIsInstance(root_result, list)
 		self.assertGreaterEqual(len(root_result), 1)
 		self.assertIn("value", root_result[0])
 		self.assertIn("expandable", root_result[0])
 
-		# Test case 2: Non-root level (is_root=False)
+		# --- Case 2: Non-root level (is_root=False) ---
 		parent_value = f"{self.root_wbs.name} : {self.root_wbs.wbs_name}"
-		non_root_result = get_children("Work Breakdown Structure", parent=parent_value, project="Demo Project", is_root=False)
+		non_root_result = get_children(
+			"Work Breakdown Structure",
+			parent=parent_value,
+			project="Demo Project",
+			is_root=False
+		)
 
 		self.assertIsInstance(non_root_result, list)
 		self.assertGreaterEqual(len(non_root_result), 1)
