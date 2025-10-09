@@ -6,8 +6,18 @@ from frappe.tests.utils import FrappeTestCase
 from erpnext.budget.doctype.work_breakdown_structure.work_breakdown_structure import get_children,delete_wbs_from_tree_view,add_wbs_from_tree_view,after_insert
 
 class TestWorkBreakdownStructure(FrappeTestCase):
+	def tearDown(self):
+		if hasattr(frappe, "_original_get_doc"):
+			frappe.get_doc = frappe._original_get_doc
+
 	def setUp(self):
-		# Create a company (required link for WBS)
+		# Restore frappe.get_doc to original if it exists
+		if hasattr(frappe, "_original_get_doc"):
+			frappe.get_doc = frappe._original_get_doc
+		else:
+			frappe._original_get_doc = frappe.get_doc
+
+		# Now safely create your test data
 		if not frappe.db.exists("Company", "Test WBS Company"):
 			self.company = frappe.get_doc({
 				"doctype": "Company",
@@ -18,7 +28,6 @@ class TestWorkBreakdownStructure(FrappeTestCase):
 		else:
 			self.company = frappe.get_doc("Company", "Test WBS Company")
 
-		# Create a root WBS (parent)
 		self.root_wbs = frappe.get_doc({
 			"doctype": "Work Breakdown Structure",
 			"company": self.company.name,
@@ -28,7 +37,6 @@ class TestWorkBreakdownStructure(FrappeTestCase):
 			"wbs_level": "Level 1",
 		}).insert(ignore_permissions=True)
 
-		# Create a child WBS under the root
 		self.child_wbs = frappe.get_doc({
 			"doctype": "Work Breakdown Structure",
 			"company": self.company.name,
@@ -38,6 +46,7 @@ class TestWorkBreakdownStructure(FrappeTestCase):
 			"parent_work_breakdown_structure": self.root_wbs.name,
 			"wbs_level": "Level 2",
 		}).insert(ignore_permissions=True)
+
     
 	def test_get_children_TC_WBS_001(self):
 		"""Covers get_children() fully for root and non-root branches"""
