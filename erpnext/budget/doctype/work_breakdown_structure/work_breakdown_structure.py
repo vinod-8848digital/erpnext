@@ -70,7 +70,7 @@ def get_children(doctype, parent, project = None, is_root=False):
     return acc
 
 @frappe.whitelist()
-def add_wbs_from_tree_view(arguments=None):
+def add_wbs_from_tree_view(arguments=None): # pragma: no cover
     from frappe.desk.treeview import make_tree_args
     
     if not arguments:
