@@ -581,4 +581,227 @@ class TestDeferredRevenueAndExpense(FrappeTestCase, AccountsTestMixin):
 		assert period_totals[1].total == 100.0
 		assert period_totals[1].actual == 0
 
+	def test_deferred_invoice_initialization_and_calculation_TC_ACC_603(self):
+		"""Covers all lines in Deferred_Invoice.__init__ and calculate_invoice_revenue_expense_for_period"""
+		import datetime
+		from frappe import _dict
+		from erpnext.accounts.report.deferred_revenue_and_expense.deferred_revenue_and_expense import Deferred_Invoice
+
+		# ---- Mock items ----
+		item1 = _dict(
+			item="ITEM-001",
+			posting_date=datetime.date(2025, 1, 1),
+			deferred_revenue_account="Deferred Revenue - Test Company",
+			deferred_expense_account=None,
+			item_name="Subscription Plan",
+			service_start_date=datetime.date(2025, 1, 1),
+			service_end_date=datetime.date(2025, 3, 31),
+			base_net_amount=300.0,
+			gle_posting_date=datetime.date(2025, 1, 15),
+		)
+		item2 = _dict(
+			item="ITEM-002",
+			posting_date=datetime.date(2025, 1, 1),
+			deferred_revenue_account=None,
+			deferred_expense_account="Deferred Expense - Test Company",
+			item_name="Office Rent",
+			service_start_date=datetime.date(2025, 1, 1),
+			service_end_date=datetime.date(2025, 3, 31),
+			base_net_amount=300.0,
+			gle_posting_date=datetime.date(2025, 1, 20),
+		)
+
+		# ---- Mock filters and period_list ----
+		filters = _dict(company="Test Company")
+		period_list = [
+			_dict({"key": "jan_2025", "from_date": datetime.date(2025, 1, 1), "to_date": datetime.date(2025, 1, 31)}),
+			_dict({"key": "feb_2025", "from_date": datetime.date(2025, 2, 1), "to_date": datetime.date(2025, 2, 28)}),
+			_dict({"key": "mar_2025", "from_date": datetime.date(2025, 3, 1), "to_date": datetime.date(2025, 3, 31)}),
+		]
+
+		# ---- Patch Deferred_Item to avoid database calls ----
+		from erpnext.accounts.report.deferred_revenue_and_expense.deferred_revenue_and_expense import Deferred_Item
+		original_init = Deferred_Item.__init__
+
+		def mock_init(self, item, inv, gle_entries):
+			self.item_name = gle_entries[0].item_name
+			self.period_total = [_dict({"key": p.key, "total": 100, "actual": 100}) for p in inv.period_list]
+			self.calculate_item_revenue_expense_for_period = lambda: self.period_total
+
+		Deferred_Item.__init__ = mock_init
+
+		# ---- Initialize Deferred_Invoice ----
+		inv = Deferred_Invoice("INV-001", [item1, item2], filters, period_list)
+
+		# Check initialization
+		assert inv.name == "INV-001"
+		assert inv.posting_date == datetime.date(2025, 1, 1)
+		assert inv.type == "Sales"  # determined by first item with deferred_revenue_account
+		assert len(inv.items) == 2
+		assert set(inv.uniq_items) == {"ITEM-001", "ITEM-002"}
+		assert inv.period_total == []  # not yet calculated
+
+		# ---- Calculate invoice revenue/expense ----
+		period_totals = inv.calculate_invoice_revenue_expense_for_period()
+
+		# Check totals
+		assert len(period_totals) == 3
+		assert all(pt.total == 200 for pt in period_totals)  # 100 + 100 from two items
+		assert all(pt.actual == 200 for pt in period_totals)
+
+		# ---- Restore original Deferred_Item.__init__ ----
+		Deferred_Item.__init__ = original_init
+
+
+	def test_deferred_invoice_estimate_future_and_report_data_TC_ACC_604(self):
+		"""Covers all lines in Deferred_Invoice.estimate_future() and report_data()"""
+		import datetime
+		from frappe import _dict
+		from erpnext.accounts.report.deferred_revenue_and_expense.deferred_revenue_and_expense import Deferred_Invoice
+
+		# ---- Mock items ----
+		item1 = _dict(
+			item="ITEM-001",
+			posting_date=datetime.date(2025, 1, 1),
+			deferred_revenue_account="Deferred Revenue - Test Company",
+			deferred_expense_account=None,
+			item_name="Subscription Plan",
+			service_start_date=datetime.date(2025, 1, 1),
+			service_end_date=datetime.date(2025, 3, 31),
+			base_net_amount=300.0,
+			gle_posting_date=datetime.date(2025, 1, 15),
+		)
+		item2 = _dict(
+			item="ITEM-002",
+			posting_date=datetime.date(2025, 1, 1),
+			deferred_revenue_account=None,
+			deferred_expense_account="Deferred Expense - Test Company",
+			item_name="Office Rent",
+			service_start_date=datetime.date(2025, 1, 1),
+			service_end_date=datetime.date(2025, 3, 31),
+			base_net_amount=300.0,
+			gle_posting_date=datetime.date(2025, 1, 20),
+		)
+
+		# ---- Mock filters and period_list ----
+		filters = _dict(company="Test Company")
+		period_list = [
+			_dict({"key": "jan_2025", "from_date": datetime.date(2025, 1, 1), "to_date": datetime.date(2025, 1, 31)}),
+			_dict({"key": "feb_2025", "from_date": datetime.date(2025, 2, 1), "to_date": datetime.date(2025, 2, 28)}),
+			_dict({"key": "mar_2025", "from_date": datetime.date(2025, 3, 1), "to_date": datetime.date(2025, 3, 31)}),
+		]
+
+		# ---- Patch Deferred_Item ----
+		from erpnext.accounts.report.deferred_revenue_and_expense.deferred_revenue_and_expense import Deferred_Item
+		original_init = Deferred_Item.__init__
+
+		def mock_init(self, item, inv, gle_entries):
+			self.item_name = gle_entries[0].item_name
+			self.period_total = [_dict({"key": p.key, "total": 100, "actual": 100}) for p in inv.period_list]
+			self.simulate_future_posting = lambda: None  # no-op
+			self.report_data = lambda: _dict({"name": self.item_name, "jan_2025": 100, "feb_2025": 100, "mar_2025": 100, "indent": 1})
+
+		Deferred_Item.__init__ = mock_init
+
+		# ---- Initialize Deferred_Invoice ----
+		inv = Deferred_Invoice("INV-001", [item1, item2], filters, period_list)
+
+		# ---- Test estimate_future ----
+		inv.estimate_future()  # should call simulate_future_posting() for each item
+
+		# ---- Test report_data ----
+		report = inv.report_data()
+		# invoice total
+		inv_total = report[0]
+		assert isinstance(inv_total, _dict)
+		assert inv_total.name == "INV-001"
+
+		# item report data
+		item_report_1 = report[1]
+		item_report_2 = report[2]
+		
+		# ---- Restore original Deferred_Item.__init__ ----
+		Deferred_Item.__init__ = original_init
+
+	def test_deferred_revenue_and_expense_report_initialization_TC_ACC_605(self):
+		"""Covers all lines in Deferred_Revenue_and_Expense_Report.__init__ and get_period_list"""
+
+		import datetime
+		from frappe import _dict
+		from frappe.utils import getdate
+		import erpnext.accounts.report.deferred_revenue_and_expense.deferred_revenue_and_expense as dre
+		from erpnext.accounts.report.deferred_revenue_and_expense.deferred_revenue_and_expense import Deferred_Revenue_and_Expense_Report
+
+		# ---- Test with no filters (default branch) ----
+		report_default = Deferred_Revenue_and_Expense_Report()
+		assert isinstance(report_default.filters, _dict)
+		assert report_default.period_list is None
+		assert report_default.deferred_invoices == []
+		assert report_default.period_total == []
+		assert report_default.filters.company is not None
+		assert report_default.filters.periodicity == "Monthly"
+		assert report_default.filters.type == "Revenue"
+		assert report_default.filters.with_upcoming_postings is True
+
+		# ---- Test with custom filters (else branch) ----
+		custom_filters = _dict(
+			company="Test Company",
+			filter_based_on="Date Range",
+			period_start_date=datetime.date(2025, 1, 1),
+			period_end_date=datetime.date(2025, 3, 31),
+			from_fiscal_year="2025",
+			to_fiscal_year="2025",
+			periodicity="Monthly",
+			type="Expense",
+			with_upcoming_postings=False,
+		)
+		report_custom = Deferred_Revenue_and_Expense_Report(filters=custom_filters)
+		assert report_custom.filters.company == "Test Company"
+		assert report_custom.filters.type == "Expense"
+
+		# ---- Patch get_period_list directly in the module where it is used ----
+		original_get_period_list = dre.get_period_list
+		dre.get_period_list = lambda *args, **kwargs: [
+			_dict({
+				"key": "jan_2025",
+				"from_date": datetime.date(2025, 1, 1),
+				"to_date": datetime.date(2025, 1, 31),
+			}),
+			_dict({
+				"key": "feb_2025",
+				"from_date": datetime.date(2025, 2, 1),
+				"to_date": datetime.date(2025, 2, 28),
+			}),
+		]
+
+		# ---- Run get_period_list() to cover all lines ----
+		report_custom.get_period_list()
+		assert isinstance(report_custom.period_list, list)
+		assert len(report_custom.period_list) == 2
+		assert report_custom.period_list[0].key == "jan_2025"
+		assert report_custom.period_list[1].key == "feb_2025"
+
+		# ---- Restore original get_period_list ----
+		dre.get_period_list = original_get_period_list
+	
+	def test_estimate_future_coverage_TC_ACC_607(self):
+		import erpnext.accounts.report.deferred_revenue_and_expense.deferred_revenue_and_expense as dre
+		from frappe import _dict
+
+		# --- Dummy invoices with estimate_future ---
+		dummy_invoice_store = []
+
+		invoice1 = _dict({"estimate_future": lambda: dummy_invoice_store.append("INV-001")})
+		invoice2 = _dict({"estimate_future": lambda: dummy_invoice_store.append("INV-002")})
+
+		# --- Create an instance of the actual report class ---
+		report = dre.Deferred_Revenue_and_Expense_Report(filters=_dict({}))
+		report.deferred_invoices = [invoice1, invoice2]
+
+		# --- Call the real method to cover all lines ---
+		report.estimate_future()
+
+		# --- Assertions to verify the function worked ---
+		assert "INV-001" in dummy_invoice_store
+		assert "INV-002" in dummy_invoice_store
 
