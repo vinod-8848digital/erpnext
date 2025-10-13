@@ -805,3 +805,153 @@ class TestDeferredRevenueAndExpense(FrappeTestCase, AccountsTestMixin):
 		assert "INV-001" in dummy_invoice_store
 		assert "INV-002" in dummy_invoice_store
 
+	def test_get_columns_and_generate_report_data_TC_ACC_608(self):
+		# Create a Deferred_Revenue_and_Expense_Report instance
+		from erpnext.accounts.report.deferred_revenue_and_expense.deferred_revenue_and_expense import (
+			Deferred_Revenue_and_Expense_Report,
+		)
+
+		report = Deferred_Revenue_and_Expense_Report(filters=frappe._dict({"type": "Revenue"}))
+
+		# Mock minimal period list
+		report.period_list = [
+			frappe._dict({"key": "jan_2025", "label": "Jan 2025"}),
+			frappe._dict({"key": "feb_2025", "label": "Feb 2025"}),
+		]
+
+		# Mock totals for each period
+		report.period_total = [
+			frappe._dict({"key": "jan_2025", "total": 100, "actual": 90}),
+			frappe._dict({"key": "feb_2025", "total": 200, "actual": 180}),
+		]
+
+		# Mock invoices with report_data() output
+		inv1 = frappe._dict({"report_data": lambda: [frappe._dict({"name": "INV-001", "jan_2025": 50, "feb_2025": 100})]})
+		inv2 = frappe._dict({"report_data": lambda: [frappe._dict({"name": "INV-002", "jan_2025": 60, "feb_2025": 120})]})
+		report.deferred_invoices = [inv1, inv2]
+
+		# ---- Test get_columns() ----
+		cols = report.get_columns()
+		self.assertEqual(cols[0]["fieldname"], "name")
+		self.assertEqual(cols[0]["fieldtype"], "Data")
+		self.assertTrue(all(c["fieldtype"] == "Currency" for c in cols[1:]))
+		self.assertTrue(all(c["read_only"] == 1 for c in cols))
+
+		# ---- Test generate_report_data() for Revenue ----
+		data = report.generate_report_data()
+		self.assertEqual(data[0].name, "INV-001")
+		self.assertEqual(data[1].name, "INV-002")
+		self.assertEqual(data[-2], {})  # padding row
+		self.assertEqual(data[-1].name, "Total Deferred Income")
+		self.assertEqual(data[-1]["jan_2025"], 100)
+		self.assertEqual(data[-1]["feb_2025"], 200)
+
+		# ---- Test generate_report_data() for Expense ----
+		report.filters.type = "Expense"
+		data_expense = report.generate_report_data()
+		self.assertEqual(data_expense[-1].name, "Total Deferred Expense")
+		self.assertEqual(data_expense[-1]["jan_2025"], 100)
+		self.assertEqual(data_expense[-1]["feb_2025"], 200)
+
+	def test_prepare_chart_and_run_functions_TC_ACC_609(self):
+		from erpnext.accounts.report.deferred_revenue_and_expense.deferred_revenue_and_expense import (
+			Deferred_Revenue_and_Expense_Report,
+		)
+
+		# --- Mock a report instance ---
+		report = Deferred_Revenue_and_Expense_Report(
+			filters=frappe._dict({"type": "Revenue", "with_upcoming_postings": True})
+		)
+
+		# Mock period list and totals
+		report.period_list = [
+			frappe._dict({"label": "Jan 2025", "key": "jan_2025"}),
+			frappe._dict({"label": "Feb 2025", "key": "feb_2025"}),
+		]
+		report.period_total = [
+			frappe._dict({"actual": 50, "total": 100}),
+			frappe._dict({"actual": 80, "total": 150}),
+		]
+
+		# ---- Test prepare_chart() ----
+		chart = report.prepare_chart()
+
+		# Validate chart structure
+		self.assertEqual(chart["type"], "axis-mixed")
+		self.assertEqual(chart["height"], 500)
+		self.assertIn("labels", chart["data"])
+		self.assertIn("datasets", chart["data"])
+		self.assertEqual(chart["data"]["labels"], ["Jan 2025", "Feb 2025"])
+
+		# Dataset 1: Actual Posting
+		actual_dataset = chart["data"]["datasets"][0]
+		self.assertEqual(actual_dataset["name"], "Actual Posting")
+		self.assertEqual(actual_dataset["chartType"], "bar")
+		self.assertEqual(actual_dataset["values"], [50, 80])
+
+		# Dataset 2: Expected (added because with_upcoming_postings=True)
+		expected_dataset = chart["data"]["datasets"][1]
+		self.assertEqual(expected_dataset["name"], "Expected")
+		self.assertEqual(expected_dataset["chartType"], "line")
+		self.assertEqual(expected_dataset["values"], [100, 150])
+
+		# ---- Test run() ----
+		# Patch internal methods to avoid real DB calls and still trigger all lines
+		report.get_period_list = lambda *a, **kw: setattr(report, "period_list", report.period_list)
+		report.get_invoices = lambda *a, **kw: report.deferred_invoices.append("dummy_invoice")
+		report.estimate_future = lambda *a, **kw: setattr(report, "future_estimated", True)
+		report.calculate_revenue_and_expense = lambda *a, **kw: setattr(report, "calculated", True)
+
+		# Run the report (should hit all code paths)
+		report.run()
+
+		# Validate that internal methods were called and flags set
+		self.assertIn("dummy_invoice", report.deferred_invoices)
+		self.assertTrue(hasattr(report, "future_estimated"))
+		self.assertTrue(hasattr(report, "calculated"))
+
+		# Test again with with_upcoming_postings=False to cover other branch
+		report.filters.with_upcoming_postings = False
+		report.deferred_invoices = []
+		delattr(report, "future_estimated")
+
+		report.run()
+		self.assertFalse(hasattr(report, "future_estimated"))
+		self.assertTrue(hasattr(report, "calculated"))
+
+	def test_execute_function_TC_ACC_610(self):
+		from erpnext.accounts.report.deferred_revenue_and_expense.deferred_revenue_and_expense import (
+			execute,
+			Deferred_Revenue_and_Expense_Report,
+		)
+
+		# Mock filters
+		filters = frappe._dict({"type": "Revenue", "with_upcoming_postings": True})
+
+		# --- Patch methods to prevent DB calls and to validate flow ---
+		original_run = Deferred_Revenue_and_Expense_Report.run
+		original_get_columns = Deferred_Revenue_and_Expense_Report.get_columns
+		original_generate_report_data = Deferred_Revenue_and_Expense_Report.generate_report_data
+		original_prepare_chart = Deferred_Revenue_and_Expense_Report.prepare_chart
+
+		try:
+			Deferred_Revenue_and_Expense_Report.run = lambda self: setattr(self, "ran", True)
+			Deferred_Revenue_and_Expense_Report.get_columns = lambda self: ["col1", "col2"]
+			Deferred_Revenue_and_Expense_Report.generate_report_data = lambda self: [{"row": 1}]
+			Deferred_Revenue_and_Expense_Report.prepare_chart = lambda self: {"type": "chart"}
+
+			# --- Execute the function ---
+			columns, data, message, chart = execute(filters)
+
+			# --- Validate return values and execution ---
+			self.assertEqual(columns, ["col1", "col2"])
+			self.assertEqual(data, [{"row": 1}])
+			self.assertEqual(message, [])
+			self.assertEqual(chart, {"type": "chart"})
+
+		finally:
+			# Restore originals to avoid side effects on other tests
+			Deferred_Revenue_and_Expense_Report.run = original_run
+			Deferred_Revenue_and_Expense_Report.get_columns = original_get_columns
+			Deferred_Revenue_and_Expense_Report.generate_report_data = original_generate_report_data
+			Deferred_Revenue_and_Expense_Report.prepare_chart = original_prepare_chart
