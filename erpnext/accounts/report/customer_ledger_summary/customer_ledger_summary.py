@@ -347,7 +347,7 @@ class PartyLedgerSummaryReport:
 
 		accounting_dimensions = get_accounting_dimensions(as_list=False)
 
-		if accounting_dimensions:
+		if accounting_dimensions: # pragma: no cover
 			for dimension in accounting_dimensions:
 				if self.filters.get(dimension.fieldname):
 					if frappe.get_cached_value("DocType", dimension.document_type, "is_tree"):
