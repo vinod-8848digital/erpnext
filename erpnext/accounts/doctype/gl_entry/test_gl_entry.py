@@ -181,19 +181,8 @@ class TestUpdateGLEntryOnce(unittest.TestCase):
 						reconciled_amt = doc["reconciled_amount"] if doc.get("reconciled_amount") else 0.0
 						unreconciled_amount = total_amt - reconciled_amt
 
-						frappe.db.set_value("GL Entry", doc["name"], "unreconciled_amount", unreconciled_amount)
-						frappe.db.commit()
 
-		# --- Print results to verify all lines executed ---
-		print(set_value_calls)
 		return set_value_calls
-
-	# Run the function
-	test_update_gl_entry_once_flat()
-
-
-
-
 
 def test_round_off_entry(self):
 	frappe.db.set_value("Company", "_Test Company", "round_off_account", "_Test Write Off - _TC")
