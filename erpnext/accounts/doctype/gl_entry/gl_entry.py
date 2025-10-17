@@ -468,7 +468,6 @@ def rename_gle_sle_docs():
 
 
 def rename_temporarily_named_docs(doctype):
-	print("****************************")
 	"""Rename temporarily named docs using autoname options"""
 	docs_to_rename = frappe.get_all(doctype, {"to_rename": "1"}, order_by="creation", limit=50000)
 	
