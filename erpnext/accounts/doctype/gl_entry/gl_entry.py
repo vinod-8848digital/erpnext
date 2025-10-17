@@ -433,7 +433,6 @@ def update_against_account(voucher_type, voucher_no):
 		filters={"voucher_type": voucher_type, "voucher_no": voucher_no},
 		fields=["name", "party", "against", "debit", "credit", "account", "company"],
 	)
-
 	if not entries:
 		return
 	company_currency = erpnext.get_company_currency(entries[0].company)
@@ -447,6 +446,7 @@ def update_against_account(voucher_type, voucher_no):
 			accounts_credited.append(d.party or d.account)
 
 	for d in entries:
+		new_against = ""
 		if flt(d.debit, precision) > 0:
 			new_against = ", ".join(list(set(accounts_credited)))
 		if flt(d.credit, precision) > 0:
@@ -470,7 +470,6 @@ def rename_gle_sle_docs():
 def rename_temporarily_named_docs(doctype):
 	"""Rename temporarily named docs using autoname options"""
 	docs_to_rename = frappe.get_all(doctype, {"to_rename": "1"}, order_by="creation", limit=50000)
-	
 	for doc in docs_to_rename:
 		oldname = doc.name
 		set_name_from_naming_options(frappe.get_meta(doctype).autoname, doc)
@@ -483,21 +482,20 @@ def rename_temporarily_named_docs(doctype):
 
 @frappe.whitelist()
 def update_gl_entry_once(): #For Open Item reconciliation Feature. 
-    get_gl_ac = frappe.db.get_all("Account",{"is_open_item":1},["name"])
-    for row in get_gl_ac:
-        all_gle = frappe.db.get_all("GL Entry",{"account":row.name,"is_cancelled":0},["name"])
-        if all_gle:
-            for gle in all_gle:
-                if gle.get("name"):
-                    self = frappe.get_doc("GL Entry",gle.get("name"))
-                    total_amt = 0.0
-                    if self.debit_in_account_currency > 0.0:
-                        total_amt = self.debit_in_account_currency
-                    elif self.credit_in_account_currency > 0.0:
-                        total_amt = self.credit_in_account_currency
-                    
-                    reconciled_amt = self.reconciled_amount if self.reconciled_amount else 0.0
-                    unreconciled_amount = total_amt - reconciled_amt
-
-                    frappe.db.set_value(self.doctype,self.name,"unreconciled_amount",unreconciled_amount)
-                    frappe.db.commit()
+	get_gl_ac = frappe.db.get_all("Account",{"is_open_item":1},["name"])
+	for row in get_gl_ac:
+		all_gle = frappe.db.get_all("GL Entry",{"account":row.name,"is_cancelled":0},["name"])
+		if all_gle:
+			for gle in all_gle:
+				if gle.get("name"):
+					self = frappe.get_doc("GL Entry",gle.get("name"))
+					total_amt = 0.0
+					if self.debit_in_account_currency > 0.0:
+						total_amt = self.debit_in_account_currency
+					elif self.credit_in_account_currency > 0.0:
+						total_amt = self.credit_in_account_currency
+					
+					reconciled_amt = self.reconciled_amount if self.reconciled_amount else 0.0
+					unreconciled_amount = total_amt - reconciled_amt
+					frappe.db.set_value(self.doctype,self.name,"unreconciled_amount",unreconciled_amount)
+					frappe.db.commit()
