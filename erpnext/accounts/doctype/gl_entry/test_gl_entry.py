@@ -86,6 +86,7 @@ class TestUpdateGLEntryOnce(unittest.TestCase):
 		# Validate all expected index additions occurred
 		self.assertEqual(called_indices, expected_calls)
 
+
 	def test_rename_gle_sle_docs(self):
 		import frappe
 		from erpnext.accounts.doctype.gl_entry.gl_entry import rename_gle_sle_docs
@@ -136,53 +137,53 @@ class TestUpdateGLEntryOnce(unittest.TestCase):
 		assert all(auto_commit for _, _, auto_commit in sql_calls)
 
 
-	# def test_update_gl_entry_once_flat_TC_ACC_615():
-	# 	# --- Mock frappe DB and doc behavior ---
-	# 	# Mock get_all for Accounts and GL Entries
-	# 	def mock_get_all(doctype, filters, fields):
-	# 		if doctype == "Account":
-	# 			return [{"name": "_Test Open Item Account"}]  # Single open item account
-	# 		elif doctype == "GL Entry":
-	# 			return [
-	# 				{"name": "GLE-001", "debit_in_account_currency": 200.0, "credit_in_account_currency": 0.0, "reconciled_amount": 50.0},
-	# 				{"name": "GLE-002", "debit_in_account_currency": 0.0, "credit_in_account_currency": 300.0, "reconciled_amount": 100.0}
-	# 			]
-	# 		return []
+	def test_update_gl_entry_once_flat_TC_ACC_615():
+		# --- Mock frappe DB and doc behavior ---
+		# Mock get_all for Accounts and GL Entries
+		def mock_get_all(doctype, filters, fields):
+			if doctype == "Account":
+				return [{"name": "_Test Open Item Account"}]  # Single open item account
+			elif doctype == "GL Entry":
+				return [
+					{"name": "GLE-001", "debit_in_account_currency": 200.0, "credit_in_account_currency": 0.0, "reconciled_amount": 50.0},
+					{"name": "GLE-002", "debit_in_account_currency": 0.0, "credit_in_account_currency": 300.0, "reconciled_amount": 100.0}
+				]
+			return []
 
-	# 	frappe.db.get_all = mock_get_all
+		frappe.db.get_all = mock_get_all
 
-	# 	# Track set_value calls
-	# 	set_value_calls = []
-	# 	frappe.db.set_value = lambda doctype, name, field, value: set_value_calls.append((doctype, name, field, value))
-	# 	frappe.db.commit = lambda: None
+		# Track set_value calls
+		set_value_calls = []
+		frappe.db.set_value = lambda doctype, name, field, value: set_value_calls.append((doctype, name, field, value))
+		frappe.db.commit = lambda: None
 
-	# 	# Mock frappe.get_doc to return dictionary-like object
-	# 	def mock_get_doc(doctype, name):
-	# 		for gle in frappe.db.get_all("GL Entry", {"account": "_Test Open Item Account", "is_cancelled": 0}, ["name"]):
-	# 			if gle["name"] == name:
-	# 				return gle
-	# 		return {}
-	# 	frappe.get_doc = mock_get_doc
+		# Mock frappe.get_doc to return dictionary-like object
+		def mock_get_doc(doctype, name):
+			for gle in frappe.db.get_all("GL Entry", {"account": "_Test Open Item Account", "is_cancelled": 0}, ["name"]):
+				if gle["name"] == name:
+					return gle
+			return {}
+		frappe.get_doc = mock_get_doc
 
-	# 	# --- Begin flat update_gl_entry_once logic ---
-	# 	accounts = frappe.db.get_all("Account", {"is_open_item": 1}, ["name"])
-	# 	for account in accounts:
-	# 		gl_entries = frappe.db.get_all("GL Entry", {"account": account["name"], "is_cancelled": 0}, ["name", "debit_in_account_currency", "credit_in_account_currency", "reconciled_amount"])
-	# 		if gl_entries:
-	# 			for gle in gl_entries:
-	# 				if gle.get("name"):
-	# 					doc = frappe.get_doc("GL Entry", gle["name"])
-	# 					total_amt = 0.0
-	# 					if doc["debit_in_account_currency"] > 0.0:
-	# 						total_amt = doc["debit_in_account_currency"]
-	# 					elif doc["credit_in_account_currency"] > 0.0:
-	# 						total_amt = doc["credit_in_account_currency"]
+		# --- Begin flat update_gl_entry_once logic ---
+		accounts = frappe.db.get_all("Account", {"is_open_item": 1}, ["name"])
+		for account in accounts:
+			gl_entries = frappe.db.get_all("GL Entry", {"account": account["name"], "is_cancelled": 0}, ["name", "debit_in_account_currency", "credit_in_account_currency", "reconciled_amount"])
+			if gl_entries:
+				for gle in gl_entries:
+					if gle.get("name"):
+						doc = frappe.get_doc("GL Entry", gle["name"])
+						total_amt = 0.0
+						if doc["debit_in_account_currency"] > 0.0:
+							total_amt = doc["debit_in_account_currency"]
+						elif doc["credit_in_account_currency"] > 0.0:
+							total_amt = doc["credit_in_account_currency"]
 
-	# 					reconciled_amt = doc["reconciled_amount"] if doc.get("reconciled_amount") else 0.0
-	# 					unreconciled_amount = total_amt - reconciled_amt
+						reconciled_amt = doc["reconciled_amount"] if doc.get("reconciled_amount") else 0.0
+						unreconciled_amount = total_amt - reconciled_amt
 
 
-	# 	return set_value_calls
+		return set_value_calls
 
 def test_round_off_entry(self):
 	frappe.db.set_value("Company", "_Test Company", "round_off_account", "_Test Write Off - _TC")

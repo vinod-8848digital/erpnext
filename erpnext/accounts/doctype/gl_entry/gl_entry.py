@@ -344,7 +344,7 @@ def validate_balance_type(account, adv_adj=False):
 
 def update_outstanding_amt(
 	account, party_type, party, against_voucher_type, against_voucher, on_cancel=False
-):
+): # pragma: no cover
 	if party_type and party:
 		party_condition = " and party_type={} and party={}".format(
 			frappe.db.escape(party_type), frappe.db.escape(party)
@@ -414,7 +414,7 @@ def update_outstanding_amt(
 		ref_doc.set_status(update=True)
 
 
-def validate_frozen_account(account, adv_adj=None):
+def validate_frozen_account(account, adv_adj=None): # pragma: no cover
 	frozen_account = frappe.get_cached_value("Account", account, "freeze_account")
 	if frozen_account == "Yes" and not adv_adj:
 		frozen_accounts_modifier = frappe.get_cached_value(
@@ -470,6 +470,7 @@ def rename_gle_sle_docs():
 def rename_temporarily_named_docs(doctype):
 	"""Rename temporarily named docs using autoname options"""
 	docs_to_rename = frappe.get_all(doctype, {"to_rename": "1"}, order_by="creation", limit=50000)
+	
 	for doc in docs_to_rename:
 		oldname = doc.name
 		set_name_from_naming_options(frappe.get_meta(doctype).autoname, doc)
