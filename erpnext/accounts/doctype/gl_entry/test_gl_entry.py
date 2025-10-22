@@ -388,6 +388,144 @@ class TestUpdateGLEntryOnce(unittest.TestCase):
 		# Credit case: 1000 - 0 = 1000
 		assert credit_update[3] == 1000.0
 
+	def test_validate_balance_type_full_coverage_TC_ACC_619(self):
+		import frappe
+		from erpnext.accounts.doctype.gl_entry.gl_entry import validate_balance_type
+
+		thrown_messages = []
+
+		# Mock frappe.throw to record messages
+		frappe.throw = lambda msg: thrown_messages.append(msg)
+
+		# --- Case 1: adv_adj=True (skips everything) ---
+		validate_balance_type("ACC-TEST-1", adv_adj=True)
+		assert len(thrown_messages) == 0  # nothing thrown
+
+		# --- Case 2: account=None (skips everything) ---
+		validate_balance_type(None)
+		assert len(thrown_messages) == 0
+
+		# --- Case 3: balance_must_be is None (skips SQL entirely) ---
+		frappe.get_cached_value = lambda doctype, account, field: None
+		validate_balance_type("ACC-NO-BAL")
+		assert len(thrown_messages) == 0
+
+		# --- Prepare reusable mocks ---
+		called_sql = []
+
+		def mock_sql(query, params=None):
+			# record every SQL call
+			called_sql.append((query, params))
+			# return a fake balance result
+			return [(mock_sql.balance_value,)]
+
+		frappe.db.sql = mock_sql
+
+		# --- Case 4: balance_must_be='Debit', balance positive (no throw) ---
+		frappe.get_cached_value = lambda doctype, account, field: "Debit"
+		mock_sql.balance_value = 500.0
+		validate_balance_type("ACC-DEBIT-POS")
+		assert len(thrown_messages) == 0
+
+		# --- Case 5: balance_must_be='Debit', balance negative (should throw) ---
+		mock_sql.balance_value = -100.0
+		thrown_messages.clear()
+		validate_balance_type("ACC-DEBIT-NEG")
+		assert len(thrown_messages) == 1
+		assert "must always be Debit" in thrown_messages[0]
+
+		# --- Case 6: balance_must_be='Credit', balance negative (no throw) ---
+		frappe.get_cached_value = lambda doctype, account, field: "Credit"
+		mock_sql.balance_value = -200.0
+		thrown_messages.clear()
+		validate_balance_type("ACC-CREDIT-NEG")
+		assert len(thrown_messages) == 0
+
+		# --- Case 7: balance_must_be='Credit', balance positive (should throw) ---
+		mock_sql.balance_value = 100.0
+		thrown_messages.clear()
+		validate_balance_type("ACC-CREDIT-POS")
+		assert len(thrown_messages) == 1
+		assert "must always be Credit" in thrown_messages[0]
+
+	def test_on_cancel_full_coverage_TC_ACC_620(self):
+		import frappe
+		from frappe.exceptions import ValidationError
+		from erpnext.accounts.doctype.gl_entry.gl_entry import GLEntry
+
+		# Create a mock GL Entry document (not inserted in DB)
+		gl_entry = frappe.new_doc("GL Entry")
+		gl_entry.name = "GLE-TEST-001"
+
+		# Patch frappe.throw to raise ValidationError (like in real case)
+		def mock_throw(msg):
+			raise ValidationError(msg)
+
+		frappe.throw = mock_throw
+
+		# Try canceling and capture the thrown message
+		try:
+			gl_entry.on_cancel()
+		except ValidationError as e:
+			error_message = str(e)
+
+		# Assertions
+		assert "Individual GL Entry cannot be cancelled" in error_message
+		assert "Please cancel related transaction" in error_message
+
+
+	def test_pl_must_have_cost_center_full_coverage_TC_ACC_621(self):
+		import frappe
+		from frappe.exceptions import ValidationError
+
+		thrown_messages = []
+
+		# Mock frappe.throw
+		def mock_throw(msg, title=None):
+			thrown_messages.append((msg, title))
+			raise ValidationError(msg)
+
+		frappe.throw = mock_throw
+
+		# --- Case 1: cost_center is present (should return early, no throw)
+		gl_entry = frappe.new_doc("GL Entry")
+		gl_entry.cost_center = "COST-001"
+		gl_entry.voucher_type = "Sales Invoice"
+		gl_entry.account = "ACC-001"
+		gl_entry.voucher_no = "SINV-001"
+
+		gl_entry.pl_must_have_cost_center()
+		assert len(thrown_messages) == 0  # no exception
+
+		# --- Case 2: voucher_type == "Period Closing Voucher" (should also return early)
+		gl_entry = frappe.new_doc("GL Entry")
+		gl_entry.cost_center = None
+		gl_entry.voucher_type = "Period Closing Voucher"
+		gl_entry.account = "ACC-002"
+		gl_entry.voucher_no = "PCV-001"
+
+		gl_entry.pl_must_have_cost_center()
+		assert len(thrown_messages) == 0
+
+		# --- Case 3: Profit and Loss account, missing cost center → should throw
+		gl_entry = frappe.new_doc("GL Entry")
+		gl_entry.cost_center = None
+		gl_entry.voucher_type = "Journal Entry"
+		gl_entry.account = "ACC-PL"
+		gl_entry.voucher_no = "JV-001"
+
+		# Mock get_cached_value to simulate "Profit and Loss" report type
+		frappe.get_cached_value = lambda doctype, account, field: "Profit and Loss"
+
+		try:
+			gl_entry.pl_must_have_cost_center()
+		except ValidationError:
+			pass
+
+		assert len(thrown_messages) == 1
+		assert "Cost Center is required" in thrown_messages[0][0]
+		assert thrown_messages[0][1] == "Missing Cost Center"
+
 
 
 
