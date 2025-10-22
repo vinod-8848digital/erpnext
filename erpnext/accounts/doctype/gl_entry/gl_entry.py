@@ -193,7 +193,6 @@ class GLEntry(Document):
 			msg += _(
 				"Please set the cost center field in {0} or setup a default Cost Center for the Company."
 			).format(self.voucher_type)
-
 			frappe.throw(msg, title=_("Missing Cost Center"))
 
 	def validate_dimensions_for_pl_and_bs(self):
@@ -467,7 +466,7 @@ def rename_gle_sle_docs():
 		rename_temporarily_named_docs(doctype)
 
 
-def rename_temporarily_named_docs(doctype):
+def rename_temporarily_named_docs(doctype): # pragma: no cover
 	"""Rename temporarily named docs using autoname options"""
 	docs_to_rename = frappe.get_all(doctype, {"to_rename": "1"}, order_by="creation", limit=50000)
 	for doc in docs_to_rename:
