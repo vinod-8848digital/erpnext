@@ -526,6 +526,93 @@ class TestUpdateGLEntryOnce(unittest.TestCase):
 		assert "Cost Center is required" in thrown_messages[0][0]
 		assert thrown_messages[0][1] == "Missing Cost Center"
 
+	def test_check_mandatory_full_coverage_TC_ACC_622(self):
+		import frappe
+		from frappe.exceptions import ValidationError
+
+		thrown_messages = []
+
+		def mock_throw(msg):
+			thrown_messages.append(msg)
+			raise ValidationError(msg)
+
+		frappe.throw = mock_throw
+
+		# Mock precision and flt to simplify
+		from frappe.utils.data import flt
+		flt = lambda v, *a, **kw: float(v or 0)
+
+		# --- Case 1: Missing mandatory field 'account' ---
+		gl_entry = frappe.new_doc("GL Entry")
+		gl_entry.voucher_type = "Sales Invoice"
+		gl_entry.voucher_no = "SINV-001"
+		gl_entry.company = "Test Co"
+		gl_entry.is_cancelled = 0
+		gl_entry.get = lambda k: getattr(gl_entry, k, None)
+		gl_entry.meta = type("Meta", (), {"get_label": lambda self, k: k})()
+		try:
+			gl_entry.check_mandatory()
+		except ValidationError:
+			pass
+		assert any("account is required" in m for m in thrown_messages)
+
+		# --- Case 2: Receivable account without customer ---
+		thrown_messages.clear()
+		gl_entry = frappe.new_doc("GL Entry")
+		gl_entry.account = "ACC-REC"
+		gl_entry.voucher_type = "Sales Invoice"
+		gl_entry.voucher_no = "SINV-002"
+		gl_entry.company = "Test Co"
+		gl_entry.party_type = None
+		gl_entry.party = None
+		gl_entry.is_cancelled = 0
+		gl_entry.debit = 0
+		gl_entry.credit = 0
+		gl_entry.get = lambda k: getattr(gl_entry, k, None)
+		gl_entry.precision = lambda f: 2
+		frappe.get_cached_value = lambda doctype, name, field: "Receivable" if doctype == "Account" else None
+
+		try:
+			gl_entry.check_mandatory()
+		except ValidationError:
+			pass
+		assert any("Customer is required" in m for m in thrown_messages)
+
+		# --- Case 3: Payable account without supplier ---
+		thrown_messages.clear()
+		frappe.get_cached_value = lambda doctype, name, field: "Payable" if doctype == "Account" else None
+		gl_entry.account = "ACC-PAY"
+		try:
+			gl_entry.check_mandatory()
+		except ValidationError:
+			pass
+		assert any("Supplier is required" in m for m in thrown_messages)
+
+		# --- Case 4: Zero debit/credit, but Exchange Gain Or Loss JE bypass ---
+		thrown_messages.clear()
+		gl_entry = frappe.new_doc("GL Entry")
+		gl_entry.account = "ACC-EXCH"
+		gl_entry.voucher_type = "Journal Entry"
+		gl_entry.voucher_no = "JE-001"
+		gl_entry.company = "Test Co"
+		gl_entry.party_type = "Customer"
+		gl_entry.party = "Test Customer"
+		gl_entry.is_cancelled = 0
+		gl_entry.debit = 0
+		gl_entry.credit = 0
+		gl_entry.precision = lambda f: 2
+		gl_entry.get = lambda k: getattr(gl_entry, k, None)
+		frappe.get_cached_value = lambda doctype, name, field: "Exchange Gain Or Loss" if doctype == "Journal Entry" else None
+
+		# Should not throw
+		gl_entry.check_mandatory()
+		assert len(thrown_messages) == 0
+
+		# --- Case 5: Valid debit > 0 (no throw) ---
+		thrown_messages.clear()
+		gl_entry.debit = 100
+		gl_entry.check_mandatory()
+		assert len(thrown_messages) == 0
 
 
 
