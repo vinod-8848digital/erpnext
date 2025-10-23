@@ -859,6 +859,247 @@ class TestSerialNo(FrappeTestCase):
 
 		self.assertTrue("Cannot delete Serial No" in str(e2.exception))
 
+	def test_serial_no_full_line_coverage_TC_SCK_310(self):
+		import frappe
+		from frappe.utils import nowdate, add_days
+		from erpnext.stock.doctype.serial_no.serial_no import (
+			SerialNo,
+			SerialNoCannotCreateDirectError,
+			SerialNoCannotCannotChangeError,
+		)
+
+		# ---- Case 1: __init__ ----
+		serial = SerialNo({"doctype": "Serial No"})
+		self.assertFalse(serial.via_stock_ledger)
+
+		# ---- Case 2: validate() throws when __islocal and warehouse set ----
+		serial = SerialNo({"doctype": "Serial No"})
+		serial.update({
+			"__islocal": True,
+			"warehouse": "Test Warehouse",
+		})
+		serial.via_stock_ledger = False
+
+		with self.assertRaises(SerialNoCannotCreateDirectError):
+			serial.validate()
+
+		# ---- Case 3: set_maintenance_status (all branches) ----
+		serial = SerialNo({"doctype": "Serial No"})
+		serial.via_stock_ledger = True  # skip throw
+		serial.set_maintenance_status()  # triggers print("22")
+		self.assertIsNone(serial.maintenance_status)
+
+		# warranty expired
+		serial.warranty_expiry_date = add_days(nowdate(), -1)
+		serial.set_maintenance_status()  # triggers print("33")
+		self.assertEqual(serial.maintenance_status, "Out of Warranty")
+
+		# amc expired
+		serial.amc_expiry_date = add_days(nowdate(), -1)
+		serial.set_maintenance_status()  # triggers print("44")
+		self.assertEqual(serial.maintenance_status, "Out of AMC")
+
+		# amc active
+		serial.amc_expiry_date = add_days(nowdate(), 5)
+		serial.set_maintenance_status()  # triggers print("55")
+		self.assertEqual(serial.maintenance_status, "Under AMC")
+
+		# warranty active
+		serial.warranty_expiry_date = add_days(nowdate(), 5)
+		serial.set_maintenance_status()  # triggers print("66")
+		self.assertEqual(serial.maintenance_status, "Under Warranty")
+
+		# ---- Case 4: validate_warehouse() ----
+		serial = SerialNo({"doctype": "Serial No"})
+		serial.via_stock_ledger = False
+		serial.name = "SN-001"
+		serial.item_code = "ITEM-01"
+		serial.warehouse = "WH-01"
+
+		# Mock frappe.db.get_value to return same values (no throw)
+		frappe.db.get_value = lambda *a, **kw: ("ITEM-01", "WH-01")
+		serial.validate_warehouse()  # should not raise
+
+		# Mock frappe.db.get_value to simulate item_code change (throw)
+		frappe.db.get_value = lambda *a, **kw: ("DIFF-ITEM", "WH-01")
+		with self.assertRaises(SerialNoCannotCannotChangeError):
+			serial.validate_warehouse()
+
+		# Mock frappe.db.get_value to simulate warehouse change (throw)
+		frappe.db.get_value = lambda *a, **kw: ("ITEM-01", "DIFF-WH")
+		with self.assertRaises(SerialNoCannotCannotChangeError):
+			serial.validate_warehouse()
+
+	def test_on_trash_full_coverage_TC_SCK_311(self):
+		import frappe
+		from erpnext.stock.doctype.serial_no.serial_no import SerialNo, get_serial_nos
+		import erpnext.stock.doctype.serial_no.serial_no as serial_module
+
+		thrown_messages = []
+
+		# Mock frappe.throw to capture the message
+		frappe.throw = lambda msg, *a, **k: thrown_messages.append(str(msg))
+
+		# Mock get_serial_nos
+		def mock_get_serial_nos(serial_no_string):
+			return [s.strip().upper() for s in serial_no_string.split("\n") if s.strip()]
+
+		serial_module.get_serial_nos = mock_get_serial_nos
+
+		# Lightweight mock object for SQL return
+		class Row:
+			def __init__(self, serial_no):
+				self.serial_no = serial_no
+
+		# Mock frappe.db.sql to simulate DB result
+		original_sql = frappe.db.sql
+
+		def mock_sql(query, params=None, as_dict=True, **kwargs):
+			if getattr(mock_sql, "call_count", 0) == 0:
+				mock_sql.call_count = 1
+				return [Row("SN-999")]  # No match case
+			else:
+				return [Row("SN-001\nSN-002")]  # Match found
+
+		mock_sql.call_count = 0
+		frappe.db.sql = mock_sql
+
+		#  Create actual SerialNo instance (without DB metadata)
+		serial = SerialNo.__new__(SerialNo)
+		serial.name = "SN-001"
+		serial.item_code = "ITEM-01"
+
+		# ---- Case 1: No match (should NOT throw) ----
+		thrown_messages.clear()
+		serial.on_trash()
+		assert len(thrown_messages) == 0
+
+		# ---- Case 2: Match found (should throw) ----
+		thrown_messages.clear()
+		serial.on_trash()
+		assert len(thrown_messages) == 1
+		assert "Cannot delete Serial No SN-001" in thrown_messages[0]
+
+		# Restore mocks
+		frappe.db.sql = original_sql
+
+	def test_serial_no_utils_TC_SCK_312(self):
+		import frappe
+		from erpnext.stock.doctype.serial_no import serial_no as serial_module
+
+		generated = []
+
+		# --- Mock frappe functions ---
+		def mock_make_autoname(series, doctype=None):
+			name = f"{series}-001"
+			generated.append(name)
+			return name
+
+		def mock_exists(doctype, name):
+			# First call -> simulate exists=True (forces recursion)
+			if not getattr(mock_exists, "called", False):
+				mock_exists.called = True
+				return True
+			# Next -> no existing record
+			return False
+
+		frappe.db.exists = mock_exists
+		serial_module.make_autoname = mock_make_autoname
+
+		# --- Case 1: get_new_serial_number (with recursion) ---
+		new_serial = serial_module.get_new_serial_number("SR")
+		assert new_serial == "SR-001"
+		assert len(generated) >= 2  # recursive call triggered once
+
+		# --- Case 2: get_available_serial_nos ---
+		generated.clear()
+		frappe.db.exists = lambda *a, **k: False  # disable recursion
+		serial_module.make_autoname = mock_make_autoname
+		result = serial_module.get_available_serial_nos("SR", 3)
+		assert len(result) == 3
+		assert all(s.startswith("SR") for s in result)
+
+		# --- Case 3: get_items_html ---
+		html = serial_module.get_items_html(["SR-001", "SR-002"], "ITEM-123")
+		assert "<details>" in html
+		assert "ITEM-123" in html
+		assert "2 Serial Numbers" in html
+		assert "SR-001" in html
+		assert "SR-002" in html
+
+	def test_get_serial_nos_TC_SCK_313(self):
+		from erpnext.stock.doctype.serial_no import serial_no as serial_module
+		from frappe.utils.data import cstr
+
+		# --- Case 1: input is a list (should hit isinstance block) ---
+		result_list = serial_module.get_serial_nos(["SN-001", "SN-002"])
+		assert result_list == ["SN-001", "SN-002"]
+
+		# --- Case 2: input is a string with commas (should hit replace/split logic) ---
+		result_str = serial_module.get_serial_nos("SN-003, SN-004")
+		assert result_str == ["SN-003", "SN-004"]
+
+		# --- Case 3: input is a string with newlines (should handle them too) ---
+		result_newline = serial_module.get_serial_nos("SN-005\nSN-006\n")
+		assert result_newline == ["SN-005", "SN-006"]
+
+		# --- Case 4: input is an empty string (should return empty list) ---
+		result_empty = serial_module.get_serial_nos("")
+		assert result_empty == []
+
+		# --- Case 5: input has extra spaces (should be stripped) ---
+		result_spaces = serial_module.get_serial_nos("  SN-007 ,  SN-008  ")
+		assert result_spaces == ["SN-007", "SN-008"]
+
+	def test_clean_serial_no_string_all_lines_TC_SCK_314(self):
+		from erpnext.stock.doctype.serial_no import serial_no as serial_module
+
+		# --- Case 1: when serial_no is empty or None (triggers first if condition) ---
+		result_empty = serial_module.clean_serial_no_string("")
+		assert result_empty == ""
+
+		result_none = serial_module.clean_serial_no_string(None)
+		assert result_none == ""
+
+		# --- Case 2: when serial_no is a valid string (executes full path) ---
+		result_valid = serial_module.clean_serial_no_string("SN-001, SN-002")
+		assert result_valid == "SN-001\nSN-002"
+
+		# --- Case 3: when serial_no has newlines and spaces (tests normalization) ---
+		result_newline = serial_module.clean_serial_no_string(" SN-003 \n SN-004 ")
+		assert result_newline == "SN-003\nSN-004"
+
+	def test_update_maintenance_status_TC_SCK_315(self):
+		import frappe
+		from frappe.utils import nowdate
+		from erpnext.stock.doctype.serial_no import serial_no as serial_module
+
+		# --- Mock frappe.db.sql to return fake serial numbers ---
+		frappe.db.sql = lambda query, params=None: [("SN-001",), ("SN-002",)]
+
+		# --- Dummy object to simulate Serial No document ---
+		class DummyDoc:
+			def __init__(self, name):
+				self.name = name
+				self.maintenance_status = "Under Warranty"
+			def set_maintenance_status(self):
+				self.maintenance_status = "Out of Warranty"
+
+		# --- Mock frappe.get_doc to return dummy Serial No documents ---
+		frappe.get_doc = lambda doctype, name: DummyDoc(name)
+
+		# --- Capture values set by frappe.db.set_value ---
+		set_values = []
+		frappe.db.set_value = lambda doctype, name, field, value: set_values.append((doctype, name, field, value))
+
+		# --- Run the function to cover all lines ---
+		serial_module.update_maintenance_status()
+
+		# --- Validate calls and logic ---
+		assert len(set_values) == 2  # should update both SN-001 and SN-002
+		assert all(v[2] == "maintenance_status" for v in set_values)
+		assert all(v[3] == "Out of Warranty" for v in set_values)
+
 
 def get_auto_serial_nos(kwargs):
 	from erpnext.stock.doctype.serial_and_batch_bundle.serial_and_batch_bundle import (
