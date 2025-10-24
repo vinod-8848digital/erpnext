@@ -153,6 +153,11 @@ class TestSalesInvoiceTrends(FrappeTestCase):
 	def test_execute_full_line_coverage_TC_ACC_621(self):
 		"""Covers all lines in execute()"""
 		from erpnext.accounts.report.sales_invoice_trends import sales_invoice_trends
+		import frappe
+
+		# --- Patch frappe.db.exists temporarily to prevent MockDB error ---
+		if not hasattr(frappe.db, "exists"):
+			frappe.db.exists = lambda *args, **kwargs: False
 
 		# --- Case 1: No filters (triggers 'if not filters' branch)
 		def mock_get_columns(filters, report_type):
@@ -168,13 +173,14 @@ class TestSalesInvoiceTrends(FrappeTestCase):
 		sales_invoice_trends.get_columns = mock_get_columns
 		sales_invoice_trends.get_data = mock_get_data
 
+		# Run without filters (tests 'if not filters')
 		columns, data = sales_invoice_trends.execute()
 		self.assertEqual(columns, ["col1", "col2"])
 		self.assertEqual(data, [{"col1": "val1", "col2": "val2"}])
 
-		# --- Case 2: With filters (skips the 'if not filters' branch)
+		# Run with filters (skips 'if not filters')
 		filters = {"customer": "_Test SIT Customer"}
-
 		columns, data = sales_invoice_trends.execute(filters)
 		self.assertEqual(columns, ["col1", "col2"])
 		self.assertEqual(data, [{"col1": "val1", "col2": "val2"}])
+
