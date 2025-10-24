@@ -1100,6 +1100,194 @@ class TestSerialNo(FrappeTestCase):
 		assert all(v[2] == "maintenance_status" for v in set_values)
 		assert all(v[3] == "Out of Warranty" for v in set_values)
 
+	def test_get_pos_reserved_serial_nos_TC_SCK_316(self):
+		import frappe, json
+		from erpnext.stock.doctype.serial_no import serial_no as serial_module
+
+		# --- Mock get_serial_nos ---
+		serial_module.get_serial_nos = lambda s: [x.strip() for x in s.split(",") if x.strip()]
+
+		# --- Input filters (dict + JSON) ---
+		filters_dict = {"item_code": "ITEM-001", "warehouse": "WH-01"}
+		filters_json = json.dumps(filters_dict)
+
+		# --- Dummy column object (query builder ops support) ---
+		class DummyColumn:
+			def __eq__(self, other): return self
+			def __ne__(self, other): return self
+			def __and__(self, other): return self
+			def __rand__(self, other): return self
+			def isnotnull(self): return self
+
+		# --- Dummy DocType mock ---
+		class DummyDocType:
+			def __init__(self, name):
+				self.name = DummyColumn()
+				self.is_return = DummyColumn()
+				self.serial_no = DummyColumn()
+				self.parent = DummyColumn()
+				self.docstatus = DummyColumn()
+				self.item_code = DummyColumn()
+				self.warehouse = DummyColumn()
+
+		# --- Dummy row object (so we can use d.is_return, d.serial_no) ---
+		class DummyRow:
+			def __init__(self, is_return, serial_no):
+				self.is_return = is_return
+				self.serial_no = serial_no
+
+		# --- Dummy Query Builder chain mock ---
+		class DummyQuery:
+			def from_(self, *args, **kwargs): return self
+			def select(self, *args, **kwargs): return self
+			def where(self, *args, **kwargs): return self
+			def run(self, as_dict=True):
+				return [
+					DummyRow(0, "SN-001,SN-002"),
+					DummyRow(1, "SN-002"),
+				]
+
+		# --- Mock frappe.qb and DocType ---
+		frappe.qb = DummyQuery()
+		frappe.qb.DocType = lambda name: DummyDocType(name)
+
+		# --- Run both test variations (JSON and dict) ---
+		result_json = serial_module.get_pos_reserved_serial_nos(filters_json)
+		result_dict = serial_module.get_pos_reserved_serial_nos(filters_dict)
+
+		# --- Assertions ---
+		assert result_json == ["SN-001"]
+		assert result_dict == ["SN-001"]
+
+
+	def test_fetch_serial_numbers_flat_TC_SCK_317(self):
+		import frappe, types
+		from erpnext.stock.doctype.serial_no import serial_no as serial_module
+
+		# --- Input ---
+		filters = {"item_code": "ITEM-001", "warehouse": "WH-01", "batch_no": ["B-001"], "expiry_date": "2025-12-31"}
+		qty = 2
+		do_not_include = ["SN-002"]
+
+		# --- Dummy rows returned by run() ---
+		row1 = types.SimpleNamespace(name="SN-001")
+		row2 = types.SimpleNamespace(name="SN-002")
+		row3 = types.SimpleNamespace(name="SN-003")
+
+		# --- Dummy DocType columns ---
+		dummy_col = types.SimpleNamespace()
+		dummy_col.name = dummy_col
+		dummy_col.item_code = dummy_col
+		dummy_col.warehouse = dummy_col
+		dummy_col.creation = dummy_col
+		dummy_col.batch_no = dummy_col
+		dummy_col.notin = lambda x: dummy_col
+		dummy_col.isin = lambda x: dummy_col
+		dummy_col.__eq__ = lambda self, other: dummy_col
+		dummy_col.__and__ = lambda self, other: dummy_col
+
+		batch_col = types.SimpleNamespace()
+		batch_col.name = batch_col
+		batch_col.expiry_date = batch_col
+
+		# --- Mock DocType ---
+		frappe.qb.DocType = lambda name: batch_col if name == "Batch" else dummy_col
+
+		# --- Full query chain mock ---
+		def make_query(*args, **kwargs):  # <-- Accept any args
+			obj = types.SimpleNamespace()
+			obj.from_ = lambda *a, **k: obj
+			obj.select = lambda *a, **k: obj
+			obj.where = lambda *a, **k: obj
+			obj.orderby = lambda *a, **k: obj
+			obj.limit = lambda *a, **k: obj
+			obj.left_join = lambda *a, **k: obj
+			obj.on = lambda *a, **k: obj
+			obj.run = lambda as_dict=True: [r for r in [row1, row2, row3] if r.name not in do_not_include][:qty]
+			return obj
+
+		frappe.qb.from_ = make_query  # Mock assigned properly
+
+		# --- Run the function ---
+		result = serial_module.fetch_serial_numbers(filters, qty, do_not_include)
+
+		# --- Assertions ---
+		assert len(result) == 2
+		assert all(r.name not in do_not_include for r in result)
+		assert result[0].name == "SN-001"
+
+	def test_get_serial_nos_for_outward_TC_SCK_318(self):
+		import types
+		from erpnext.stock.doctype.serial_no import serial_no as serial_module
+
+		# --- Mock get_available_serial_nos ---
+		mock_data = [types.SimpleNamespace(serial_no="SN-001"), types.SimpleNamespace(serial_no="SN-002")]
+		from erpnext.stock.doctype.serial_and_batch_bundle import serial_and_batch_bundle
+		serial_and_batch_bundle.get_available_serial_nos = lambda kwargs: mock_data
+
+		# --- Input ---
+		kwargs = {"item_code": "ITEM-001"}
+
+		# --- Run ---
+		result = serial_module.get_serial_nos_for_outward(kwargs)
+
+		# --- Assertions ---
+		assert result == ["SN-001", "SN-002"]
+
+		# --- Case 2: No serial numbers ---
+		serial_and_batch_bundle.get_available_serial_nos = lambda kwargs: []
+		result_empty = serial_module.get_serial_nos_for_outward(kwargs)
+		assert result_empty == []
+
+
+	def test_get_serial_nos_from_sle_list_TC_SCK_319(self):
+		import frappe, types
+		from erpnext.stock.doctype.serial_no import serial_no as serial_module
+
+		# --- Input ---
+		bundles = ["BND-001", "BND-002"]
+
+		# --- Dummy DocType mock ---
+		dummy_col = types.SimpleNamespace()
+		dummy_col.parent = dummy_col
+		dummy_col.serial_no = dummy_col
+		dummy_col.isin = lambda x: dummy_col
+
+		# --- Dummy run result ---
+		row1 = types.SimpleNamespace(parent="BND-001", serial_no="SN-001")
+		row2 = types.SimpleNamespace(parent="BND-001", serial_no="SN-002")
+		row3 = types.SimpleNamespace(parent="BND-002", serial_no="SN-003")
+
+		# --- Mock DocType and Query ---
+		frappe.qb.DocType = lambda name: dummy_col
+
+		def make_query(*args, **kwargs):
+			obj = types.SimpleNamespace()
+			obj.from_ = lambda *a, **k: obj
+			obj.select = lambda *a, **k: obj
+			obj.where = lambda *a, **k: obj
+			obj.run = lambda as_dict=True: [row1, row2, row3]
+			return obj
+
+		frappe.qb.from_ = make_query
+
+		# --- Run function ---
+		result = serial_module.get_serial_nos_from_sle_list(bundles)
+
+		# --- Assertions ---
+		assert result == {
+			"BND-001": ["SN-001", "SN-002"],
+			"BND-002": ["SN-003"],
+		}
+
+		# --- Case 2: Empty input ---
+		assert serial_module.get_serial_nos_from_sle_list([]) == {}
+
+
+
+	
+
+
 
 def get_auto_serial_nos(kwargs):
 	from erpnext.stock.doctype.serial_and_batch_bundle.serial_and_batch_bundle import (
