@@ -149,3 +149,32 @@ class TestSalesInvoiceTrends(FrappeTestCase):
 
 		self.assertEqual(first_row[-2], 13.0)
 		self.assertEqual(first_row[-1], 1300.0)
+
+	def test_execute_full_line_coverage_TC_ACC_621(self):
+		"""Covers all lines in execute()"""
+		from erpnext.accounts.report.sales_invoice_trends import sales_invoice_trends
+
+		# --- Case 1: No filters (triggers 'if not filters' branch)
+		def mock_get_columns(filters, report_type):
+			self.assertIsInstance(filters, dict)
+			self.assertEqual(report_type, "Sales Invoice")
+			return {"columns": ["col1", "col2"]}
+
+		def mock_get_data(filters, conditions):
+			self.assertIn("columns", conditions)
+			return [{"col1": "val1", "col2": "val2"}]
+
+		# Monkey-patch the helper functions
+		sales_invoice_trends.get_columns = mock_get_columns
+		sales_invoice_trends.get_data = mock_get_data
+
+		columns, data = sales_invoice_trends.execute()
+		self.assertEqual(columns, ["col1", "col2"])
+		self.assertEqual(data, [{"col1": "val1", "col2": "val2"}])
+
+		# --- Case 2: With filters (skips the 'if not filters' branch)
+		filters = {"customer": "_Test SIT Customer"}
+
+		columns, data = sales_invoice_trends.execute(filters)
+		self.assertEqual(columns, ["col1", "col2"])
+		self.assertEqual(data, [{"col1": "val1", "col2": "val2"}])
