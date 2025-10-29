@@ -40,10 +40,3 @@ class TestVoucherWiseBalance(AccountsTestMixin, FrappeTestCase):
         _, data = execute(filters)
 
         self.assertTrue(data, "No data returned from voucher wise balance report")
-
-
-@frappe.whitelist()
-def call_method():
-    obj_1 = TestVoucherWiseBalance()
-    obj_1.setUp()
-    obj_1.test_voucher_wise_balance_basic()
