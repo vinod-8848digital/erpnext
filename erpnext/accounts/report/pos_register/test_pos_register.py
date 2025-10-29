@@ -79,3 +79,24 @@ class TestPOSRegistry(FrappeTestCase, AccountsTestMixin):
         # Verify payments
         for row in data:
             self.assertEqual(row.get("mode_of_payment"), "Cash")
+
+    def test_pos_registry_filters_conditions_TC_ACC_595(self):
+        filters = frappe._dict({})
+        columns, data = execute(filters)
+        self.assertTrue(len(data) == 0, "POS Registry should return no rows when no filters are applied")
+
+
+        filters = frappe._dict({
+            "pos_profile" : "Non-Existent POS Profile",
+        })
+        with self.assertRaisesRegex(frappe.ValidationError, "Company is mandatory"):
+            columns, data = execute(filters)
+        
+        filters = frappe._dict({
+            "pos_profile" : "Non-Existent POS Profile",
+            "company" : "_Test Company",
+        })
+        with self.assertRaisesRegex(frappe.ValidationError, "From Date and To Date are mandatory"):
+            columns, data = execute(filters)
+        
+        return
