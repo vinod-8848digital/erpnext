@@ -64,7 +64,7 @@ def get_result(filters, tds_docs, tds_accounts, tax_category_map, journal_entry_
 				tax_withholding_category = tds_accounts.get(entry.account)
 				# or else the consolidated value from the voucher document
 				if not tax_withholding_category:
-					tax_withholding_category = tax_category_map.get((voucher_type, name))
+					tax_withholding_category = tax_category_map.get((voucher_type, name)) 
 				# or else from the party default
 				if not tax_withholding_category:
 					tax_withholding_category = party_map.get(party, {}).get("tax_withholding_category")

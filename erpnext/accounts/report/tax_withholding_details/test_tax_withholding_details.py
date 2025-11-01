@@ -126,7 +126,29 @@ class TestTaxWithholdingDetails(AccountsTestMixin, FrappeTestCase):
 
 	def tearDown(self):
 		self.clear_old_entries()
+	
+	def test_error_msg_TC_ACC_596(self):
+		fiscal_year = get_fiscal_year(today(), company="_Test Company")
+		with self.assertRaisesRegex(frappe.ValidationError, "From Date must be before To Date"):
+			execute(
+				frappe._dict(
+					company="_Test Company",
+					party_type="Supplier",
+					from_date=fiscal_year[2],
+					to_date=fiscal_year[1],
+				)
+			)
 
+		with self.assertRaisesRegex(frappe.ValidationError, "No Tax Withholding Accounts found for this company."):
+			frappe.db.delete("Tax Withholding Account", {"company": "_Test Company"})
+			execute(
+				frappe._dict(
+					company="_Test Company",
+					party_type="Supplier",
+					from_date=fiscal_year[1],
+					to_date=fiscal_year[2],
+				)
+			)
 
 def create_tax_accounts():
 	account_names = ["TCS", "TDS"]

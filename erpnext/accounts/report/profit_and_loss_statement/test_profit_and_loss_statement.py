@@ -152,3 +152,55 @@ class TestProfitAndLossStatement(AccountsTestMixin, FrappeTestCase):
 		for key in expected.keys():
 			with self.subTest(key=key):
 				self.assertEqual(expected.get(key), actual.get(key))
+
+	def test_pnl_output_selected_view_growth_margin_TC_ACC_595(self):
+		self.create_sales_invoice(qty=1, rate=150)
+
+		filters = self.get_report_filters()
+		period_list = get_period_list(
+			filters.from_fiscal_year,
+			filters.to_fiscal_year,
+			filters.period_start_date,
+			filters.period_end_date,
+			filters.filter_based_on,
+			filters.periodicity,
+			company=filters.company,
+		)
+		
+		# --- Test Growth view ---
+		filters.selected_view = "Growth"
+		result = execute(filters)  # execute returns (columns, data)
+		self.assertTrue(result[0], "Growth view: Columns should not be empty")
+		self.assertTrue(result[1], "Growth view: Data should not be empty")
+
+		filters.selected_view = "Margin"
+		result = execute(filters)[1]
+		# Test expressions for Margin view
+		self.assertTrue(result[0], "Margin view: Columns should not be empty")
+		self.assertTrue(result[1], "Margin view: Data should not be empty")
+
+		return 
+
+	def test_pnl_with_report_summary_TC_ACC_596(self):
+		self.create_sales_invoice(qty=1, rate=150)
+
+		filters = self.get_report_filters()
+		period_list = get_period_list(
+			filters.from_fiscal_year,
+			filters.to_fiscal_year,
+			filters.period_start_date,
+			filters.period_end_date,
+			filters.filter_based_on,
+			filters.periodicity,
+			company=filters.company,
+		)
+		
+		# --- Test Growth view ---
+		filters.accumulated_values = 1
+		filters.periodicity = "Yearly"
+		result = execute(filters)  # execute returns (columns, data)
+		self.assertIsInstance(result, (list, tuple), "Result should be a list or tuple (columns, data)")
+		self.assertGreater(len(result), 1, "Execute should return at least (columns, data)")
+		self.assertTrue(result[0], "Columns should not be empty for Growth view")
+		self.assertTrue(result[1], "Data should not be empty for Growth view")
+		return 
