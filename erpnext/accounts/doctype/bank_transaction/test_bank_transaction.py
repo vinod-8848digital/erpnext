@@ -15,7 +15,6 @@ from erpnext.accounts.doctype.bank_reconciliation_tool.bank_reconciliation_tool 
 from erpnext.accounts.doctype.mode_of_payment.test_mode_of_payment import (
 	set_default_account_for_mode_of_payment,
 )
-from erpnext.accounts.doctype.payment_entry.test_payment_entry import get_payment_entry
 from erpnext.accounts.doctype.pos_profile.test_pos_profile import make_pos_profile
 from erpnext.accounts.doctype.purchase_invoice.test_purchase_invoice import make_purchase_invoice
 from erpnext.accounts.doctype.sales_invoice.test_sales_invoice import create_sales_invoice
@@ -42,7 +41,12 @@ class TestBankTransaction(FrappeTestCase):
 		bank_account = create_bank_account(
 			gl_account=gl_account, bank_account_name="Checking Account " + uniq_identifier
 		)
-		frappe.db.set_value("Company", "_Test Company", "stock_received_but_not_billed",f"Stock Received But Not Billed - _TC")
+		frappe.db.set_value(
+			"Company",
+			"_Test Company",
+			"stock_received_but_not_billed",
+			f"Stock Received But Not Billed - _TC",
+		)
 		add_transactions(bank_account=bank_account)
 		add_vouchers(gl_account=gl_account)
 
@@ -304,6 +308,8 @@ class TestBankTransaction(FrappeTestCase):
 		self.assertRaises(frappe.ValidationError, doc2.before_save)
 
 	def test_remove_payment_entries_TC_ACC_273(self):
+		from erpnext.accounts.doctype.payment_entry.test_payment_entry import get_payment_entry
+
 		gl_account = create_gl_account("Remove PE Bank")
 		bank_account = create_bank_account(gl_account=gl_account, bank_account_name="Remove PE Account")
 
@@ -399,6 +405,8 @@ class TestBankTransaction(FrappeTestCase):
 		self.assertEqual(len(bt_main.payment_entries), 0)
 
 	def test_allocate_payment_entries_all_paths_TC_ACC_275(self):
+		from erpnext.accounts.doctype.payment_entry.test_payment_entry import get_payment_entry
+
 		gl_account = create_gl_account("Alloc Paths")
 		bank_account = create_bank_account(gl_account=gl_account, bank_account_name="Alloc Paths")
 
@@ -629,6 +637,8 @@ def add_transactions(bank_account="_Test Bank - _TC"):
 
 
 def add_vouchers(gl_account="_Test Bank - _TC"):
+	from erpnext.accounts.doctype.payment_entry.test_payment_entry import get_payment_entry
+
 	try:
 		frappe.get_doc(
 			{

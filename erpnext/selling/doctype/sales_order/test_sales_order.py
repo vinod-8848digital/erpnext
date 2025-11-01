@@ -33,6 +33,7 @@ from erpnext.selling.doctype.sales_order.sales_order import (
 from erpnext.stock.doctype.item.test_item import make_item
 from erpnext.stock.doctype.stock_entry.stock_entry_utils import make_stock_entry
 from erpnext.stock.get_item_details import get_bin_details
+from erpnext.stock.utils import get_or_create_fiscal_year
 
 
 class TestSalesOrder(AccountsTestMixin, FrappeTestCase):
@@ -7282,7 +7283,7 @@ class TestSalesOrder(AccountsTestMixin, FrappeTestCase):
 		so.customer_address = customer_add.get("name")
 		so.billing_address_gstin = customer_add.get("gstin")
 		so.company_address = company_add.get("name")
-		so.company_gstin = company_add.get("gstin")
+		so.company_gstin = company.get("gstin")
 		for i in so.items:
 			i.gst_hsn_code = "01011020"
 		so.save()
@@ -8528,59 +8529,6 @@ def make_sales_order_workflow():
 	workflow.insert(ignore_permissions=True)
 
 	return workflow
-
-
-def get_or_create_fiscal_year(company):
-	from datetime import date, datetime
-
-	import frappe
-
-	current_date = datetime.today().date()
-
-	matching_fy_list = frappe.get_all(
-		"Fiscal Year",
-		filters={
-			"disabled": 0,
-			"year_start_date": ["<=", current_date],
-			"year_end_date": [">=", current_date],
-		},
-		fields=["name", "year_start_date", "year_end_date"],
-	)
-	is_company = False
-	if len(matching_fy_list) > 0:
-		for fy in matching_fy_list:
-			fiscal_year = frappe.get_doc("Fiscal Year", fy["name"])
-			for years in fiscal_year.companies:
-				if years.company == company:
-					is_company = True
-					break
-			if is_company:
-				break
-
-		if not is_company:
-			for rows in matching_fy_list:
-				try:
-					fiscal_year = frappe.get_doc("Fiscal Year", rows.name)
-					fiscal_year.append("companies", {"company": company})
-					fiscal_year.save()
-					break
-				except Exception as e:
-					print(f"Failed to get Fiscal Year {fy['name']}: {e}")
-					continue
-
-	else:
-		# No fiscal year includes current date — create a new one
-		current_year = current_date.year
-		first_date = date(current_year, 1, 1)
-		last_date = date(current_year, 12, 31)
-
-		fiscal_year = frappe.new_doc("Fiscal Year")
-		fiscal_year.year = f"{current_year}-{company}"
-		fiscal_year.year_start_date = first_date
-		fiscal_year.year_end_date = last_date
-		fiscal_year.company = company  # Required to avoid overlap error
-		fiscal_year.append("companies", {"company": company})
-		fiscal_year.save()
 
 
 def _make_blanket_order(**args):

@@ -291,8 +291,8 @@ class TestQualityInspection(FrappeTestCase):
 
 	def test_qa_for_pr_TC_SCK_159(self):
 		from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_company
-		from erpnext.buying.doctype.purchase_order.test_purchase_order import get_or_create_fiscal_year
 		from erpnext.buying.doctype.supplier.test_supplier import create_supplier
+		from erpnext.stock.utils import get_or_create_fiscal_year
 
 		create_company()
 		company = "_Test Company"
@@ -342,7 +342,7 @@ class TestQualityInspection(FrappeTestCase):
 
 		from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_company
 		from erpnext.buying.doctype.supplier.test_supplier import create_supplier
-		from erpnext.selling.doctype.sales_order.test_sales_order import get_or_create_fiscal_year
+		from erpnext.stock.utils import get_or_create_fiscal_year
 
 		create_company()
 		company = "_Test Company"
@@ -425,8 +425,8 @@ class TestQualityInspection(FrappeTestCase):
 
 	def test_qa_for_pr_out_TC_SCK_162(self):
 		from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_company
-		from erpnext.buying.doctype.purchase_order.test_purchase_order import get_or_create_fiscal_year
 		from erpnext.buying.doctype.supplier.test_supplier import create_supplier
+		from erpnext.stock.utils import get_or_create_fiscal_year
 
 		create_company()
 		company = "_Test Company"
@@ -533,8 +533,8 @@ class TestQualityInspection(FrappeTestCase):
 
 	def test_qa_for_pr_proc_TC_SCK_166(self):
 		from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_company
-		from erpnext.buying.doctype.purchase_order.test_purchase_order import get_or_create_fiscal_year
 		from erpnext.buying.doctype.supplier.test_supplier import create_supplier
+		from erpnext.stock.utils import get_or_create_fiscal_year
 
 		create_company()
 		company = "_Test Company"
@@ -896,16 +896,15 @@ class TestQualityInspection(FrappeTestCase):
 		qi3.inspected_by = "Administrator"
 		qi3.sample_size = 5
 		qi3.insert()
-		from types import SimpleNamespace
 
 		# Patch frappe.get_all to simulate how distribute_child_row_reference pulls QIs
 		with unittest.mock.patch("frappe.get_all") as mock_get_all, unittest.mock.patch(
 			"frappe.db.set_value"
 		) as mock_set_value:
 			mock_get_all.return_value = [
-				SimpleNamespace(name=qi1.name, child_row_reference="ROW-1", docstatus=1),
-				SimpleNamespace(name=qi2.name, child_row_reference="ROW-2", docstatus=0),
-				SimpleNamespace(name=qi3.name, child_row_reference=None, docstatus=0),
+				{"name": qi1.name, "child_row_reference": "ROW-1", "docstatus": 1},
+				{"name": qi2.name, "child_row_reference": "ROW-2", "docstatus": 0},
+				{"name": qi3.name, "child_row_reference": None, "docstatus": 0},
 			]
 
 			# Call method under test

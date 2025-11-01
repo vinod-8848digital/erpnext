@@ -27,7 +27,7 @@ class TestWarehouse(FrappeTestCase):
 			company.default_currency = "INR"
 			company.insert()
 
-		from erpnext.buying.doctype.purchase_order.test_purchase_order import get_or_create_fiscal_year
+		from erpnext.stock.utils import get_or_create_fiscal_year
 
 		get_or_create_fiscal_year("_Test Company")
 
@@ -64,7 +64,9 @@ class TestWarehouse(FrappeTestCase):
 
 		# delete warehouses if already exist
 		for wh_name in ["Named Warehouse", "Unnamed Warehouse"]:
-			existing_whs = frappe.get_all("Warehouse", filters={"warehouse_name": wh_name, "company": company.name})
+			existing_whs = frappe.get_all(
+				"Warehouse", filters={"warehouse_name": wh_name, "company": company.name}
+			)
 			for wh in existing_whs:
 				frappe.delete_doc("Warehouse", wh.name, force=True)
 
