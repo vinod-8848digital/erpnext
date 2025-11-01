@@ -10,7 +10,7 @@ class TestWbsSummaryReport(FrappeTestCase):
 	def test_execute_with_empty_filters(self):
 		"""Test execute() with no filters (just checks structure)"""
 
-		fake_data = [
+		test_data = [
 			{
 				"name": "WBS-001",
 				"wbs_name": "Planning",
@@ -21,7 +21,7 @@ class TestWbsSummaryReport(FrappeTestCase):
 			}
 		]
 
-		with patch.object(wbs_summary_report, "get_data", return_value=fake_data):
+		with patch.object(wbs_summary_report, "get_data", return_value=test_data):
 			columns, data = wbs_summary_report.execute(filters={})
 
 		# assert columns is not empty
@@ -32,7 +32,7 @@ class TestWbsSummaryReport(FrappeTestCase):
 	def test_execute_with_filters(self):
 		"""Test execute() with filters covering branch where filters exist"""
 
-		fake_data = [
+		test_data = [
 			{
 				"name": "WBS-002",
 				"wbs_name": "Execution",
@@ -43,7 +43,7 @@ class TestWbsSummaryReport(FrappeTestCase):
 			}
 		]
 
-		with patch.object(wbs_summary_report, "get_data", return_value=fake_data) as mock_get:
+		with patch.object(wbs_summary_report, "get_data", return_value=test_data) as mock_get:
 			columns, data = wbs_summary_report.execute(filters={"project": "Test Project"})
 			mock_get.assert_called_once_with({"project": "Test Project"})
 

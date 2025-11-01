@@ -57,7 +57,7 @@ def apply_filters(query, filters, gle):
 	if filters.get("company"):
 		query = query.where(gle.company == filters.company)
 	if filters.get("voucher_type"):
-		query = query.where(gle.voucher_type == filters.voucher_type)  # pragma: no cover
+		query = query.where(gle.voucher_type == filters.voucher_type)
 	if filters.get("from_date"):
 		query = query.where(gle.posting_date >= filters.from_date)
 	if filters.get("to_date"):

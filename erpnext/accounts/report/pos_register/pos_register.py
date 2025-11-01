@@ -10,7 +10,7 @@ from erpnext.accounts.report.sales_register.sales_register import get_mode_of_pa
 
 def execute(filters=None):
 	if not filters:
-		return [], []  # pragma: no cover
+		return [], []
 
 	validate_filters(filters)
 
@@ -24,7 +24,7 @@ def execute(filters=None):
 
 	# return only entries if group by is unselected
 	if not group_by_field:
-		return columns, pos_entries  # pragma: no cover
+		return columns, pos_entries
 
 	# handle grouping
 	invoice_map, grouped_data = {}, []
@@ -49,7 +49,7 @@ def get_pos_entries(filters, group_by_field):
 	conditions = get_conditions(filters)
 	order_by = "p.posting_date"
 	select_mop_field, from_sales_invoice_payment, group_by_mop_condition = "", "", ""
-	if group_by_field == "mode_of_payment":  # pragma: no cover
+	if group_by_field == "mode_of_payment":
 		select_mop_field = (
 			", sip.mode_of_payment, sip.base_amount - CASE WHEN sip.type = 'Cash' THEN p.change_amount ELSE 0 END AS paid_amount"
 		)
@@ -102,7 +102,7 @@ def add_subtotal_row(data, group_invoices, group_by_field, group_by_value):
 	data.append({})
 
 
-def validate_filters(filters):  # pragma: no cover
+def validate_filters(filters):
 	if not filters.get("company"):
 		frappe.throw(_("{0} is mandatory").format(_("Company")))
 
@@ -127,7 +127,7 @@ def validate_filters(filters):  # pragma: no cover
 		frappe.throw(_("Can not filter based on Payment Method, if grouped by Payment Method"))
 
 
-def get_conditions(filters):  # pragma: no cover
+def get_conditions(filters):
 	conditions = "company = %(company)s AND posting_date >= %(from_date)s AND posting_date <= %(to_date)s"
 
 	if filters.get("pos_profile"):
@@ -152,7 +152,7 @@ def get_conditions(filters):  # pragma: no cover
 	return conditions
 
 
-def get_group_by_field(group_by):  # pragma: no cover
+def get_group_by_field(group_by):
 	group_by_field = ""
 
 	if group_by == "POS Profile":
